@@ -1,0 +1,143 @@
+'use client'
+import { useEffect, useRef, useState } from 'react'
+
+const OPTION_LABELS = {
+  postProcessing: 'Post-processing',
+  specialRequest: 'Special request',
+  priority: 'Priority',
+}
+
+function money(amount, currency = 'sgd') {
+  const n = Number(amount) || 0
+  return `${String(currency).toUpperCase()} ${n.toFixed(2)}`
+}
+
+/**
+ * Live instant-quote panel for the editor. Sends geometry metrics + print
+ * settings + option toggles to the server-authoritative /api/quote endpoint
+ * (debounced) and renders the itemized breakdown. The server owns the pricing;
+ * this component never computes or sends a price.
+ */
+export default function QuotePanel({ metrics, settings, deliveryTypeName }) {
+  const [options, setOptions] = useState({
+    postProcessing: false,
+    specialRequest: false,
+    priority: false,
+    expedite: false,
+  })
+  const [quote, setQuote] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const abortRef = useRef(null)
+
+  const hasModel = !!(metrics && metrics.volumeCm3 > 0)
+
+  useEffect(() => {
+    if (!hasModel) {
+      setQuote(null)
+      return
+    }
+    const t = setTimeout(async () => {
+      abortRef.current?.abort()
+      const controller = new AbortController()
+      abortRef.current = controller
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch('/api/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            volumeCm3: metrics.volumeCm3,
+            dimensionsCm: {
+              length: metrics.dimensionsCm?.length || 0,
+              width: metrics.dimensionsCm?.width || 0,
+              height: metrics.dimensionsCm?.height || 0,
+            },
+            confidence: metrics.confidence || 'high',
+            settings,
+            options,
+            ...(deliveryTypeName ? { deliveryTypeName } : {}),
+          }),
+        })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Quote failed')
+        const data = await res.json()
+        setQuote(data.quote)
+      } catch (e) {
+        if (e.name !== 'AbortError') setError(e.message || 'Could not get a quote')
+      } finally {
+        setLoading(false)
+      }
+    }, 500)
+    return () => clearTimeout(t)
+  }, [hasModel, metrics, settings, options, deliveryTypeName])
+
+  if (!hasModel) return null
+
+  const toggle = (key) => setOptions((o) => ({ ...o, [key]: !o[key] }))
+
+  return (
+    <div className="fixed bottom-4 left-4 z-50 w-72 rounded-md border border-borderColor bg-baseColor p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-textColor tracking-tight">Instant Quote</h3>
+        {loading && <span className="text-[10px] text-light">updating…</span>}
+      </div>
+
+      {metrics.confidence === 'low' && (
+        <p className="mb-2 rounded bg-amber-50 border border-amber-200 px-2 py-1 text-[11px] text-amber-700">
+          This model isn’t watertight — the estimate is approximate.
+        </p>
+      )}
+
+      <div className="mb-2 text-[11px] text-light">
+        {Number(metrics.volumeCm3).toFixed(1)} cm³ · {Number(metrics.dimensionsCm?.length).toFixed(1)}×
+        {Number(metrics.dimensionsCm?.width).toFixed(1)}×{Number(metrics.dimensionsCm?.height).toFixed(1)} cm
+      </div>
+
+      {error && <p className="text-[11px] text-red-500 mb-2">{error}</p>}
+
+      {quote && (
+        <>
+          <ul className="flex flex-col gap-1 text-xs text-textColor">
+            {quote.lines
+              .filter((l) => l.amount > 0 || ['material', 'printTime', 'baseFee'].includes(l.key))
+              .map((l) => (
+                <li key={l.key} className="flex justify-between">
+                  <span className="text-light">
+                    {l.label}
+                    {l.key === 'printTime' ? ' (est.)' : ''}
+                  </span>
+                  <span>{money(l.amount, quote.currency)}</span>
+                </li>
+              ))}
+            {quote.expedite?.applied && (
+              <li className="flex justify-between">
+                <span className="text-light">Expedite</span>
+                <span>{money(quote.expedite.amount, quote.currency)}</span>
+              </li>
+            )}
+          </ul>
+
+          <div className="mt-2 flex justify-between border-t border-borderColor pt-2 text-sm font-semibold text-textColor">
+            <span>Total</span>
+            <span>{money(quote.total, quote.currency)}</span>
+          </div>
+        </>
+      )}
+
+      <div className="mt-3 flex flex-col gap-1.5">
+        {Object.keys(OPTION_LABELS).map((key) => (
+          <label key={key} className="flex items-center gap-2 text-[11px] text-light cursor-pointer">
+            <input type="checkbox" checked={options[key]} onChange={() => toggle(key)} />
+            {OPTION_LABELS[key]}
+          </label>
+        ))}
+        <label className="flex items-center gap-2 text-[11px] font-medium text-textColor cursor-pointer">
+          <input type="checkbox" checked={options.expedite} onChange={() => toggle('expedite')} />
+          Expedite / rush
+        </label>
+      </div>
+    </div>
+  )
+}

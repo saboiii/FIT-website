@@ -64,6 +64,32 @@ const CustomPrintRequestSchema = new mongoose.Schema({
     printFee: { type: Number, default: 0 }, // Admin-specified extra print fee
     currency: { type: String, default: 'sgd' },
 
+    // Instant Quoting Engine result (server-authoritative breakdown). Set when
+    // the request is auto-quoted; mirrors lib/quoting/quote.js output shape.
+    quote: {
+        currency: { type: String },
+        lines: [{
+            key: { type: String },
+            label: { type: String },
+            amount: { type: Number },
+            _id: false,
+        }],
+        subtotal: { type: Number },
+        expedite: {
+            applied: { type: Boolean, default: false },
+            mode: { type: String },
+            amount: { type: Number, default: 0 },
+        },
+        total: { type: Number },
+        confidence: { type: String, enum: ['high', 'low'] },
+        inputs: {
+            volumeCm3: { type: Number },
+            weightGrams: { type: Number },
+            printHours: { type: Number },
+        },
+    },
+    quotedAt: { type: Date },
+
     // Payment info
     stripeSessionId: { type: String },
     stripePaymentIntentId: { type: String },

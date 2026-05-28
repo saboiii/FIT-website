@@ -7,6 +7,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js'
+import { computeMetricsFromObject } from '@/lib/quoting/threeGeometryAdapter'
 
 // Code generation removed - not needed for 3D model viewer
 
@@ -16,14 +17,15 @@ const useStore = create((set, get) => ({
   textOriginalFile: '',
   animations: false,
   scene: null,
+  geometryMetrics: null, // { volumeCm3, dimensionsCm, watertight, confidence } from the loaded model
   orderId: null,
   productId: null,
   variantId: null,
   requestId: null,
   isCustomPrint: false,
 
-  setFileName: (fileName) => set({ fileName, scene: null }),
-  setBuffers: (buffers) => set({ buffers, scene: null }),
+  setFileName: (fileName) => set({ fileName, scene: null, geometryMetrics: null }),
+  setBuffers: (buffers) => set({ buffers, scene: null, geometryMetrics: null }),
   setScene: (scene) => set({ scene }),
   setOrderId: (orderId) => set({ orderId }),
   setProductId: (productId) => set({ productId }),
@@ -204,6 +206,16 @@ const useStore = create((set, get) => ({
 
     // Always replace the scene when regenerating from new buffers.
     set({ scene: result.scene })
+
+    // Compute pricing-ready geometry metrics for the Instant Quoting Engine.
+    // Best-effort: never let a measurement error break model loading.
+    try {
+      const geometryMetrics = computeMetricsFromObject(result.scene, get().fileName)
+      set({ geometryMetrics })
+    } catch (err) {
+      console.error('Failed to compute geometry metrics:', err)
+      set({ geometryMetrics: null })
+    }
   },
 }))
 

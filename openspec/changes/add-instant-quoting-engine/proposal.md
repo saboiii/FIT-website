@@ -77,3 +77,23 @@ Plus an **expedited/rush** option that adds a configurable surcharge
   non-manifold models yield approximate volume. The estimator MUST flag low
   confidence and fall back to bounding-box estimation. Print-time heuristic is
   approximate by design — the breakdown labels it an estimate.
+
+## Implementation status (2026-05-28)
+
+Implemented and unit/integration-tested (100 tests): pure engine
+(`lib/quoting/*`), the three.js adapter, the server-authoritative `POST /api/quote`
+(zod-validated, Clerk optional-auth, persists + auto-quotes when a `requestId` is
+supplied by the owner), the `AppSettings.quotingConfig` + `CustomPrintRequest.quote`
+schema additions, and the live `QuotePanel` in the editor (RTL-tested).
+
+**Not yet done / flagged:**
+- **Browser verification of the editor (BLOCKED — needs human):** the live panel
+  was verified via RTL with a mocked API, but the full interactive flow (upload a
+  real STL in `/editor`, watch the quote update, sanity-check totals) could not be
+  run headlessly. Needs a `yarn dev` session with Clerk/Mongo env. See tasks 9.2.
+- **Admin settings UI** for `quotingConfig` (task 5.3).
+- **Auto-quote from editor submit** with the user's chosen options (task 8.2,
+  deferred to Phase 2 — the API/model already support it).
+- **Security/infra follow-ups:** `add-quote-api-rate-limiting` (Upstash Redis) and
+  `add-server-side-geometry-verification` (recompute volume from the stored model
+  to stop metric tampering before payment).

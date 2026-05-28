@@ -94,12 +94,31 @@ const AppSettingsSchema = new mongoose.Schema({
     version: { type: Number, default: 1 },
 
     // Print pricing formula for auto-calculating custom print quotes
+    // (LEGACY: superseded by quotingConfig + the Instant Quoting Engine; kept
+    // until the admin "calculate print cost" tool migrates).
     printPricingFormula: {
         baseFee: { type: Number, default: 5 },
         materialCostPerGram: { type: Number, default: 0.05 },
         supportMultiplier: { type: Number, default: 1.2 },
         highQualityMultiplier: { type: Number, default: 1.5 },
         markupPercentage: { type: Number, default: 30 },
+    },
+
+    // Instant Quoting Engine configuration (see lib/quoting/pricingDefaults.js).
+    // Money in major units (SGD); material rate per gram, time rate per hour.
+    quotingConfig: {
+        materialRatePerGram: { type: Number, default: 0.02 }, // $20/kg
+        printTimeRatePerHour: { type: Number, default: 3 },   // $3/hr
+        baseFee: { type: Number, default: 0 },
+        postProcessingFee: { type: Number, default: 0 },
+        specialRequestFee: { type: Number, default: 0 },
+        priorityFee: { type: Number, default: 0 },
+        expediteMode: { type: String, enum: ['percent', 'flat', 'greater'], default: 'greater' },
+        expediteSurchargePercent: { type: Number, default: 50 },
+        expediteSurchargeFlat: { type: Number, default: 20 },
+        minimumPrice: { type: Number, default: 5 },
+        // Optional per-material density overrides (g/cm³): { pla: 1.24, ... }
+        materialDensities: { type: Map, of: Number, default: undefined },
     }
 }, {
     timestamps: true

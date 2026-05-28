@@ -1,6 +1,32 @@
 # Proposal: Fix Dimension Weight Unit Inconsistency (bug)
 
-> Status: backlog (bug). Discovered while mapping the pricing/delivery code.
+> Status: **investigated 2026-05-28 — no active bug found.** Re-scoped to
+> regression-test the invariant + a flagged admin-boundary validation follow-up.
+
+## Audit conclusion (2026-05-28)
+
+A full call-site audit found **no active 1000× mismatch**. Every real consumer of
+gram-denominated pricing converts kg→g first:
+- `utils/deliveryTypeHelpers.js` converts (`weight * 1000`) before calling
+  `calculateDeliveryPrice` (the only caller of it).
+- `lib/printPricing.js` converts (`weight * 1000`).
+- `getApplicableDeliveryTypes` (the unguarded pass-through that motivated the
+  original worry) has **zero callers** in the codebase.
+
+So the risky unit-standardisation refactor is **not warranted** (it would only
+shift live prices for no benefit). The invariant is now pinned by
+`tests/unit/unitContract.test.js` (plus the existing per-module tests) so a future
+refactor cannot silently reintroduce the error.
+
+### Remaining actionable (FLAGGED — needs human input)
+
+Admin API endpoints (`app/api/admin/custom-print-requests`,
+`app/api/product/custom-print-config`) accept raw `dimensions` without
+validation. Adding **non-negative/number validation is safe**, but **range
+sanity thresholds** (e.g. "reject weight > 50 kg as a likely grams typo") are a
+**product decision** — the client must confirm realistic max dimensions/weight
+before we enforce them. Do not guess thresholds. See
+`add-input-validation-admin-endpoints` backlog.
 
 ## Why
 

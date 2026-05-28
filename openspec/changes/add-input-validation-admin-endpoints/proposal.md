@@ -1,0 +1,36 @@
+# Proposal: Validate Dimensions/Inputs at Admin API Boundaries (backlog)
+
+> Status: backlog. **Spun off from `fix-dimension-unit-mismatch` audit.**
+> Contains a sub-item that is **BLOCKED on a human/product decision** (range
+> thresholds) — flagged so we revisit it, do not silently guess.
+
+## Why
+
+The admin endpoints `app/api/admin/custom-print-requests/route.js` and
+`app/api/product/custom-print-config/route.js` save `dimensions` (and related
+pricing inputs) more or less verbatim from the request body, with no schema
+validation. Today this is not an active bug (the audit found correct unit
+handling everywhere), but it is a latent risk: a typo entering weight in grams
+instead of kilograms, or a negative/NaN value, would corrupt downstream delivery
+pricing and the instant quote.
+
+## What Changes
+
+- **Safe now (no human input needed):** validate that submitted dimensions are
+  finite, non-negative numbers and that pricing fields are well-formed, rejecting
+  malformed payloads with a 400. Recommend adopting the same `zod` schemas
+  introduced by `add-instant-quoting-engine` for consistency.
+- **BLOCKED — needs client/product decision:** realistic **range thresholds**
+  (max length/width/height, max weight) used to catch unit-typo mistakes (e.g.
+  "weight 500 probably means 0.5 kg entered as grams"). We must NOT invent these;
+  the print farm knows their real build-volume and weight limits. Capture the
+  agreed limits, then enforce + warn.
+
+## Impact
+
+- **Specs:** adds an `admin-input-validation` requirement.
+- **Code:** the two admin routes above; shared zod schemas.
+- **Blocker owner:** client / print-farm operator — confirm max build dimensions
+  and weight. Until then, ship only the structural validation.
+- **Risk:** low for structural validation; medium for thresholds (could reject
+  legitimate large prints if set wrong) — hence the human sign-off.

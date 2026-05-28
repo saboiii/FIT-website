@@ -3,6 +3,7 @@ import saveAs from 'file-saver'
 import { Leva, useControls, button, levaStore } from 'leva'
 import useStore from '@/utils/store'
 import Viewer from './viewer'
+import QuotePanel from './QuotePanel'
 import { useToast } from '@/components/General/ToastProvider'
 import { useState } from 'react'
 
@@ -24,7 +25,7 @@ const whiteTheme = {
 }
 
 const Result = () => {
-  const { fileName, scene, buffers, generateScene, orderId, productId, variantId } = useStore()
+  const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics } = useStore()
   const { showToast } = useToast()
   const [meshNames, setMeshNames] = useState([])
   const [submittingConfig, setSubmittingConfig] = useState(false)
@@ -241,6 +242,23 @@ const Result = () => {
     currentLightingRef.current = lighting
   }, [lighting])
 
+  // Map the editor's print controls to the Instant Quoting Engine's settings shape.
+  const quoteSettings = useMemo(() => ({
+    materialType: visualConfig.materialType,
+    infillPercent: printability.sparseInfillDensity,
+    wallLoops: printability.wallLoops,
+    nozzleMm: printability.nozzleDiameter,
+    layerHeightMm: printability.layerHeight,
+    enableSupport: printability.enableSupport,
+  }), [
+    visualConfig.materialType,
+    printability.sparseInfillDensity,
+    printability.wallLoops,
+    printability.nozzleDiameter,
+    printability.layerHeight,
+    printability.enableSupport,
+  ])
+
   const downloadImage = useCallback(async () => {
     try {
       showToast('Preparing image...', 'info')
@@ -422,6 +440,7 @@ const Result = () => {
         </div>
       )}
       <Leva theme={whiteTheme} hidden={!advancedMode} />
+      {scene && <QuotePanel metrics={geometryMetrics} settings={quoteSettings} />}
       {/* Simple/Advanced mode toggle */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
         <button

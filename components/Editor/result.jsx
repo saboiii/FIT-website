@@ -4,6 +4,7 @@ import { Leva, useControls, button, levaStore } from 'leva'
 import useStore from '@/utils/store'
 import Viewer from './viewer'
 import QuotePanel from './QuotePanel'
+import { mapGenericToPrintSettings, DEFAULT_PRINT_COLOURS, QUALITY_MAP, STRENGTH_MAP } from '@/lib/quoting/genericPresets'
 import { useToast } from '@/components/General/ToastProvider'
 import { useState } from 'react'
 
@@ -31,6 +32,9 @@ const Result = () => {
   const [submittingConfig, setSubmittingConfig] = useState(false)
   const [configLoaded, setConfigLoaded] = useState(false)
   const [advancedMode, setAdvancedMode] = useState(false)
+  // Generic (plain-language) configuration: Strength × Quality × Colour.
+  const [generic, setGeneric] = useState({ strength: 'Normal', quality: 'Medium', colour: 'White' })
+  const [genericMaterial, setGenericMaterial] = useState('plastic')
 
   const defaultPrintability = {
     layerHeight: 0.2, initialLayerHeight: 0.2, wallLoops: 2,
@@ -44,24 +48,6 @@ const Result = () => {
   const defaultLighting = {
     autoRotate: true, lightIntensity: 1, preset: 'rembrandt', environment: 'city',
   }
-
-  const printPresets = {
-    'Draft (Fast)': { layerHeight: 0.3, initialLayerHeight: 0.3, sparseInfillDensity: 10, wallLoops: 1, enableSupport: false },
-    'Standard': { layerHeight: 0.2, initialLayerHeight: 0.2, sparseInfillDensity: 20, wallLoops: 2, enableSupport: false },
-    'High Quality': { layerHeight: 0.12, initialLayerHeight: 0.12, sparseInfillDensity: 25, wallLoops: 3, enableSupport: false },
-    'Strong & Durable': { layerHeight: 0.2, initialLayerHeight: 0.2, sparseInfillDensity: 40, wallLoops: 4, enableSupport: true },
-  }
-
-  const predefinedColors = [
-    { name: 'White', hex: '#ffffff' },
-    { name: 'Black', hex: '#000000' },
-    { name: 'Red', hex: '#ff0000' },
-    { name: 'Blue', hex: '#0055ff' },
-    { name: 'Green', hex: '#00aa00' },
-    { name: 'Yellow', hex: '#ffdd00' },
-    { name: 'Orange', hex: '#ff6600' },
-    { name: 'Purple', hex: '#8800cc' },
-  ]
 
   // Refs to store current values for submission
   const currentPrintabilityRef = useRef({})
@@ -243,14 +229,18 @@ const Result = () => {
   }, [lighting])
 
   // Map the editor's print controls to the Instant Quoting Engine's settings shape.
+  // In generic mode the colour can imply a denser material (wood/marble/etc.),
+  // so the quote uses the generic material; advanced mode uses the leva value.
   const quoteSettings = useMemo(() => ({
-    materialType: visualConfig.materialType,
+    materialType: advancedMode ? visualConfig.materialType : genericMaterial,
     infillPercent: printability.sparseInfillDensity,
     wallLoops: printability.wallLoops,
     nozzleMm: printability.nozzleDiameter,
     layerHeightMm: printability.layerHeight,
     enableSupport: printability.enableSupport,
   }), [
+    advancedMode,
+    genericMaterial,
     visualConfig.materialType,
     printability.sparseInfillDensity,
     printability.wallLoops,
@@ -258,6 +248,24 @@ const Result = () => {
     printability.layerHeight,
     printability.enableSupport,
   ])
+
+  // Apply a generic (Strength/Quality/Colour) selection to the underlying leva
+  // print settings + mesh colours, so generic mode is a friendly front-end over
+  // the same printSettings advanced mode edits.
+  const applyGeneric = useCallback((next) => {
+    setGeneric(next)
+    const m = mapGenericToPrintSettings(next, DEFAULT_PRINT_COLOURS)
+    setGenericMaterial(m.materialType)
+    levaStore.set({
+      'printability.layerHeight': m.layerHeight,
+      'printability.initialLayerHeight': m.initialLayerHeight,
+      'printability.wallLoops': m.wallLoops,
+      'printability.sparseInfillDensity': m.sparseInfillDensity,
+      ...(m.colourHex
+        ? Object.fromEntries(meshNames.map((n) => [`visual.${n}`, m.colourHex]))
+        : {}),
+    }, false)
+  }, [meshNames])
 
   const downloadImage = useCallback(async () => {
     try {
@@ -450,42 +458,71 @@ const Result = () => {
           {advancedMode ? 'Simple Mode' : 'Advanced Mode'}
         </button>
         {!advancedMode && (
-          <div className="flex flex-col gap-1 bg-white border border-gray-200 rounded shadow-sm p-2 w-48">
-            <span className="text-[10px] font-semibold uppercase text-gray-500 px-1">Print Presets</span>
-            {Object.entries(printPresets).map(([name, values]) => (
-              <button
-                key={name}
-                onClick={() => {
-                  levaStore.set(
-                    Object.fromEntries(
-                      Object.entries(values).map(([k, v]) => [`printability.${k}`, v])
-                    ), false
-                  )
-                }}
-                className="text-xs text-left px-2 py-1.5 rounded hover:bg-gray-100"
-              >
-                {name}
-              </button>
-            ))}
+          <div className="flex flex-col gap-3 bg-baseColor border border-borderColor rounded-md shadow-sm p-3 w-56">
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase text-light px-0.5">Strength</span>
+              <div className="grid grid-cols-3 gap-1">
+                {Object.keys(STRENGTH_MAP).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => applyGeneric({ ...generic, strength: s })}
+                    className={`text-[11px] px-2 py-1.5 rounded border transition-colors ${
+                      generic.strength === s
+                        ? 'bg-textColor text-background border-textColor'
+                        : 'bg-background text-textColor border-borderColor hover:bg-borderColor/20'
+                    }`}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold uppercase text-light px-0.5">Quality</span>
+              <div className="grid grid-cols-3 gap-1">
+                {Object.keys(QUALITY_MAP).map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => applyGeneric({ ...generic, quality: q })}
+                    className={`text-[11px] px-2 py-1.5 rounded border transition-colors ${
+                      generic.quality === q
+                        ? 'bg-textColor text-background border-textColor'
+                        : 'bg-background text-textColor border-borderColor hover:bg-borderColor/20'
+                    }`}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {meshNames.length > 0 && (
-              <>
-                <span className="text-[10px] font-semibold uppercase text-gray-500 px-1 mt-2">Colors</span>
-                <div className="flex flex-wrap gap-1.5 px-1">
-                  {predefinedColors.map(({ name: colorName, hex }) => (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-semibold uppercase text-light px-0.5">Colour</span>
+                <select
+                  value={generic.colour}
+                  onChange={(e) => applyGeneric({ ...generic, colour: e.target.value })}
+                  className="formInput text-xs"
+                >
+                  {DEFAULT_PRINT_COLOURS.map((c) => (
+                    <option key={c.name} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {DEFAULT_PRINT_COLOURS.slice(0, 12).map((c) => (
                     <button
-                      key={hex}
-                      title={colorName}
-                      onClick={() => {
-                        levaStore.set(
-                          Object.fromEntries(meshNames.map(n => [`visual.${n}`, hex])), false
-                        )
-                      }}
-                      className="w-6 h-6 rounded-full border border-gray-300 hover:scale-110 transition-transform"
-                      style={{ backgroundColor: hex }}
+                      key={c.name}
+                      title={c.name}
+                      onClick={() => applyGeneric({ ...generic, colour: c.name })}
+                      className={`w-5 h-5 rounded-full border transition-transform hover:scale-110 ${
+                        generic.colour === c.name ? 'border-textColor ring-1 ring-textColor' : 'border-borderColor'
+                      }`}
+                      style={{ backgroundColor: c.hex }}
                     />
                   ))}
                 </div>
-              </>
+              </div>
             )}
           </div>
         )}

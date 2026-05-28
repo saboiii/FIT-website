@@ -119,6 +119,21 @@ const AppSettingsSchema = new mongoose.Schema({
         minimumPrice: { type: Number, default: 5 },
         // Optional per-material density overrides (g/cm³): { pla: 1.24, ... }
         materialDensities: { type: Map, of: Number, default: undefined },
+    },
+
+    // Available colours/materials for generic print configuration. Seeded from
+    // lib/quoting/genericPresets DEFAULT_PRINT_COLOURS; admins curate to stock.
+    // `material` (optional) maps to a quoting density key; `priceModifier`
+    // (optional) is reserved for per-colour surcharges.
+    printColours: {
+        type: [{
+            name: { type: String, required: true },
+            hex: { type: String, required: true },
+            material: { type: String, default: null },
+            priceModifier: { type: Number, default: null },
+            _id: false,
+        }],
+        default: undefined,
     }
 }, {
     timestamps: true

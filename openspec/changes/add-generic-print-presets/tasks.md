@@ -1,36 +1,45 @@
 # Tasks: Generic Print Presets
 
 > GOOS / test-first. The mapping is pure — drive it with unit tests before any UI.
+> Progress: 2026-05-28 — mapping + catalogue + editor generic UI done (109 tests).
 
 ## 1. Preset mapping (pure, `lib/quoting/genericPresets.js`)
-- [ ] 1.1 Unit tests: each Quality maps to the agreed layerHeight; each Strength
-      maps to the agreed wallLoops + infill; Strong > Normal > Draft on
-      walls/infill; High < Medium < Draft on layer height
-- [ ] 1.2 Unit tests: colour maps to meshColors; material-bearing colours
-      (Wood/Marble/Transparent/Natural) set materialType
-- [ ] 1.3 Implement `mapGenericToPrintSettings({ strength, quality, colour })`
-      with the mapping tables as data
+- [x] 1.1 Tests: Quality→layerHeight (High<Medium<Draft); Strength→walls+infill
+      (Strong>Normal>Draft)
+- [x] 1.2 Tests: colour→hex; material-bearing colours (Wood/Marble/Transparent/
+      Natural) set materialType; case-insensitive; unknown colour falls back
+- [x] 1.3 `mapGenericToPrintSettings({ strength, quality, colour })` with data tables
 
-## 2. Colour/material catalogue (`models/AppSettings.js`)
-- [ ] 2.1 Add `printColours: [{ name, hex, material?, priceModifier? }]`
-- [ ] 2.2 Seed defaults from the client's colour list; admin settings UI to edit
+## 2. Colour/material catalogue
+- [x] 2.1 `AppSettings.printColours: [{ name, hex, material?, priceModifier? }]`
+- [x] 2.2 `DEFAULT_PRINT_COLOURS` seeds the client's 31-colour list; densities for
+      wood/marble/transparent/natural added to `pricingDefaults`
+- [ ] 2.3 Admin settings UI to curate `printColours` — **TODO (next), with the
+      `quotingConfig` admin UI from the engine change (5.3)**
+- [ ] 2.4 Editor sources colours from `AppSettings.printColours` (currently uses
+      `DEFAULT_PRINT_COLOURS`) — small follow-up once the admin UI exists
 
 ## 3. Quote integration
-- [ ] 3.1 Unit test: a generic selection produces a deterministic instant quote
-      via the engine (price changes sensibly with Strength/Quality/Colour)
-- [ ] 3.2 Wire generic selection → mapGenericToPrintSettings → calculateInstantQuote
+- [x] 3.1 Tests: stronger/higher selection costs more; denser colour ≥ plastic
+- [x] 3.2 Editor maps generic selection → printSettings → live quote (via QuotePanel)
 
 ## 4. Editor generic mode UI (`components/Editor/result.jsx`)
-- [ ] 4.1 Generic mode (default) with Strength, Quality, Colour controls
-- [ ] 4.2 Live quote shown; advanced (leva) mode still reachable via toggle
-- [ ] 4.3 Replace the ad-hoc 4 presets / 8 swatches with the catalogue-driven UI
+- [x] 4.1 Generic mode (default, `!advancedMode`) with Strength, Quality, Colour
+- [x] 4.2 Live quote shown (QuotePanel); advanced (leva) mode still reachable
+- [x] 4.3 Replaced the ad-hoc 4 presets / 8 swatches with the catalogue-driven UI
+- [ ] 4.4 **BLOCKED — needs browser/human:** interactive `/editor` verification
+      (selections update leva + colour + quote). Verified the pure mapping by
+      tests; the leva/three wiring can't be exercised headlessly.
 
 ## 5. Pay-first flow
-- [ ] 5.1 On complete generic selection, auto-quote (configured → quoted) and
-      route to payment (coordinate with improve-custom-print-post-config-ux)
-- [ ] 5.2 Integration test (mocked): generic submit yields a payable quoted request
+- [ ] 5.1 **DEFERRED to `improve-custom-print-post-config-ux`:** on a complete
+      generic selection, persist the quote (status → `quoted`) and route to
+      payment. The API (`POST /api/quote` with `requestId`) + model already
+      support persistence; the editor-submit trigger + pay-first routing land with
+      the post-config-ux change so the option/expedite state and routing are
+      handled in one place. Tracked there, not dropped.
+- [ ] 5.2 Integration test for the pay-first submit (with 5.1)
 
 ## 6. Verify
-- [ ] 6.1 Manual: generic flow upload → 3 choices → instant price → pay
-- [ ] 6.2 Manual: advanced flow still works
-- [ ] 6.3 `yarn test:run` green
+- [x] 6.1 `yarn test:run` green (109 tests); changed files lint-clean
+- [ ] 6.2 Manual generic + advanced flows in the browser (see 4.4)

@@ -981,17 +981,35 @@ function Cart() {
                     <div className='flex flex-col border border-borderColor rounded p-4 w-full md:w-fit min-w-1/2'>
                         <h2 className="font-semibold text-lg mb-4">Cart Summary</h2>
                         {/* Block checkout if any custom print is pending */}
-                        {hasPendingCustomPrint && (
-                            <div className="mb-4 rounded-lg border border-yellow-400 bg-yellow-50 p-4 flex items-center gap-3">
-                                <HiExclamationCircle className="text-yellow-600 text-xl" />
-                                <div>
-                                    <div className="font-semibold text-yellow-800 text-sm">Custom Print Request Incomplete</div>
-                                    <div className="text-xs text-yellow-700">
-                                        Please upload your 3D model, configure your print request and await a quote before proceeding to checkout.
+                        {hasPendingCustomPrint && (() => {
+                            const allConfigured = cart.every(cartItem => {
+                                if (!String(cartItem.productId || '').startsWith('custom-print:')) return true;
+                                const requestId = cartItem.customPrintRequestId || cartItem.requestId || (cartItem.productId || '').split(':')[1];
+                                const req = customPrintRequests[requestId];
+                                return req?.status === 'configured';
+                            });
+                            return allConfigured ? (
+                                <div className="mb-4 rounded-lg border border-blue-400 bg-blue-50 p-4 flex items-center gap-3">
+                                    <HiExclamationCircle className="text-blue-600 text-xl" />
+                                    <div>
+                                        <div className="font-semibold text-blue-800 text-sm">Awaiting Quote</div>
+                                        <div className="text-xs text-blue-700">
+                                            Your print configuration has been submitted. Please wait for a quote before proceeding to checkout.
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            ) : (
+                                <div className="mb-4 rounded-lg border border-yellow-400 bg-yellow-50 p-4 flex items-center gap-3">
+                                    <HiExclamationCircle className="text-yellow-600 text-xl" />
+                                    <div>
+                                        <div className="font-semibold text-yellow-800 text-sm">Custom Print Request Incomplete</div>
+                                        <div className="text-xs text-yellow-700">
+                                            Please upload your 3D model and configure your print request before proceeding to checkout.
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                         {loading ? (
                             <CartSummarySkeleton />
                         ) : showAddressPrompt ? (

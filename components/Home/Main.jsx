@@ -8,7 +8,8 @@ import { useState, useEffect } from 'react'
 function Main({ adbanner }) {
     const { content } = useContent('home/hero-banner', {
         text: '3D printing and modeling services',
-        heroImage: '/placeholder.jpg'
+        heroImage: '/placeholder.jpg',
+        darkOverlay: false
     })
 
     const text = "FIX IT TODAY®";
@@ -82,6 +83,9 @@ function Main({ adbanner }) {
                         setIsImageLoaded(true)
                     }}
                 />
+            )}
+            {content?.darkOverlay && (
+                <div className="absolute inset-0 bg-black/50 z-[5]" />
             )}
             <div className="relative z-10 flex flex-col items-center w-full text-background text-center px-4">
                 {isImageLoaded && (

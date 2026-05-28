@@ -29,6 +29,38 @@ const Result = () => {
   const [meshNames, setMeshNames] = useState([])
   const [submittingConfig, setSubmittingConfig] = useState(false)
   const [configLoaded, setConfigLoaded] = useState(false)
+  const [advancedMode, setAdvancedMode] = useState(false)
+
+  const defaultPrintability = {
+    layerHeight: 0.2, initialLayerHeight: 0.2, wallLoops: 2,
+    internalSolidInfillPattern: 'Rectilinear', sparseInfillDensity: 20,
+    sparseInfillPattern: 'Rectilinear', nozzleDiameter: 0.4,
+    enableSupport: false, supportType: 'Normal', printPlate: 'Textured',
+  }
+  const defaultVisual = {
+    background: '#e3e3e3', wireframe: false, materialType: 'plastic',
+  }
+  const defaultLighting = {
+    autoRotate: true, lightIntensity: 1, preset: 'rembrandt', environment: 'city',
+  }
+
+  const printPresets = {
+    'Draft (Fast)': { layerHeight: 0.3, initialLayerHeight: 0.3, sparseInfillDensity: 10, wallLoops: 1, enableSupport: false },
+    'Standard': { layerHeight: 0.2, initialLayerHeight: 0.2, sparseInfillDensity: 20, wallLoops: 2, enableSupport: false },
+    'High Quality': { layerHeight: 0.12, initialLayerHeight: 0.12, sparseInfillDensity: 25, wallLoops: 3, enableSupport: false },
+    'Strong & Durable': { layerHeight: 0.2, initialLayerHeight: 0.2, sparseInfillDensity: 40, wallLoops: 4, enableSupport: true },
+  }
+
+  const predefinedColors = [
+    { name: 'White', hex: '#ffffff' },
+    { name: 'Black', hex: '#000000' },
+    { name: 'Red', hex: '#ff0000' },
+    { name: 'Blue', hex: '#0055ff' },
+    { name: 'Green', hex: '#00aa00' },
+    { name: 'Yellow', hex: '#ffdd00' },
+    { name: 'Orange', hex: '#ff6600' },
+    { name: 'Purple', hex: '#8800cc' },
+  ]
 
   // Refs to store current values for submission
   const currentPrintabilityRef = useRef({})
@@ -298,6 +330,9 @@ const Result = () => {
         }
 
         showToast('Print configuration saved successfully!', 'success')
+        setTimeout(() => {
+          window.location.href = '/cart'
+        }, 1500)
       }
     } catch (error) {
       console.error('Error submitting configuration:', error)
@@ -310,6 +345,21 @@ const Result = () => {
   // Add save configuration button in export controls
   const saveConfigControls = useMemo(() => {
     const controls = {
+      'Reset All Settings': button(() => {
+        levaStore.set({
+          'visual.background': defaultVisual.background,
+          'visual.wireframe': defaultVisual.wireframe,
+          'visual.materialType': defaultVisual.materialType,
+          'lighting.autoRotate': defaultLighting.autoRotate,
+          'lighting.lightIntensity': defaultLighting.lightIntensity,
+          'lighting.preset': defaultLighting.preset,
+          'lighting.environment': defaultLighting.environment,
+          ...Object.fromEntries(
+            Object.entries(defaultPrintability).map(([k, v]) => [`printability.${k}`, v])
+          ),
+          ...Object.fromEntries(meshNames.map(name => [`visual.${name}`, '#ffffff'])),
+        }, false)
+      }),
       'Download image': button(() => downloadImage()),
     }
 
@@ -320,7 +370,7 @@ const Result = () => {
     }
 
     return controls
-  }, [orderId, productId, variantId, submittingConfig, downloadImage, submitConfiguration])
+  }, [orderId, productId, variantId, submittingConfig, downloadImage, submitConfiguration, meshNames])
 
   useControls('export', saveConfigControls, { collapsed: false })
 
@@ -371,7 +421,56 @@ const Result = () => {
           </section>
         </div>
       )}
-      <Leva theme={whiteTheme} />
+      <Leva theme={whiteTheme} hidden={!advancedMode} />
+      {/* Simple/Advanced mode toggle */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
+        <button
+          onClick={() => setAdvancedMode(!advancedMode)}
+          className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50"
+        >
+          {advancedMode ? 'Simple Mode' : 'Advanced Mode'}
+        </button>
+        {!advancedMode && (
+          <div className="flex flex-col gap-1 bg-white border border-gray-200 rounded shadow-sm p-2 w-48">
+            <span className="text-[10px] font-semibold uppercase text-gray-500 px-1">Print Presets</span>
+            {Object.entries(printPresets).map(([name, values]) => (
+              <button
+                key={name}
+                onClick={() => {
+                  levaStore.set(
+                    Object.fromEntries(
+                      Object.entries(values).map(([k, v]) => [`printability.${k}`, v])
+                    ), false
+                  )
+                }}
+                className="text-xs text-left px-2 py-1.5 rounded hover:bg-gray-100"
+              >
+                {name}
+              </button>
+            ))}
+            {meshNames.length > 0 && (
+              <>
+                <span className="text-[10px] font-semibold uppercase text-gray-500 px-1 mt-2">Colors</span>
+                <div className="flex flex-wrap gap-1.5 px-1">
+                  {predefinedColors.map(({ name: colorName, hex }) => (
+                    <button
+                      key={hex}
+                      title={colorName}
+                      onClick={() => {
+                        levaStore.set(
+                          Object.fromEntries(meshNames.map(n => [`visual.${n}`, hex])), false
+                        )
+                      }}
+                      className="w-6 h-6 rounded-full border border-gray-300 hover:scale-110 transition-transform"
+                      style={{ backgroundColor: hex }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

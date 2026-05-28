@@ -458,7 +458,7 @@ export default function ChatLauncher() {
             </button>
 
             {open && (
-                <div className="fixed bottom-24 left-6 z-40 w-105 h-150 bg-white dark:bg-background border border-gray-200 dark:border-borderColor rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-bottom-4">
+                <div className="fixed bottom-24 left-3 right-3 sm:right-auto sm:left-6 z-40 w-auto sm:w-105 h-[calc(100vh-8rem)] sm:h-150 bg-white dark:bg-background border border-gray-200 dark:border-borderColor rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 animate-in slide-in-from-bottom-4">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-borderColor bg-linear-to-r from-gray-50 to-white dark:from-borderColor/20 dark:to-transparent">
                         <div className="flex flex-col gap-0.5">
                             <span className="text-base font-semibold text-gray-900 dark:text-textColor">Messages</span>

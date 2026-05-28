@@ -7,6 +7,7 @@ import SelectField from './CMSFields/SelectField'
 import ArrayField from './CMSFields/ArrayField'
 import ProductSearch from './CMSFields/ProductSearch'
 import CategoryInput from './CMSFields/CategoryInput'
+import BooleanField from './CMSFields/BooleanField'
 import { IoRefresh } from 'react-icons/io5'
 import { MdOpenInNew } from 'react-icons/md'
 
@@ -21,7 +22,7 @@ const defaultContentSections = [
         id: 'home/hero-banner',
         name: 'Home - Hero Banner',
         description: 'Banner text displayed at the top of the homepage',
-        fields: ['text', 'heroImage']
+        fields: ['text', 'heroImage', 'darkOverlay']
     },
     {
         id: 'home/ad-banner',
@@ -366,6 +367,26 @@ export default function ContentManagement() {
                     value={value || ''}
                     onChange={onChange}
                     helpText="Search and select products by name. Drag to reorder them - the order here is the display order on your site."
+                />
+            )
+        }
+
+        // Boolean field detection
+        const isBooleanField = (f) => {
+            const meta = getFieldMeta(f)
+            if (meta) return meta.type === 'boolean'
+            const name = f.toLowerCase()
+            return name.includes('enable') || name.includes('toggle') || name.includes('overlay')
+                || name.includes('show') || name.includes('hide')
+        }
+
+        if (isBooleanField(field)) {
+            return (
+                <BooleanField
+                    key={field}
+                    label={field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')}
+                    value={!!value}
+                    onChange={onChange}
                 />
             )
         }

@@ -84,6 +84,7 @@ function ProductForm({ mode = "Create", product = null }) {
         categoryId: "",
         subcategoryId: "",
         stock: 1,
+        infiniteStock: false,
             hidden: false,
 
         basePrice: {
@@ -146,7 +147,7 @@ function ProductForm({ mode = "Create", product = null }) {
     const { settings: adminSettings, loading: adminSettingsLoading, error: adminSettingsError } = useAdminSettings();
     useEffect(() => {
         if (adminSettingsLoading) return;
-        if (adminSettings && adminSettings.deliveryTypes && adminSettings.categories) {
+        if (adminSettings) {
             // Handle delivery types
             const applicableDeliveryTypes = (adminSettings.deliveryTypes || []).filter(dt =>
                 dt.isActive && dt.applicableToProductTypes?.includes(form.productType)
@@ -557,6 +558,14 @@ function ProductForm({ mode = "Create", product = null }) {
             showToast(isEditing ? "Product updated successfully!" : "Product created successfully!", 'success');
             if (!isEditing) {
                 setForm({ ...defaultForm });
+            } else {
+                // Update form state with newly uploaded files so subsequent saves don't lose them
+                setForm(prev => ({
+                    ...prev,
+                    images: [...prev.images, ...uploadedImages],
+                    paidAssets: [...prev.paidAssets, ...uploadedModels],
+                    viewableModel: uploadedViewable ? uploadedViewable : prev.viewableModel,
+                }));
             }
         } catch (err) {
             showToast("Network error: " + err.message, 'error');
@@ -647,7 +656,8 @@ function ProductForm({ mode = "Create", product = null }) {
                 <div
                     className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-6"
                     style={{
-                        maxHeight: openSection.details ? 2000 : 0,
+                        maxHeight: openSection.details ? 5000 : 0,
+                        overflow: openSection.details ? 'visible' : 'hidden',
                         opacity: openSection.details ? 1 : 0,
                         pointerEvents: openSection.details ? 'auto' : 'none'
                     }}
@@ -714,7 +724,8 @@ function ProductForm({ mode = "Create", product = null }) {
                 <div
                     className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-6"
                     style={{
-                        maxHeight: openSection.shipping ? 2000 : 0,
+                        maxHeight: openSection.shipping ? 5000 : 0,
+                        overflow: openSection.shipping ? 'visible' : 'hidden',
                         opacity: openSection.shipping ? 1 : 0,
                         pointerEvents: openSection.shipping ? 'auto' : 'none'
                     }}
@@ -736,17 +747,55 @@ function ProductForm({ mode = "Create", product = null }) {
                 <div
                     className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-3"
                     style={{
-                        maxHeight: openSection.pricing ? 2000 : 0,
+                        maxHeight: openSection.pricing ? 5000 : 0,
+                        overflow: openSection.pricing ? 'visible' : 'hidden',
                         opacity: openSection.pricing ? 1 : 0,
                         pointerEvents: openSection.pricing ? 'auto' : 'none'
                     }}
                 >
                     <PricingFields form={form} setForm={setForm} allCurrencies={allCurrencies} missingFields={missingFields} />
 
+                    {/* Stock Management */}
+                    <div className="border border-borderColor rounded-lg p-4 space-y-3">
+                        <h3 className="font-medium text-sm text-textColor">Stock Management</h3>
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={form.infiniteStock || false}
+                                onChange={(e) => setForm(f => ({ ...f, infiniteStock: e.target.checked }))}
+                                className="rounded"
+                            />
+                            Infinite Stock (never runs out)
+                        </label>
+                        {!form.infiniteStock && (
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-lightColor">Total Stock</label>
+                                <input
+                                    type="number"
+                                    name="stock"
+                                    min="0"
+                                    value={form.stock ?? ''}
+                                    onChange={(e) => setForm(f => ({ ...f, stock: e.target.value === '' ? '' : Number(e.target.value) }))}
+                                    className="formInput text-sm w-32"
+                                    placeholder="Stock quantity"
+                                />
+                                <p className="text-xs text-extraLight">Per-variant stock can be set in the Variant Types section below.</p>
+                            </div>
+                        )}
+                    </div>
+
                     <VariantTypesField
                         form={form}
                         setForm={setForm}
                         isDigitalDelivery={form.delivery?.deliveryTypes?.some(dt => dt.type === 'digital' || dt === 'digital')}
+                        onVariantImageUpload={async (file) => {
+                            const formData = new FormData();
+                            formData.append('files', file);
+                            const res = await fetch('/api/upload/images', { method: 'POST', body: formData });
+                            const data = await res.json();
+                            if (!res.ok) throw new Error(data.error || 'Upload failed');
+                            return data.files[0];
+                        }}
                     />
 
                     <DiscountsField form={form} setForm={setForm} events={events} />

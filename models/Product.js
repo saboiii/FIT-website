@@ -83,6 +83,7 @@ const VariantOptionSchema = new mongoose.Schema({
     name: { type: String, required: true },
     additionalFee: { type: Number, required: true, default: 0 },
     stock: { type: Number, required: false, min: 0 },
+    image: { type: String, required: false, default: null },
 }, { _id: true });
 
 const VariantTypeSchema = new mongoose.Schema({
@@ -105,6 +106,7 @@ const ProductSchema = new mongoose.Schema(
         },
         priceCredits: { type: Number, required: true },
         stock: { type: Number, required: false, min: 0 },
+        infiniteStock: { type: Boolean, default: false },
         productType: { type: String, enum: ["print", "shop"], required: true, default: "shop" },
 
         // Legacy category system (for backward compatibility)

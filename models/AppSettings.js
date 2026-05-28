@@ -91,7 +91,16 @@ const AppSettingsSchema = new mongoose.Schema({
     },
 
     // Version for future migrations if needed
-    version: { type: Number, default: 1 }
+    version: { type: Number, default: 1 },
+
+    // Print pricing formula for auto-calculating custom print quotes
+    printPricingFormula: {
+        baseFee: { type: Number, default: 5 },
+        materialCostPerGram: { type: Number, default: 0.05 },
+        supportMultiplier: { type: Number, default: 1.2 },
+        highQualityMultiplier: { type: Number, default: 1.5 },
+        markupPercentage: { type: Number, default: 30 },
+    }
 }, {
     timestamps: true
 });

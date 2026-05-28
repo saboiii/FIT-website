@@ -342,6 +342,29 @@ function ProductPage() {
         });
     };
 
+    // Check if current selection is out of stock
+    const isOutOfStock = () => {
+        if (!product) return false;
+        if (product.infiniteStock) return false;
+
+        // Check variant-level stock if variants are selected
+        if (product.variantTypes?.length > 0) {
+            for (const variantType of product.variantTypes) {
+                const selectedOptionName = selectedVariantOptions[variantType.name];
+                if (selectedOptionName) {
+                    const option = variantType.options.find(o => o.name === selectedOptionName);
+                    if (option && option.stock !== undefined && option.stock !== null && option.stock <= 0) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Check top-level stock
+        if (product.stock !== undefined && product.stock !== null && product.stock <= 0) return true;
+        return false;
+    };
+
     // Function to calculate total price including selected variant fees
     const calculateTotalPrice = () => {
         if (!product) return { total: 0, currency: 'SGD', breakdown: null, discountedTotal: null, effectivePercentage: null, appliedGlobalEvents: [] };
@@ -485,9 +508,9 @@ function ProductPage() {
     };
 
     return (
-        <div className='flex w-full flex-col py-20 border-b border-borderColor px-20'>
+        <div className='flex w-full flex-col py-20 border-b border-borderColor px-8 md:px-20'>
             <div className='flex lg:flex-row flex-col w-full gap-16'>
-                <div className='flex flex-col lg:flex-2/5 gap-4'>
+                <div className='flex flex-col lg:flex-2/5 gap-4 max-w-[600px]'>
                     <div className='flex w-full overflow-hidden aspect-square' ref={containerRef}>
                         <div
                             className='flex h-full flex-row'
@@ -509,8 +532,8 @@ function ProductPage() {
                                         src={`/api/proxy?key=${encodeURIComponent(image)}`}
                                         alt={`Product Image`}
                                         priority
-                                        width={500}
-                                        height={500}
+                                        width={600}
+                                        height={600}
                                         className='w-full h-full object-cover'
                                     />
                                 </div>
@@ -703,7 +726,7 @@ function ProductPage() {
                                         <button
                                             className='formBlackButton gap-2'
                                             onClick={() => handleAddToCart(product)}
-                                            disabled={isAdding || showAdded || checkingOwnership || !areAllVariantsSelected()}
+                                            disabled={isAdding || showAdded || checkingOwnership || !areAllVariantsSelected() || isOutOfStock()}
                                         >
                                             {checkingOwnership ? (
                                                 <>
@@ -719,6 +742,10 @@ function ProductPage() {
                                                 <>
                                                     Added to cart
                                                     <IoMdCheckmark size={16} className='transition-opacity duration-300' />
+                                                </>
+                                            ) : isOutOfStock() ? (
+                                                <>
+                                                    Out of Stock
                                                 </>
                                             ) : !areAllVariantsSelected() ? (
                                                 <>

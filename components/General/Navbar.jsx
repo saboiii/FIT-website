@@ -42,6 +42,12 @@ function Navbar() {
         setIsOpen((prev) => !prev);
     }
 
+    // Auto-close mobile drawer on route change
+    useEffect(() => {
+        setIsOpen(false);
+        setMobileDropdown(null);
+    }, [pathname, searchParams]);
+
     useEffect(() => {
         const fetchCategories = async () => {
             try {

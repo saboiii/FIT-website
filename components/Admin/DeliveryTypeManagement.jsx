@@ -10,6 +10,7 @@ export default function DeliveryTypeManagement() {
     const [saving, setSaving] = useState(false)
     const [expandedDeliveryTypes, setExpandedDeliveryTypes] = useState({})
     const [showDeliveryTypeForm, setShowDeliveryTypeForm] = useState(false)
+    const [editingDeliveryType, setEditingDeliveryType] = useState(null)
     const { showToast } = useToast()
 
     const [formData, setFormData] = useState({
@@ -93,19 +94,57 @@ export default function DeliveryTypeManagement() {
 
         setSaving(true)
         try {
-            const response = await fetch('/api/admin/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'deliveryType',
-                    action: 'add',
-                    data: formData
+            let response;
+            if (editingDeliveryType) {
+                // Edit mode - PUT to update existing delivery type
+                response = await fetch('/api/admin/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'delivery-type',
+                        id: editingDeliveryType._id,
+                        data: {
+                            displayName: formData.displayName,
+                            description: formData.description,
+                            applicableToProductTypes: formData.applicableToProductTypes,
+                            basePricing: formData.basePricing,
+                            isActive: formData.isActive,
+                        }
+                    })
                 })
-            })
+            } else {
+                // Add mode - POST to create new delivery type
+                response = await fetch('/api/admin/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'deliveryType',
+                        action: 'add',
+                        data: formData
+                    })
+                })
+            }
 
             const result = await response.json()
             if (response.ok) {
-                showToast('Delivery type added!', 'success')
+                showToast(editingDeliveryType ? 'Delivery type updated!' : 'Delivery type added!', 'success')
+
+                // Notify affected creators if editing
+                if (editingDeliveryType) {
+                    try {
+                        await fetch('/api/admin/notify-delivery-change', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                deliveryTypeName: editingDeliveryType.name,
+                                changes: formData,
+                            })
+                        })
+                    } catch (e) {
+                        console.error('Failed to notify creators:', e)
+                    }
+                }
+
                 setFormData({
                     name: '',
                     displayName: '',
@@ -122,6 +161,7 @@ export default function DeliveryTypeManagement() {
                     isActive: true
                 })
                 setShowDeliveryTypeForm(false)
+                setEditingDeliveryType(null)
                 fetchDeliveryTypes()
             } else {
                 showToast(result.error || 'Failed to add', 'error')
@@ -213,9 +253,9 @@ export default function DeliveryTypeManagement() {
             {showDeliveryTypeForm && (
                 <div className="adminDashboardContainer animate-slideDown">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-medium">Add New Delivery Type</h3>
+                        <h3 className="text-base font-medium">{editingDeliveryType ? 'Edit Delivery Type' : 'Add New Delivery Type'}</h3>
                         <button
-                            onClick={() => setShowDeliveryTypeForm(false)}
+                            onClick={() => { setShowDeliveryTypeForm(false); setEditingDeliveryType(null); }}
                             className="toggleXbutton"
                         >
                             <RxCross1 size={14} />
@@ -536,7 +576,7 @@ export default function DeliveryTypeManagement() {
                                 disabled={saving}
                                 className="formBlackButton min-w-24"
                             >
-                                {saving ? 'Adding...' : 'Add Delivery Type'}
+                                {saving ? (editingDeliveryType ? 'Saving...' : 'Adding...') : (editingDeliveryType ? 'Save Changes' : 'Add Delivery Type')}
                             </button>
                         </div>
                     </form>
@@ -565,7 +605,7 @@ export default function DeliveryTypeManagement() {
                                 <div className="flex flex-col gap-3 p-4 bg-baseColor">
                                     <div className="flex items-center gap-3 flex-1 min-w-0">
                                         {/* Expand/Collapse Button */}
-                                        {dt.basePricing && dt.basePricing.basePrice && (
+                                        {dt.basePricing && dt.basePricing.basePrice != null && !(Number(dt.basePricing.basePrice) === 0 && Number(dt.basePricing.volumeFactor || 0) === 0 && Number(dt.basePricing.weightFactor || 0) === 0) && (
                                             <button
                                                 onClick={() => toggleDeliveryType(dt.name)}
                                                 className="toggleXbutton p-1 shrink-0"
@@ -601,12 +641,14 @@ export default function DeliveryTypeManagement() {
                                                     }`}>
                                                     {dt.isActive ? 'Active' : 'Inactive'}
                                                 </span>
-                                                {dt.basePricing && dt.basePricing.basePrice && (
+                                                {dt.basePricing && dt.basePricing.basePrice != null && (
                                                     <span className="text-xs text-extraLight">
-                                                        Formula-based pricing
+                                                        {Number(dt.basePricing.basePrice) === 0 && Number(dt.basePricing.volumeFactor || 0) === 0 && Number(dt.basePricing.weightFactor || 0) === 0
+                                                            ? 'Free'
+                                                            : 'Formula-based pricing'}
                                                     </span>
                                                 )}
-                                                {(!dt.basePricing || !dt.basePricing.basePrice) && (
+                                                {(!dt.basePricing || dt.basePricing.basePrice == null) && (
                                                     <span className="text-xs text-extraLight">
                                                         Creator-defined pricing
                                                     </span>
@@ -619,6 +661,32 @@ export default function DeliveryTypeManagement() {
                                     </div>
 
                                     <div className="flex items-center gap-2">
+                                        {!dt.isHardcoded && (
+                                            <button
+                                                onClick={() => {
+                                                    setEditingDeliveryType(dt)
+                                                    setFormData({
+                                                        name: dt.name,
+                                                        displayName: dt.displayName,
+                                                        description: dt.description || '',
+                                                        applicableToProductTypes: dt.applicableToProductTypes || [],
+                                                        basePricing: {
+                                                            basePrice: dt.basePricing?.basePrice ?? '',
+                                                            volumeFactor: dt.basePricing?.volumeFactor ?? '',
+                                                            weightFactor: dt.basePricing?.weightFactor ?? '',
+                                                            minPrice: dt.basePricing?.minPrice ?? '',
+                                                            maxPrice: dt.basePricing?.maxPrice ?? '',
+                                                            freeShippingThreshold: dt.basePricing?.freeShippingThreshold ?? '',
+                                                        },
+                                                        isActive: dt.isActive,
+                                                    })
+                                                    setShowDeliveryTypeForm(true)
+                                                }}
+                                                className="text-xs px-3 py-1.5 rounded border border-borderColor hover:bg-borderColor/30 text-lightColor font-medium whitespace-nowrap"
+                                            >
+                                                Edit
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => handleToggleActive(dt.name, dt.isActive)}
                                             className={`text-xs px-3 py-1.5 rounded transition-all duration-200 font-medium whitespace-nowrap ${dt.isActive
@@ -642,7 +710,7 @@ export default function DeliveryTypeManagement() {
                                 </div>
 
                                 {/* Pricing Formula Details - Collapsible */}
-                                {dt.basePricing && dt.basePricing.basePrice && expandedDeliveryTypes[dt.name] && (
+                                {dt.basePricing && dt.basePricing.basePrice != null && !(Number(dt.basePricing.basePrice) === 0 && Number(dt.basePricing.volumeFactor || 0) === 0 && Number(dt.basePricing.weightFactor || 0) === 0) && expandedDeliveryTypes[dt.name] && (
                                     <div className="border-t border-borderColor bg-background/50">
                                         <div className="p-4">
                                             <h4 className="text-xs font-medium text-lightColor mb-3">Pricing Formula</h4>

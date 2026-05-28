@@ -4,7 +4,7 @@ import { MdExpandMore, MdExpandLess, MdOutlineLightbulb, MdAdd } from 'react-ico
 import { BiPalette } from 'react-icons/bi'
 import { IoMdPricetag } from 'react-icons/io'
 
-export default function VariantTypesField({ form, setForm, isDigitalDelivery }) {
+export default function VariantTypesField({ form, setForm, isDigitalDelivery, onVariantImageUpload }) {
     // Check if digital delivery is selected
     const isDigitalProduct = !!isDigitalDelivery
     const [expandedVariants, setExpandedVariants] = useState(false)
@@ -45,7 +45,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery }) 
             </button>
 
             {expandedVariants && (
-                <div className="p-4 border-t border-borderColor bg-baseColor animate-slideDown space-y-4">
+                <div className="p-4 border-t border-borderColor bg-baseColor animate-slideDown space-y-4 max-h-[60vh] overflow-y-auto">
                     {isDigitalProduct ? (
                         <div className="p-3 bg-blue-50 border border-blue-200 rounded flex gap-2 items-start text-xs text-blue-950">
                             <MdOutlineLightbulb className="flex-shrink-0 mt-0.5" />
@@ -168,7 +168,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery }) 
                                                     </span>
                                                 </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                     <div className="space-y-2">
                                                         <label className="text-xs font-medium text-lightColor">Option Name</label>
                                                         <input
@@ -194,30 +194,66 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery }) 
                                                             />
                                                         </div>
                                                     </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-medium text-lightColor">Stock</label>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            className="formInput text-sm"
+                                                            placeholder="10"
+                                                            id={`optionStock-${typeIdx}`}
+                                                            disabled={isDigitalProduct && variantType.options?.length >= 1}
+                                                        />
+                                                    </div>
                                                 </div>
+                                                {onVariantImageUpload && (
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-medium text-lightColor">Variant Image (optional)</label>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            id={`optionImage-${typeIdx}`}
+                                                            className="formInput text-xs"
+                                                            disabled={isDigitalProduct && variantType.options?.length >= 1}
+                                                        />
+                                                    </div>
+                                                )}
 
                                                 <button
                                                     type="button"
                                                     className="formButton text-sm w-full"
                                                     disabled={isDigitalProduct && variantType.options?.length >= 1}
-                                                    onClick={() => {
+                                                    onClick={async () => {
                                                         if (!(isDigitalProduct && variantType.options?.length >= 1)) {
                                                             const nameInput = document.getElementById(`optionName-${typeIdx}`);
                                                             const feeInput = document.getElementById(`optionFee-${typeIdx}`);
+                                                            const stockInput = document.getElementById(`optionStock-${typeIdx}`);
+                                                            const imageInput = document.getElementById(`optionImage-${typeIdx}`);
                                                             const name = nameInput.value.trim();
                                                             const additionalFee = parseFloat(feeInput.value) || 0;
+                                                            const stock = stockInput?.value !== '' ? parseInt(stockInput.value) : undefined;
 
                                                             if (name) {
+                                                                let imageKey = null;
+                                                                if (onVariantImageUpload && imageInput?.files?.[0]) {
+                                                                    try {
+                                                                        imageKey = await onVariantImageUpload(imageInput.files[0]);
+                                                                    } catch (e) {
+                                                                        console.error('Failed to upload variant image:', e);
+                                                                    }
+                                                                }
                                                                 setForm(f => ({
                                                                     ...f,
                                                                     variantTypes: f.variantTypes.map((vt, i) =>
                                                                         i === typeIdx
-                                                                            ? { ...vt, options: [...(vt.options || []), { name, additionalFee, stock: 1 }] }
+                                                                            ? { ...vt, options: [...(vt.options || []), { name, additionalFee, stock, image: imageKey }] }
                                                                             : vt
                                                                     )
                                                                 }));
                                                                 nameInput.value = '';
                                                                 feeInput.value = '';
+                                                                if (stockInput) stockInput.value = '';
+                                                                if (imageInput) imageInput.value = '';
                                                             }
                                                         }
                                                     }}
@@ -236,12 +272,24 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery }) 
                                                     {variantType.options.map((option, optionIdx) => (
                                                         <div key={optionIdx} className="flex items-center justify-between bg-white border border-borderColor p-3 rounded-lg hover:shadow-sm transition-shadow group">
                                                             <div className="flex items-center gap-3">
+                                                                {option.image && (
+                                                                    <img
+                                                                        src={`/api/proxy?key=${encodeURIComponent(option.image)}`}
+                                                                        alt={option.name}
+                                                                        className="w-8 h-8 rounded object-cover border border-borderColor"
+                                                                    />
+                                                                )}
                                                                 <div className="w-2 h-2 rounded-full bg-purple-500"></div>
                                                                 <div>
                                                                     <span className="text-sm font-medium text-textColor">{option.name}</span>
                                                                     {option.additionalFee > 0 && (
                                                                         <span className="ml-2 text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-semibold">
                                                                             +${option.additionalFee.toFixed(2)}
+                                                                        </span>
+                                                                    )}
+                                                                    {option.stock !== undefined && option.stock !== null && (
+                                                                        <span className="ml-2 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">
+                                                                            Stock: {option.stock}
                                                                         </span>
                                                                     )}
                                                                 </div>

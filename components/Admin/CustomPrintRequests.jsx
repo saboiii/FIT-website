@@ -55,8 +55,14 @@ export default function CustomPrintRequests() {
 
   const downloadModel = (r) => {
     if (!r.modelFile?.s3Key) return;
-    const url = `/api/proxy?key=${encodeURIComponent(r.modelFile.s3Key)}`;
-    window.open(url, '_blank');
+    const originalName = r.modelFile.originalName || r.modelFile.s3Key.split('/').pop() || 'model.stl';
+    const url = `/api/proxy?key=${encodeURIComponent(r.modelFile.s3Key)}&download=1`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = originalName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => document.body.removeChild(a), 100);
   };
 
   const exportToExcel = () => {
@@ -256,6 +262,52 @@ export default function CustomPrintRequests() {
                   </button>
                 )}
               </div>
+              {/* Inline Print Config Display */}
+              {r.printConfiguration?.printSettings && editing !== r.requestId && (
+                <div className="mt-2 p-3 bg-gray-50 border border-borderColor rounded text-xs">
+                  <h4 className="font-semibold text-[11px] uppercase tracking-wide mb-2 text-gray-700">Print Configuration</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
+                    {Object.entries({
+                      'Layer Height': `${r.printConfiguration.printSettings.layerHeight}mm`,
+                      'Initial Layer': `${r.printConfiguration.printSettings.initialLayerHeight}mm`,
+                      'Material': r.printConfiguration.printSettings.materialType,
+                      'Wall Loops': r.printConfiguration.printSettings.wallLoops,
+                      'Infill Density': `${r.printConfiguration.printSettings.sparseInfillDensity}%`,
+                      'Infill Pattern': r.printConfiguration.printSettings.sparseInfillPattern,
+                      'Internal Pattern': r.printConfiguration.printSettings.internalSolidInfillPattern,
+                      'Nozzle': `${r.printConfiguration.printSettings.nozzleDiameter}mm`,
+                      'Support': r.printConfiguration.printSettings.enableSupport ? r.printConfiguration.printSettings.supportType : 'None',
+                      'Print Plate': r.printConfiguration.printSettings.printPlate,
+                    }).map(([label, val]) => (
+                      <div key={label} className="flex flex-col">
+                        <span className="text-[10px] text-gray-500">{label}</span>
+                        <span className="font-medium text-gray-800">{val ?? 'N/A'}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {r.printConfiguration.meshColors && Object.keys(
+                    r.printConfiguration.meshColors instanceof Map
+                      ? Object.fromEntries(r.printConfiguration.meshColors)
+                      : (typeof r.printConfiguration.meshColors === 'object' ? r.printConfiguration.meshColors : {})
+                  ).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-borderColor">
+                      <span className="text-[10px] text-gray-500">Mesh Colors:</span>
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        {Object.entries(
+                          r.printConfiguration.meshColors instanceof Map
+                            ? Object.fromEntries(r.printConfiguration.meshColors)
+                            : (typeof r.printConfiguration.meshColors === 'object' ? r.printConfiguration.meshColors : {})
+                        ).map(([mesh, color]) => (
+                          <div key={mesh} className="flex items-center gap-1">
+                            <div className="w-3 h-3 rounded-full border border-borderColor" style={{ backgroundColor: color }} />
+                            <span className="text-[10px]">{mesh}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {editing === r.requestId ? (
                 <div className="mt-2 flex flex-col gap-4">
                   <div className="flex gap-2">
@@ -269,6 +321,34 @@ export default function CustomPrintRequests() {
                         onChange={(e) => setQuoteAmount(e.target.value)}
                         className="w-full border rounded px-2 py-1 text-[11px]"
                       />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const shipping = shippingEdit[r.requestId] || {};
+                            const res = await fetch('/api/admin/calculate-print-cost', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                printSettings: r.printConfiguration?.printSettings,
+                                dimensions: shipping.dimensions || r.dimensions,
+                              }),
+                            });
+                            if (res.ok) {
+                              const { suggestedPrice } = await res.json();
+                              setQuoteAmount(String(suggestedPrice));
+                              showToast(`Suggested price: ${suggestedPrice}`, 'info');
+                            }
+                          } catch (e) {
+                            console.error('Auto-calculate failed:', e);
+                          }
+                        }}
+                        className="px-3 py-1 border rounded text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
+                      >
+                        Auto-Calculate
+                      </button>
                     </div>
                   </div>
                   {/* ShippingFields for dimensions and delivery types */}

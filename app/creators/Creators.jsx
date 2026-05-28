@@ -2,17 +2,25 @@
 
 import Link from "next/link";
 import { useStripePriceIds } from "@/utils/StripePriceIdsContext";
+import { useUserSubscription } from "@/utils/UserSubscriptionContext";
 import { IoIosCheckmarkCircleOutline } from "react-icons/io";
 import { IoMdLock } from "react-icons/io";
 import { HiSparkles } from "react-icons/hi";
 
 function Creators() {
   const { stripePriceIds, loading } = useStripePriceIds();
+  const { subscription } = useUserSubscription();
 
   const tiers = {
     free: '',
     paid: stripePriceIds?.tier2 || stripePriceIds?.tier1 || '',
     team: stripePriceIds?.tier3 || stripePriceIds?.tier4 || '',
+  };
+
+  const currentPriceId = subscription?.priceId || '';
+  const isCurrentTier = (tierPriceId) => {
+    if (!currentPriceId && !tierPriceId) return true; // Both free
+    return currentPriceId === tierPriceId;
   };
 
   return (
@@ -46,9 +54,9 @@ function Creators() {
 
             <Link
               href={`/account/subscription${tiers.free ? `?priceId=${encodeURIComponent(tiers.free)}` : ''}`}
-              className="formBlackButton w-full justify-center"
+              className={`formBlackButton w-full justify-center ${isCurrentTier(tiers.free) ? 'bg-green-600 hover:bg-green-700 pointer-events-none' : ''}`}
             >
-              Lorem ipsum
+              {isCurrentTier(tiers.free) ? 'Current Plan' : 'Lorem ipsum'}
             </Link>
 
             <div className="flex flex-col gap-3 pt-2">
@@ -80,9 +88,9 @@ function Creators() {
 
             <Link
               href={`/account/subscription${tiers.paid ? `?priceId=${encodeURIComponent(tiers.paid)}` : ''}`}
-              className="formBlackButton w-full justify-center"
+              className={`formBlackButton w-full justify-center ${isCurrentTier(tiers.paid) ? 'bg-green-600 hover:bg-green-700 pointer-events-none' : ''}`}
             >
-              {loading ? 'Loading…' : 'Lorem ipsum'}
+              {loading ? 'Loading…' : isCurrentTier(tiers.paid) ? 'Current Plan' : 'Lorem ipsum'}
             </Link>
 
             <div className="flex flex-col gap-3 pt-2">
@@ -110,9 +118,9 @@ function Creators() {
 
             <Link
               href={`/account/subscription${tiers.team ? `?priceId=${encodeURIComponent(tiers.team)}` : ''}`}
-              className="formBlackButton w-full justify-center"
+              className={`formBlackButton w-full justify-center ${isCurrentTier(tiers.team) ? 'bg-green-600 hover:bg-green-700 pointer-events-none' : ''}`}
             >
-              {loading ? 'Loading…' : 'Lorem ipsum'}
+              {loading ? 'Loading…' : isCurrentTier(tiers.team) ? 'Current Plan' : 'Lorem ipsum'}
             </Link>
 
             <div className="flex flex-col gap-3 pt-2">

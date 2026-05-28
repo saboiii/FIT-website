@@ -7,6 +7,8 @@ import PrintOrder from "@/models/PrintOrder";
 import CheckoutSession from "@/models/CheckoutSession";
 import Order from "@/models/Order";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
+import { sendEmail, wrapInTemplate } from "@/lib/email";
+import { clerkClient } from "@clerk/nextjs/server";
 import mongoose from "mongoose";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -241,13 +243,37 @@ export async function POST(req) {
                     stripeSessionId: session.id, // Store Stripe session ID for payment method retrieval
                 });
 
-                // Update product sales (skip for custom prints)
+                // Update product sales and decrement stock (skip for custom prints)
                 if (!isCustomPrint) {
                     product.sales.push({
                         userId,
                         quantity: item.quantity,
                         price: item.price || 0,
                     });
+
+                    // Decrement stock if not infinite
+                    if (!product.infiniteStock) {
+                        const qty = item.quantity || 1;
+
+                        // Decrement variant-level stock
+                        if (item.selectedVariants && Object.keys(item.selectedVariants).length > 0 && product.variantTypes) {
+                            for (const [variantTypeName, selectedOption] of Object.entries(item.selectedVariants)) {
+                                const variantType = product.variantTypes.find(vt => vt.name === variantTypeName);
+                                if (variantType) {
+                                    const option = variantType.options.find(opt => opt.name === selectedOption);
+                                    if (option && option.stock !== undefined && option.stock !== null) {
+                                        option.stock = Math.max(0, option.stock - qty);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Decrement top-level stock
+                        if (product.stock !== undefined && product.stock !== null) {
+                            product.stock = Math.max(0, product.stock - qty);
+                        }
+                    }
+
                     await product.save();
                 }
 
@@ -405,6 +431,58 @@ export async function POST(req) {
             // Empty the cart
             user.cart = [];
             await user.save();
+
+            // Notify each creator about their sale
+            try {
+                const creatorSales = {};
+                for (const item of orderItems) {
+                    if (!item.productId) continue;
+                    const prod = await Product.findById(item.productId);
+                    if (!prod?.creatorUserId) continue;
+
+                    if (!creatorSales[prod.creatorUserId]) {
+                        creatorSales[prod.creatorUserId] = { items: [], total: 0 };
+                    }
+                    creatorSales[prod.creatorUserId].items.push({
+                        name: item.productName,
+                        quantity: item.quantity,
+                        price: item.finalPrice,
+                        currency: item.currency,
+                    });
+                    creatorSales[prod.creatorUserId].total += item.totalPrice;
+                }
+
+                for (const [creatorUserId, saleData] of Object.entries(creatorSales)) {
+                    try {
+                        const clerk = await clerkClient();
+                        const creatorClerkUser = await clerk.users.getUser(creatorUserId);
+                        const creatorEmail = creatorClerkUser?.emailAddresses?.[0]?.emailAddress;
+                        if (!creatorEmail) continue;
+
+                        const itemsHtml = saleData.items.map(i =>
+                            `<li>${i.name} x${i.quantity} - ${i.currency} ${i.price.toFixed(2)}</li>`
+                        ).join('');
+
+                        const bodyHtml = `
+                            <p>You have a new sale on Fix It Today!</p>
+                            <h3 style="color: #ffdd00;">Order Details:</h3>
+                            <ul>${itemsHtml}</ul>
+                            <p><b>Total: ${saleData.items[0]?.currency || 'SGD'} ${saleData.total.toFixed(2)}</b></p>
+                            <p>Log in to your dashboard to manage this order.</p>
+                        `;
+
+                        await sendEmail({
+                            to: creatorEmail,
+                            subject: 'New Sale on Fix It Today!',
+                            html: wrapInTemplate(bodyHtml),
+                        });
+                    } catch (emailErr) {
+                        console.error(`Failed to email creator ${creatorUserId}:`, emailErr);
+                    }
+                }
+            } catch (notifyErr) {
+                console.error('Creator notification failed:', notifyErr);
+            }
 
             // console.log(`Successfully processed checkout for userId: ${userId}, sessionId: ${session.id}`);
 

@@ -20,4 +20,6 @@
 
 ## 4. Verify
 - [x] 4.1 `yarn test:run` green
-- [ ] 4.2 (follow-up) coverage thresholds + CI gating
+- [x] 4.2 coverage thresholds + CI gating — **moved to `add-test-coverage-ci`**
+
+> Archived 2026-05-28. `testing` capability folded into `openspec/specs/testing/`.

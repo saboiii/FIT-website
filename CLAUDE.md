@@ -44,6 +44,31 @@ roadmap work must continue.
    (`feat/instant-quoting-engine`). Never touch `main`. Exclude local `.claude/`
    from commits.
 
+## Archiving completed changes (DO THIS every time a change is fully done)
+
+When a change is complete, archive it — do not leave finished changes in the
+active `openspec/changes/` queue:
+
+1. **Confirm it's actually done.** All non-deferred tasks in its `tasks.md` are
+   checked. Any remaining deferred/blocked work must first be **spun out into its
+   own backlog change** (with a pointer), so the archived change has no loose
+   ends. If real work remains under that change's own scope, it is NOT done.
+2. **Fold its spec deltas into the established truth.** For each
+   `changes/<id>/specs/<capability>/spec.md`, merge into
+   `openspec/specs/<capability>/spec.md` as a normal spec (drop the
+   "delta for…/ADDED/MODIFIED" framing; add a `## Purpose`; apply MODIFIED/REMOVED
+   edits to the existing requirements). If a change has no spec delta, skip this.
+3. **Move the folder** to a dated archive path (today's date, `YYYY-MM-DD`):
+   `mkdir -p openspec/changes/archive && git mv openspec/changes/<id>
+   openspec/changes/archive/$(date +%F)-<id>`.
+4. **Update `openspec/ROADMAP.md`** to mark the item archived.
+5. Note: this is `openspec/changes/archive/` — NOT the repo's root `archive/`
+   folder (unrelated).
+
+A change is "done enough to archive" only when its own scope is delivered;
+foundational/ongoing capabilities (e.g. the test harness) still archive — the
+*change* is complete even though the *capability* in `openspec/specs/` lives on.
+
 ## Delegation
 
 Use subagents in parallel for breadth (codebase audits, web best-practice/

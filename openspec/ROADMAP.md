@@ -21,13 +21,17 @@ independent ────────────────┴─ enhance-admin
 
 ## Phase 1 — Foundations (do first)
 
-1. **add-test-framework** — harness + baseline suite. *(done; tests passing)*
-2. **fix-dimension-unit-mismatch** — weight kg↔g inconsistency in delivery/print
-   pricing. Do **before** the quoting engine so the quote is built on correct
-   units (the engine consumes dimensions/weight).
+1. **add-test-framework** — harness + baseline suite. *(✅ archived 2026-05-28 →
+   `changes/archive/`; `testing` spec in `openspec/specs/`)*
+2. **fix-dimension-unit-mismatch** — investigated: **no active bug**; pinned by a
+   unit-contract test; admin-validation follow-up split to
+   `add-input-validation-admin-endpoints`. *(✅ archived 2026-05-28)*
 3. **add-instant-quoting-engine** — the core: geometry→volume→weight, print-time
    estimate, the seven cost factors, expedite, minimum price, server-authoritative
-   pricing. Everything quote-related depends on this.
+   pricing. *(implemented; deferred: admin UI, submit-persist, browser verify)*
+
+Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating,
+spun out of add-test-framework).
 
 ## Phase 2 — Quote-driven customer experience (depends on Phase 1)
 

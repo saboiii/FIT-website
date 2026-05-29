@@ -1,8 +1,29 @@
 # Proposal: Server-Side Geometry Verification for Quotes (backlog — security)
 
-> Status: backlog (security hardening). Flagged from `add-instant-quoting-engine`:
-> `app/api/quote/route.js` and `lib/quoting/quoteRequest.js` carry SECURITY NOTEs
-> at the exact points this work plugs in.
+> Status: **STL implemented 2026-05-29.** Kept active for the remaining formats +
+> integration verification.
+
+## Done (2026-05-29)
+
+- `lib/quoting/stl.js` — pure binary+ASCII STL parser → positions (tested,
+  including a synthetic binary cube → 1 cm³).
+- `lib/quoting/serverGeometry.recomputeMetricsFromModel(buffer, fileName)` —
+  recomputes volume/dimensions server-side for **STL** (returns null otherwise).
+- `POST /api/quote` persist path now fetches the stored model from S3 and, for
+  STL, recomputes the quote from server metrics (re-running `buildQuote` with the
+  server volume/dims) before persisting + returning it. Best-effort: any failure
+  falls back to the client-derived quote so the save never breaks. The live
+  preview still uses client metrics.
+
+## Remaining (flagged)
+
+- **Other formats:** server-side parsing for OBJ / glTF / 3MF (heavier; glTF
+  especially). Until then those formats persist the client-metric quote.
+- **Deviation policy:** currently the server value silently wins for STL. Decide
+  whether to also surface/log when client vs server volume deviates beyond a
+  tolerance (possible abuse signal).
+- **Integration verification:** the S3-fetch + persist path is guarded but was not
+  run against live S3 here (see `verify-quoting-flows-browser`).
 
 ## Why
 

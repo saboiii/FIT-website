@@ -5,6 +5,9 @@ import AppSettings from '@/models/AppSettings'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
 import { buildQuote } from '@/lib/quoting/quoteRequest'
 import { getAppSettingsId } from '@/lib/appSettingsId'
+import { recomputeMetricsFromModel } from '@/lib/quoting/serverGeometry'
+import { s3 } from '@/lib/s3'
+import { GetObjectCommand } from '@aws-sdk/client-s3'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -48,6 +51,7 @@ export async function POST(req) {
   }
 
   const { quote, requestId } = result.data
+  let responseQuote = quote
 
   if (requestId) {
     const { userId } = await auth()
@@ -62,11 +66,39 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // SECURITY NOTE: geometry metrics are client-computed. Recomputing volume
-    // server-side from the stored model (to prevent metric tampering before
-    // payment) is a tracked follow-up: openspec change
-    // `add-server-side-geometry-verification`.
-    reqDoc.quote = quote
+    // Anti-tamper: for the PERSISTED quote, recompute geometry server-side from
+    // the stored model (STL only for now) instead of trusting client metrics.
+    // Best-effort — any failure falls back to the client-derived quote so the
+    // save never breaks. The live preview still uses client metrics.
+    let persistQuote = quote
+    try {
+      const mf = reqDoc.modelFile || {}
+      const name = mf.originalName || mf.s3Key || ''
+      if (mf.s3Key && /\.stl$/i.test(name)) {
+        const obj = await s3.send(
+          new GetObjectCommand({ Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME, Key: mf.s3Key }),
+        )
+        const bytes = await obj.Body.transformToByteArray()
+        const serverMetrics = recomputeMetricsFromModel(bytes, name)
+        if (serverMetrics?.volumeCm3 > 0) {
+          const serverResult = buildQuote(
+            {
+              ...body,
+              volumeCm3: serverMetrics.volumeCm3,
+              dimensionsCm: serverMetrics.dimensionsCm,
+              confidence: serverMetrics.confidence,
+            },
+            { pricingConfig, deliveryTypes },
+          )
+          if (serverResult.ok) persistQuote = serverResult.data.quote
+        }
+      }
+    } catch (verifyErr) {
+      console.error('Server geometry verification failed; using client metrics:', verifyErr)
+    }
+
+    reqDoc.quote = persistQuote
+    responseQuote = persistQuote
     reqDoc.quotedAt = new Date()
     if (['pending_upload', 'pending_config', 'configured'].includes(reqDoc.status)) {
       reqDoc.status = 'quoted'
@@ -75,5 +107,5 @@ export async function POST(req) {
     await reqDoc.save()
   }
 
-  return NextResponse.json({ quote }, { status: 200 })
+  return NextResponse.json({ quote: responseQuote }, { status: 200 })
 }

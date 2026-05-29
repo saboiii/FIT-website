@@ -129,7 +129,9 @@ const Viewer = ({
         {scene && (
           <>
             <Environment key={environment} preset={environment || 'city'} background={false} />
+            {/* Key on preset so drei rebuilds the light rig when it changes. */}
             <Stage
+              key={preset}
               preset={preset}
               intensity={intensity}
               shadows={true}

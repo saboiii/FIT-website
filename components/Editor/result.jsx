@@ -291,6 +291,18 @@ const Result = () => {
   // Reset every setting (visual/lighting/printability + mesh colours) and the
   // generic selection back to defaults. Shared by the leva control and the
   // generic-mode button so "default" is single-sourced.
+  // Stable mesh-colour map so the viewer's scene-styler only re-runs when a
+  // colour actually changes (not on every unrelated re-render).
+  const meshColors = useMemo(
+    () =>
+      Object.fromEntries(
+        meshNames
+          .map((name) => [name, visualConfig[name]])
+          .filter(([, color]) => color),
+      ),
+    [meshNames, visualConfig],
+  )
+
   const resetAllToDefaults = useCallback(() => {
     levaStore.set({
       'visual.background': defaultVisual.background,
@@ -491,7 +503,7 @@ const Result = () => {
                 intensity={lighting.lightIntensity}
                 autoRotate={lighting.autoRotate}
                 materialType={visualConfig.materialType}
-                meshColors={Object.fromEntries(meshNames.map(name => [name, visualConfig[name]]).filter(([name, color]) => color))}
+                meshColors={meshColors}
               />
             )}
           </section>

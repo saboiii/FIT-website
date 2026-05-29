@@ -16,6 +16,10 @@ artifacts like `app/api/product/route.js.bak` add similar noise.
   to `CustomPrintRequest`).
 - Migrate/verify any historical `PrintOrder` data, then remove the model and its
   routes.
+- Remove the dead `/api/print-config` routes: `route.js` (unused in-memory `Map`
+  store) and `[orderId]/route.js` (reads the deprecated `PrintOrder`). Confirmed
+  zero internal callers — see `fix-print-config-in-memory-store`. Pending
+  confirmation of no external callers.
 - Remove stray backup files (e.g. `*.bak`).
 
 ## Impact

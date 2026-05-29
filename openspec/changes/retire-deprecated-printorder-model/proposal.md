@@ -1,6 +1,23 @@
 # Proposal: Retire Deprecated PrintOrder Model (tech debt)
 
-> Status: backlog (tech debt / cleanup). Discovered while mapping data models.
+> Status: **partially done 2026-05-29.** Dead files removed; the `PrintOrder`
+> model removal itself stays deferred (it is still live).
+
+## Done (2026-05-29)
+
+- Removed the stray `app/api/product/route.js.bak`.
+- Removed the dead `/api/print-config` routes — `route.js` (unused in-memory
+  `Map`) and `[orderId]/route.js` (read the deprecated model). Confirmed zero
+  internal callers.
+
+## Remaining (DEFERRED — needs migration + data audit)
+
+`PrintOrder` is **still live**: imported by `app/api/webhook/stripe/route.js`,
+`app/api/user/checkout/route.js`, and `app/api/user/print-order/*`. Removing it
+means migrating the direct print-order flow to `CustomPrintRequest` and a data
+audit/migration of historical `PrintOrder` documents — this touches the live
+payment/webhook path, so it must be done deliberately (and likely verified
+against real Stripe events), not as a drive-by deletion.
 
 ## Why
 

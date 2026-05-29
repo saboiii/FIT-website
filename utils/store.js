@@ -23,10 +23,12 @@ const useStore = create((set, get) => ({
   variantId: null,
   requestId: null,
   isCustomPrint: false,
+  returnTo: null, // validated same-origin path to return to after saving
 
   setFileName: (fileName) => set({ fileName, scene: null, geometryMetrics: null }),
   setBuffers: (buffers) => set({ buffers, scene: null, geometryMetrics: null }),
   setScene: (scene) => set({ scene }),
+  setReturnTo: (returnTo) => set({ returnTo }),
   setOrderId: (orderId) => set({ orderId }),
   setProductId: (productId) => set({ productId }),
   setVariantId: (variantId) => set({ variantId }),

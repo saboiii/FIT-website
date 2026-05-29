@@ -42,9 +42,12 @@ const defaultLighting = {
 const defaultGeneric = { strength: 'Normal', quality: 'Medium', colour: 'White' }
 
 const Result = () => {
-  const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics } = useStore()
+  const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics, returnTo } = useStore()
   const { showToast } = useToast()
   const router = useRouter()
+  // Colour/material catalogue (admin-curated via AppSettings.printColours), with
+  // the built-in defaults as fallback.
+  const [colourCatalogue, setColourCatalogue] = useState(DEFAULT_PRINT_COLOURS)
   // Customer's quote options/expedite, shared with QuotePanel so they persist at submit.
   const [quoteOptions, setQuoteOptions] = useState({
     postProcessing: false, specialRequest: false, priority: false, expedite: false,
@@ -56,6 +59,16 @@ const Result = () => {
   // Generic (plain-language) configuration: Strength × Quality × Colour.
   const [generic, setGeneric] = useState(defaultGeneric)
   const [genericMaterial, setGenericMaterial] = useState('plastic')
+
+  // Load the admin-curated colour catalogue (falls back to defaults on failure).
+  useEffect(() => {
+    let active = true
+    fetch('/api/quote/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (active && d?.printColours?.length) setColourCatalogue(d.printColours) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
 
   // Refs to store current values for submission
   const currentPrintabilityRef = useRef({})
@@ -262,7 +275,7 @@ const Result = () => {
   // the same printSettings advanced mode edits.
   const applyGeneric = useCallback((next) => {
     setGeneric(next)
-    const m = mapGenericToPrintSettings(next, DEFAULT_PRINT_COLOURS)
+    const m = mapGenericToPrintSettings(next, colourCatalogue)
     setGenericMaterial(m.materialType)
     levaStore.set({
       'printability.layerHeight': m.layerHeight,
@@ -273,7 +286,7 @@ const Result = () => {
         ? Object.fromEntries(meshNames.map((n) => [`visual.${n}`, m.colourHex]))
         : {}),
     }, false)
-  }, [meshNames])
+  }, [meshNames, colourCatalogue])
 
   // Reset every setting (visual/lighting/printability + mesh colours) and the
   // generic selection back to defaults. Shared by the leva control and the
@@ -359,7 +372,7 @@ const Result = () => {
 
         if (response.ok) {
           showToast('Print configuration submitted successfully!', 'success')
-          router.push('/account')
+          router.push(returnTo || '/account')
         } else {
           throw new Error('Failed to submit configuration')
         }
@@ -409,7 +422,7 @@ const Result = () => {
         }
 
         showToast('Print configuration saved successfully!', 'success')
-        router.push('/cart')
+        router.push(returnTo || '/cart')
       }
     } catch (error) {
       console.error('Error submitting configuration:', error)
@@ -417,7 +430,7 @@ const Result = () => {
     } finally {
       setSubmittingConfig(false)
     }
-  }, [meshNames, orderId, productId, variantId, showToast, router, geometryMetrics, quoteSettings, quoteOptions])
+  }, [meshNames, orderId, productId, variantId, showToast, router, geometryMetrics, quoteSettings, quoteOptions, returnTo])
 
   // Add save configuration button in export controls
   const saveConfigControls = useMemo(() => {
@@ -549,12 +562,12 @@ const Result = () => {
                   onChange={(e) => applyGeneric({ ...generic, colour: e.target.value })}
                   className="formInput text-xs"
                 >
-                  {DEFAULT_PRINT_COLOURS.map((c) => (
+                  {colourCatalogue.map((c) => (
                     <option key={c.name} value={c.name}>{c.name}</option>
                   ))}
                 </select>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {DEFAULT_PRINT_COLOURS.slice(0, 12).map((c) => (
+                  {colourCatalogue.slice(0, 12).map((c) => (
                     <button
                       key={c.name}
                       title={c.name}

@@ -8,6 +8,7 @@ import FileDrop from '@/components/Editor/fileDrop'
 import useStore from '@/utils/store'
 import { is3DModel, isZip } from '@/utils/isExtension'
 import { loadFileAsArrayBuffer } from '@/utils/buffers'
+import { safeInternalPath } from '@/utils/safeReturnPath'
 import { useUser } from '@clerk/nextjs'
 
 const Loading = () => <div className="loader" />
@@ -24,7 +25,14 @@ const Editor = () => {
     const productId = searchParams.get('productId')
     const variantId = searchParams.get('variantId')
     const requestId = searchParams.get('requestId') // NEW: Custom print request ID
+    const returnTo = searchParams.get('returnTo') // optional, validated same-origin path
     const buffers = useStore((state) => state.buffers)
+
+    // Capture a safe return destination so the editor can route back to where it
+    // was launched from after saving (falls back to context defaults in Result).
+    useEffect(() => {
+        useStore.getState().setReturnTo(safeInternalPath(returnTo))
+    }, [returnTo])
     const [orderData, setOrderData] = useState(null)
     const [productData, setProductData] = useState(null)
     const [customRequestData, setCustomRequestData] = useState(null) // NEW

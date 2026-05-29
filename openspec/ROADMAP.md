@@ -28,45 +28,61 @@ independent ────────────────┴─ enhance-admin
    `add-input-validation-admin-endpoints`. *(✅ archived 2026-05-28)*
 3. **add-instant-quoting-engine** — the core: geometry→volume→weight, print-time
    estimate, the seven cost factors, expedite, minimum price, server-authoritative
-   pricing. *(implemented; deferred: admin UI, submit-persist, browser verify)*
+   pricing, editor quote panel, admin pricing UI. *(✅ archived 2026-05-29; specs
+   `instant-quoting-engine` + folded into `custom-print-requests`/`3d-model-editor`)*
 
-Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating,
-spun out of add-test-framework).
+Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
 
 ## Phase 2 — Quote-driven customer experience (depends on Phase 1)
 
 4. **add-generic-print-presets** — Strength × Quality × Colour generic mode →
-   maps to print settings → instant quote → pay first. Depends on (3).
-5. **improve-custom-print-post-config-ux** — return-to-origin navigation + clear
-   status copy ("awaiting quote" not "incomplete"). Depends on (3)/(4) because the
-   auto-quote/pay-first path changes the post-config routing and banner logic.
+   instant quote → pay first; admin colour catalogue. *(✅ archived 2026-05-29;
+   spec `generic-print-presets`)*
+5. **improve-custom-print-post-config-ux** — router return-to-origin + clear
+   status copy + pay-first auto-quote at submit. *(✅ archived 2026-05-29)*
 6. **add-quote-persistence-and-sharing** — save/share quotes. Depends on (3).
+   *(not started — the remaining Phase 2 item)*
 
 ## Phase 3 — Operator tooling & fixes (largely independent; parallelizable)
 
-7. **enhance-admin-request-config-view** — expandable print-config panel for the
-   print farm. Richer once (3) exists (show dimensions/quote), but can start anytime.
+7. **enhance-admin-request-config-view** — expandable print-config panel + dims/
+   quote for the print farm. *(✅ archived 2026-05-29; spec `admin-custom-print-requests`)*
 8. **fix-model-download-filename** — downloads keep original filename + extension.
-9. **add-editor-reset-controls** — discoverable + per-field reset. Best built
-   alongside (4) since both touch the editor config surface.
-10. **fix-print-config-in-memory-store** — replace the serverless-unsafe in-memory
-    print-config store with DB persistence.
+   *(✅ archived 2026-05-29)*
+9. **add-editor-reset-controls** — discoverable reset in generic mode (per-field
+   spun to `add-per-field-setting-reset`). *(✅ archived 2026-05-29)*
+10. **fix-print-config-in-memory-store** — investigated: **dead code** (zero
+    callers); removal folded into `retire-deprecated-printorder-model`.
+    *(✅ archived 2026-05-29)*
 
-## Phase 4 — Refinements & tech debt (later)
+## Phase 4 — Refinements & tech debt (later, not started)
 
 11. **add-slicer-accurate-estimation** — cura-wasm slicer behind the engine's
-    time/material interface. Depends on (3); accuracy upgrade, not blocking.
+    time/material interface. Depends on (3); accuracy upgrade.
 12. **add-otp-contact-verification** — OTP-verified contact channel at checkout.
-    Independent.
-13. **retire-deprecated-printorder-model** — remove the deprecated `PrintOrder`
-    model and stray `*.bak` files after a data audit. Independent.
+13. **retire-deprecated-printorder-model** — remove `PrintOrder`, the dead
+    `/api/print-config` routes, and stray `*.bak` files after a data audit.
+
+## Backlog spun out during implementation (not started)
+
+- **add-test-coverage-ci** — coverage thresholds + CI gating.
+- **add-input-validation-admin-endpoints** — dimension validation; range
+  thresholds need the print farm's real limits (human input).
+- **add-quote-api-rate-limiting** — needs Upstash Redis infra.
+- **add-server-side-geometry-verification** — recompute volume from the stored
+  model to stop metric tampering before payment.
+- **add-public-quoting-config** — customer-readable `printColours` so the editor
+  reflects the admin catalogue (generic-presets 2.4).
+- **add-returnto-origin-capture** — explicit `returnTo` for the editor (post-config 3.1).
+- **add-per-field-setting-reset** — per-field reset (leva limitation).
+- **verify-quoting-flows-browser** — human QA checklist for the interactive UI
+  paths (engine/generic/pay-first/cart/admin) not verifiable headlessly.
 
 ## Notes
 
-- **Client-note traceability:** note 1 + note 5 → (5); note 2.1 → (7);
-  note 2.2 → (8); note 3 → (4); note 4 → (9). The instant quoting engine (3) is
-  the backbone the generic-quote/pay-first experience builds on.
-- Group (4) + (9) in one editor work-stream to avoid touching
-  `components/Editor/result.jsx` twice.
-- Keep all pricing/mapping logic in pure, unit-tested modules under `lib/quoting/`
-  (per `project.md`).
+- The instant quoting engine is the backbone the generic-quote/pay-first
+  experience builds on. All pricing/mapping logic lives in pure, unit-tested
+  modules under `lib/quoting/` (per `project.md`).
+- **Established specs** now in `openspec/specs/`: `testing`, `3d-model-editor`,
+  `custom-print-requests`, `instant-quoting-engine`, `generic-print-presets`,
+  `admin-custom-print-requests`.

@@ -3,10 +3,10 @@
 ## Purpose
 
 The in-browser 3D editor (`/editor`) lets a customer upload a 3D model, preview
-it interactively, and configure print settings before submitting a custom print
-request. It is built on `@react-three/fiber`/`drei` with `leva` control panels
-and a Zustand store (`utils/store.js`). This spec documents current behaviour;
-the `add-instant-quoting-engine` change adds a live quote panel here.
+it interactively, configure print settings (generic or advanced), see a live
+instant quote, and submit a custom print request. It is built on
+`@react-three/fiber`/`drei` with `leva` control panels and a Zustand store
+(`utils/store.js`).
 
 ## Requirements
 
@@ -38,24 +38,87 @@ color selection.
 - WHEN the customer picks a color for a named mesh
 - THEN that mesh's material color updates live in the viewer
 
-### Requirement: Print settings (printability) controls
-The system SHALL expose print settings — layer height, initial layer height,
-wall loops, infill density and pattern, nozzle diameter, support enable/type,
-and print plate — through both an advanced (leva) panel and a simplified preset
-mode (Draft / Standard / High Quality / Strong & Durable) with quick color
-swatches.
+### Requirement: Geometry metrics on load
+The system SHALL, after a model is parsed into the scene, compute and store its
+geometry metrics (volume cm³, bounding-box dimensions cm, watertight flag,
+confidence) in the editor store for use by the quoting engine.
 
-#### Scenario: Applying a simple-mode preset
-- GIVEN the editor in simple mode
-- WHEN the customer selects the "High Quality" preset
-- THEN the underlying print settings update to that preset's values
+#### Scenario: Metrics available after upload
+- GIVEN the editor with a freshly loaded model
+- WHEN parsing completes
+- THEN `geometryMetrics` is populated with volume and bounding-box dimensions
+
+### Requirement: Print settings (printability) controls
+The system SHALL offer two configuration modes: a **generic** mode (default) with
+plain-language Strength, Quality, and Colour choices (see the
+`generic-print-presets` capability), and an **advanced** mode exposing the full
+leva print settings — layer height, initial layer height, wall loops, infill
+density and pattern, nozzle diameter, support enable/type, and print plate. The
+customer SHALL be able to switch between modes; selecting generic choices SHALL
+populate the same underlying `printSettings` used by advanced mode.
+
+#### Scenario: Switching between generic and advanced
+- GIVEN the editor in generic mode with a Strength/Quality/Colour selection
+- WHEN the customer switches to advanced mode
+- THEN the leva controls reflect the print settings derived from the generic choices
+- AND further manual edits are possible
+
+#### Scenario: Generic choices populate print settings
+- GIVEN the editor in generic mode
+- WHEN the customer selects a Strength, Quality, and Colour
+- THEN the underlying `printSettings` (layer height, walls, infill, material, mesh
+  colours) are set accordingly for downstream pricing and fulfilment
+
+### Requirement: Live instant-quote panel
+The system SHALL display an instant-quote panel in the editor showing the
+itemized breakdown (material, print time, base/post-processing/special-request/
+priority/delivery fees), an expedite toggle, the total, and a low-confidence
+warning when geometry is non-watertight; the panel SHALL update as print settings
+and options change, and the displayed price SHALL be the server-authoritative
+quote.
+
+#### Scenario: Quote updates with settings
+- GIVEN a loaded model with the quote panel shown
+- WHEN the customer increases infill density
+- THEN the material line and total update to reflect the higher material usage
+
+#### Scenario: Expedite toggle reflected
+- GIVEN a loaded model with a computed quote
+- WHEN the customer enables the expedite option
+- THEN an expedite line appears and the total increases accordingly
+
+#### Scenario: Low-confidence warning
+- GIVEN a non-watertight model
+- WHEN the quote is shown
+- THEN the panel displays a notice that the estimate is approximate
+
+### Requirement: Reset configuration to defaults
+The system SHALL provide a reset-to-defaults control that is discoverable in both
+generic and advanced editor modes, restoring all print/visual/lighting settings
+(and mesh colours) and the generic selection to their defaults. Defaults SHALL be
+sourced from a single set of default constants.
+
+#### Scenario: Reset all from generic mode
+- GIVEN the editor in generic mode with customised settings
+- WHEN the customer activates "Reset to defaults"
+- THEN all settings, mesh colours, and the generic selection return to defaults
 
 ### Requirement: Submit configuration
 The system SHALL let the customer save/submit the print configuration, persisting
-it to the associated `CustomPrintRequest` (when launched from a custom-print
-flow, carrying `requestId`/`isCustomPrint` in the store).
+it to the associated `CustomPrintRequest`, and upon success SHALL navigate the
+customer back to the context from which the editor was launched (custom print →
+cart, direct order → account) using client-side routing with an explicit success
+confirmation — not a fixed-delay full-page redirect. For custom prints, the
+editor SHALL also request a server-authoritative quote (auto-quoting the request)
+so the customer can pay; a quoting failure SHALL NOT block the configuration save.
 
-#### Scenario: Submitting print configuration
-- GIVEN a loaded model and chosen print settings in a custom-print session
-- WHEN the customer submits the configuration
-- THEN the settings are sent to the custom-print API and the request advances to `configured`
+#### Scenario: Return to origin after saving (cart flow)
+- GIVEN the editor was launched from the cart for a custom print
+- WHEN the customer saves the configuration successfully
+- THEN the configuration is persisted and the request is auto-quoted to `quoted`
+- AND the customer is routed back to the cart showing that request updated and payable
+
+#### Scenario: Return to origin after saving (direct print order)
+- GIVEN the editor was launched from a direct print order page
+- WHEN the customer saves the configuration successfully
+- THEN the customer is routed back to the account/order page with a success confirmation

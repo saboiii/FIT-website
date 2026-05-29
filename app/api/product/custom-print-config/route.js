@@ -4,6 +4,7 @@ import Product from '@/models/Product'
 import User from '@/models/User'
 import { authenticate } from '@/lib/authenticate'
 import { checkAdminPrivileges } from '@/lib/checkPrivileges'
+import { validateDimensions } from '@/lib/validation/dimensions'
 
 export async function GET(req) {
     try {
@@ -22,11 +23,19 @@ export async function GET(req) {
 export async function POST(request) {
     try {
         const { userId } = await authenticate(request);
-        await checkAdminPrivileges(userId);
+        if (!(await checkAdminPrivileges(userId))) {
+            return NextResponse.json({ error: 'Access denied.' }, { status: 403 });
+        }
 
         await connectToDatabase()
 
         const { name, description, images, basePrice, priceCredits, delivery, dimensions, discount } = await request.json()
+
+        const dimCheck = validateDimensions(dimensions)
+        if (!dimCheck.ok) {
+            return NextResponse.json({ error: dimCheck.error }, { status: 400 })
+        }
+        const validDimensions = dimCheck.value
 
         // Find or create the custom print product by slug
         let product = await Product.findOne({ slug: 'custom-print-request' })
@@ -39,7 +48,7 @@ export async function POST(request) {
             product.basePrice = basePrice
             product.priceCredits = priceCredits || 0
             product.delivery = delivery
-            product.dimensions = dimensions
+            product.dimensions = validDimensions
             product.discount = discount
             await product.save()
         } else {
@@ -53,7 +62,7 @@ export async function POST(request) {
                 priceCredits: priceCredits || 0,
                 productType: 'print',
                 delivery: delivery,
-                dimensions: dimensions,
+                dimensions: validDimensions,
                 discount: discount,
                 slug: 'custom-print-request',
                 hidden: true, // Hidden from shop listings

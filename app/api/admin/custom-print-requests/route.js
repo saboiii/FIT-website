@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/db'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
 import Product from '@/models/Product'
 import { checkAdminPrivileges } from '@/lib/checkPrivileges'
+import { validateDimensions } from '@/lib/validation/dimensions'
 
 // Admin: list all custom print requests
 export async function GET() {
@@ -41,6 +42,11 @@ export async function PUT(request) {
     return NextResponse.json({ error: 'requestId is required' }, { status: 400 })
   }
 
+  const dimCheck = validateDimensions(dimensions)
+  if (!dimCheck.ok) {
+    return NextResponse.json({ error: dimCheck.error }, { status: 400 })
+  }
+
   await connectToDatabase()
 
   const doc = await CustomPrintRequest.findOne({ requestId })
@@ -73,9 +79,9 @@ export async function PUT(request) {
     if (delivery && Array.isArray(delivery.deliveryTypes)) {
       doc.delivery = { deliveryTypes: delivery.deliveryTypes }
     }
-    // Save dimensions if provided
-    if (dimensions && typeof dimensions === 'object') {
-      doc.dimensions = { ...dimensions }
+    // Save validated dimensions if provided
+    if (dimCheck.value && Object.keys(dimCheck.value).length > 0) {
+      doc.dimensions = { ...dimCheck.value }
     }
     // Save admin note if provided
     if (typeof note === 'string') {

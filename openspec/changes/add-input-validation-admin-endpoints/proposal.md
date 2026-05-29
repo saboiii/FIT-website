@@ -1,8 +1,23 @@
 # Proposal: Validate Dimensions/Inputs at Admin API Boundaries (backlog)
 
-> Status: backlog. **Spun off from `fix-dimension-unit-mismatch` audit.**
-> Contains a sub-item that is **BLOCKED on a human/product decision** (range
-> thresholds) — flagged so we revisit it, do not silently guess.
+> Status: **structural validation implemented 2026-05-29** (kept active for the
+> remaining threshold sub-item, which is **BLOCKED on a human/product decision**).
+> Spun off from `fix-dimension-unit-mismatch` audit.
+
+## Done (2026-05-29)
+
+- `lib/validation/dimensions.validateDimensions` (pure, tested) — rejects
+  non-object, non-finite, or negative dimension values and coerces numbers.
+- Wired into `PUT /api/admin/custom-print-requests` and
+  `POST /api/product/custom-print-config` (400 on invalid).
+- **Security fix:** `POST /api/product/custom-print-config` previously called
+  `checkAdminPrivileges` but ignored the result (no gate) — now returns 403 for
+  non-admins.
+
+## Remaining (BLOCKED — human input)
+
+Realistic max RANGE thresholds (build-volume / weight limits, unit-typo catch).
+Needs the print farm's real limits before enforcing — do not guess.
 
 ## Why
 

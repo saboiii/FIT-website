@@ -26,6 +26,21 @@ const whiteTheme = {
   fonts: { mono: 'Montserrat' },
 }
 
+// Default settings (module-scope so they're stable references for reset logic).
+const defaultPrintability = {
+  layerHeight: 0.2, initialLayerHeight: 0.2, wallLoops: 2,
+  internalSolidInfillPattern: 'Rectilinear', sparseInfillDensity: 20,
+  sparseInfillPattern: 'Rectilinear', nozzleDiameter: 0.4,
+  enableSupport: false, supportType: 'Normal', printPlate: 'Textured',
+}
+const defaultVisual = {
+  background: '#e3e3e3', wireframe: false, materialType: 'plastic',
+}
+const defaultLighting = {
+  autoRotate: true, lightIntensity: 1, preset: 'rembrandt', environment: 'city',
+}
+const defaultGeneric = { strength: 'Normal', quality: 'Medium', colour: 'White' }
+
 const Result = () => {
   const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics } = useStore()
   const { showToast } = useToast()
@@ -39,21 +54,8 @@ const Result = () => {
   const [configLoaded, setConfigLoaded] = useState(false)
   const [advancedMode, setAdvancedMode] = useState(false)
   // Generic (plain-language) configuration: Strength × Quality × Colour.
-  const [generic, setGeneric] = useState({ strength: 'Normal', quality: 'Medium', colour: 'White' })
+  const [generic, setGeneric] = useState(defaultGeneric)
   const [genericMaterial, setGenericMaterial] = useState('plastic')
-
-  const defaultPrintability = {
-    layerHeight: 0.2, initialLayerHeight: 0.2, wallLoops: 2,
-    internalSolidInfillPattern: 'Rectilinear', sparseInfillDensity: 20,
-    sparseInfillPattern: 'Rectilinear', nozzleDiameter: 0.4,
-    enableSupport: false, supportType: 'Normal', printPlate: 'Textured',
-  }
-  const defaultVisual = {
-    background: '#e3e3e3', wireframe: false, materialType: 'plastic',
-  }
-  const defaultLighting = {
-    autoRotate: true, lightIntensity: 1, preset: 'rembrandt', environment: 'city',
-  }
 
   // Refs to store current values for submission
   const currentPrintabilityRef = useRef({})
@@ -273,6 +275,27 @@ const Result = () => {
     }, false)
   }, [meshNames])
 
+  // Reset every setting (visual/lighting/printability + mesh colours) and the
+  // generic selection back to defaults. Shared by the leva control and the
+  // generic-mode button so "default" is single-sourced.
+  const resetAllToDefaults = useCallback(() => {
+    levaStore.set({
+      'visual.background': defaultVisual.background,
+      'visual.wireframe': defaultVisual.wireframe,
+      'visual.materialType': defaultVisual.materialType,
+      'lighting.autoRotate': defaultLighting.autoRotate,
+      'lighting.lightIntensity': defaultLighting.lightIntensity,
+      'lighting.preset': defaultLighting.preset,
+      'lighting.environment': defaultLighting.environment,
+      ...Object.fromEntries(
+        Object.entries(defaultPrintability).map(([k, v]) => [`printability.${k}`, v])
+      ),
+      ...Object.fromEntries(meshNames.map((name) => [`visual.${name}`, '#ffffff'])),
+    }, false)
+    setGeneric(defaultGeneric)
+    setGenericMaterial('plastic')
+  }, [meshNames])
+
   const downloadImage = useCallback(async () => {
     try {
       showToast('Preparing image...', 'info')
@@ -399,21 +422,7 @@ const Result = () => {
   // Add save configuration button in export controls
   const saveConfigControls = useMemo(() => {
     const controls = {
-      'Reset All Settings': button(() => {
-        levaStore.set({
-          'visual.background': defaultVisual.background,
-          'visual.wireframe': defaultVisual.wireframe,
-          'visual.materialType': defaultVisual.materialType,
-          'lighting.autoRotate': defaultLighting.autoRotate,
-          'lighting.lightIntensity': defaultLighting.lightIntensity,
-          'lighting.preset': defaultLighting.preset,
-          'lighting.environment': defaultLighting.environment,
-          ...Object.fromEntries(
-            Object.entries(defaultPrintability).map(([k, v]) => [`printability.${k}`, v])
-          ),
-          ...Object.fromEntries(meshNames.map(name => [`visual.${name}`, '#ffffff'])),
-        }, false)
-      }),
+      'Reset All Settings': button(() => resetAllToDefaults()),
       'Download image': button(() => downloadImage()),
     }
 
@@ -424,7 +433,7 @@ const Result = () => {
     }
 
     return controls
-  }, [orderId, productId, variantId, submittingConfig, downloadImage, submitConfiguration, meshNames])
+  }, [orderId, productId, variantId, submittingConfig, downloadImage, submitConfiguration, resetAllToDefaults])
 
   useControls('export', saveConfigControls, { collapsed: false })
 
@@ -559,6 +568,13 @@ const Result = () => {
                 </div>
               </div>
             )}
+
+            <button
+              onClick={resetAllToDefaults}
+              className="text-[11px] text-light hover:text-textColor underline underline-offset-2 self-start mt-1"
+            >
+              Reset to defaults
+            </button>
           </div>
         )}
       </div>

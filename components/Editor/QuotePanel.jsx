@@ -18,13 +18,13 @@ function money(amount, currency = 'sgd') {
  * (debounced) and renders the itemized breakdown. The server owns the pricing;
  * this component never computes or sends a price.
  */
-export default function QuotePanel({ metrics, settings, deliveryTypeName }) {
-  const [options, setOptions] = useState({
-    postProcessing: false,
-    specialRequest: false,
-    priority: false,
-    expedite: false,
-  })
+const DEFAULT_OPTIONS = { postProcessing: false, specialRequest: false, priority: false, expedite: false }
+
+export default function QuotePanel({ metrics, settings, deliveryTypeName, options: optionsProp, onOptionsChange }) {
+  // Controlled when `options`/`onOptionsChange` are supplied (so the editor can
+  // persist the exact selection at submit); otherwise self-managed.
+  const [internalOptions, setInternalOptions] = useState(DEFAULT_OPTIONS)
+  const options = optionsProp || internalOptions
   const [quote, setQuote] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -75,7 +75,11 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName }) {
 
   if (!hasModel) return null
 
-  const toggle = (key) => setOptions((o) => ({ ...o, [key]: !o[key] }))
+  const toggle = (key) => {
+    const next = { ...options, [key]: !options[key] }
+    if (onOptionsChange) onOptionsChange(next)
+    else setInternalOptions(next)
+  }
 
   return (
     <div className="fixed bottom-4 left-4 z-50 w-72 rounded-md border border-borderColor bg-baseColor p-4 shadow-sm">

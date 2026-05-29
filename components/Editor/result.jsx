@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useCallback, startTransition, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import saveAs from 'file-saver'
 import { Leva, useControls, button, levaStore } from 'leva'
 import useStore from '@/utils/store'
@@ -28,6 +29,11 @@ const whiteTheme = {
 const Result = () => {
   const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics } = useStore()
   const { showToast } = useToast()
+  const router = useRouter()
+  // Customer's quote options/expedite, shared with QuotePanel so they persist at submit.
+  const [quoteOptions, setQuoteOptions] = useState({
+    postProcessing: false, specialRequest: false, priority: false, expedite: false,
+  })
   const [meshNames, setMeshNames] = useState([])
   const [submittingConfig, setSubmittingConfig] = useState(false)
   const [configLoaded, setConfigLoaded] = useState(false)
@@ -330,22 +336,20 @@ const Result = () => {
 
         if (response.ok) {
           showToast('Print configuration submitted successfully!', 'success')
-          setTimeout(() => {
-            window.location.href = '/account'
-          }, 1500)
+          router.push('/account')
         } else {
           throw new Error('Failed to submit configuration')
         }
       } else if (productId) {
         // Save custom print configuration to MongoDB
-        const requestId = variantId // variantId is the requestId for custom prints
+        const cpRequestId = variantId // variantId is the requestId for custom prints
         const response = await fetch('/api/custom-print/config', {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            requestId,
+            requestId: cpRequestId,
             ...configurationData,
           }),
         })
@@ -355,10 +359,34 @@ const Result = () => {
           throw new Error(error.error || 'Failed to save configuration')
         }
 
+        // Instant quote + pay-first: persist a server-authoritative quote onto the
+        // request (auto-advances it to `quoted`). Best-effort — never block the
+        // save flow if quoting fails; an admin/manual quote remains the fallback.
+        if (geometryMetrics?.volumeCm3 > 0) {
+          try {
+            await fetch('/api/quote', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                requestId: cpRequestId,
+                volumeCm3: geometryMetrics.volumeCm3,
+                dimensionsCm: {
+                  length: geometryMetrics.dimensionsCm?.length || 0,
+                  width: geometryMetrics.dimensionsCm?.width || 0,
+                  height: geometryMetrics.dimensionsCm?.height || 0,
+                },
+                confidence: geometryMetrics.confidence || 'high',
+                settings: quoteSettings,
+                options: quoteOptions,
+              }),
+            })
+          } catch (quoteErr) {
+            console.error('Auto-quote failed (config still saved):', quoteErr)
+          }
+        }
+
         showToast('Print configuration saved successfully!', 'success')
-        setTimeout(() => {
-          window.location.href = '/cart'
-        }, 1500)
+        router.push('/cart')
       }
     } catch (error) {
       console.error('Error submitting configuration:', error)
@@ -366,7 +394,7 @@ const Result = () => {
     } finally {
       setSubmittingConfig(false)
     }
-  }, [meshNames, orderId, productId, variantId, showToast])
+  }, [meshNames, orderId, productId, variantId, showToast, router, geometryMetrics, quoteSettings, quoteOptions])
 
   // Add save configuration button in export controls
   const saveConfigControls = useMemo(() => {
@@ -448,7 +476,14 @@ const Result = () => {
         </div>
       )}
       <Leva theme={whiteTheme} hidden={!advancedMode} />
-      {scene && <QuotePanel metrics={geometryMetrics} settings={quoteSettings} />}
+      {scene && (
+        <QuotePanel
+          metrics={geometryMetrics}
+          settings={quoteSettings}
+          options={quoteOptions}
+          onOptionsChange={setQuoteOptions}
+        />
+      )}
       {/* Simple/Advanced mode toggle */}
       <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
         <button

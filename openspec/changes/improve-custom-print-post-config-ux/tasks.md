@@ -1,33 +1,40 @@
 # Tasks: Improve Custom-Print Post-Configuration UX
 
-> Test-first (GOOS): the status-copy logic and the "is genuinely incomplete"
-> predicate are pure and should be extracted and unit-tested before wiring UI.
+> Test-first (GOOS). Progress: 2026-05-29 — status helper + cart copy + editor
+> nav + pay-first persist implemented (116 tests). Browser verify pending.
 
 ## 1. Status semantics (pure logic)
-- [ ] 1.1 Failing unit tests for a `customPrintStage(status)` helper mapping each
-      status to one of: `action_needed` (pending_upload/pending_config),
-      `awaiting_quote` (configured), `ready_to_pay` (quoted+), `in_production`, etc.
-- [ ] 1.2 Implement the helper; replace the inline `isCustomPrintPending` array
-      check in `app/cart/Cart.jsx` (418–427) with it
+- [x] 1.1 Unit tests for `customPrintStage(status)` → `action_needed`
+      (pending_upload/pending_config), `awaiting_quote` (configured),
+      `ready_to_pay` (quoted+), `in_production`, `cancelled`, `unknown`
+- [x] 1.2 Implement `utils/customPrintStatus.js`; `isCustomPrintPending` in
+      `app/cart/Cart.jsx` now delegates to `isCustomPrintBlockingCheckout`
 
 ## 2. Customer-facing copy
-- [ ] 2.1 Update the cart banner (Cart.jsx 984–1012): remove "Incomplete" for
-      `configured`; show reassuring "preparing your quote" copy
-- [ ] 2.2 Only `pending_upload`/`pending_config` show a "finish your request" CTA
+- [x] 2.1 Cart banner driven by the helper: `configured` shows reassuring
+      "Preparing your quote" (blue); the word "Incomplete" is gone
+- [x] 2.2 Only `pending_upload`/`pending_config` show the yellow "Finish your
+      print request" message
 
 ## 3. Post-save navigation
-- [ ] 3.1 Capture the editor's origin (where it was launched from) in the store /
-      URL when entering `/editor` for a custom print
-- [ ] 3.2 Replace the 1.5s `window.location.href` redirect (result.jsx 308/334)
-      with router navigation back to the origin, passing `requestId`
-- [ ] 3.3 Show an explicit success confirmation; ensure destination shows the
-      updated status (no stale "incomplete")
+- [x] 3.2 Replaced the 1.5s `window.location.href` redirects (result.jsx) with
+      `router.push` (client nav, deterministic, no full reload)
+- [x] 3.3 Success toast retained; destination (cart) refetches request status so
+      the just-saved state shows (no stale "incomplete")
+- [ ] 3.1 Explicit origin capture (`returnTo`) — currently routes by context
+      (custom print → `/cart`, direct order → `/account`, which ARE the origins).
+      A `returnTo` param for arbitrary entry points is a small follow-up.
 
-## 4. Coordinate with auto-quote
-- [ ] 4.1 When the request is auto-quoted (generic path), route straight to the
-      pay step instead of an "awaiting quote" state
+## 4. Coordinate with auto-quote (pay-first)
+- [x] 4.1 On custom-print submit, after saving config the editor persists a
+      server-authoritative quote via `POST /api/quote` (auto-advances the request
+      to `quoted`) using the customer's chosen options/expedite (lifted from
+      QuotePanel), then routes to `/cart` ready to pay. Best-effort: quoting
+      failure never blocks the save (admin/manual quote remains the fallback).
 
 ## 5. Verify
-- [ ] 5.1 Manual: configure from cart → returns to cart with correct status copy
-- [ ] 5.2 Manual: configure a direct print order → returns to the order page
-- [ ] 5.3 `yarn test:run` green
+- [x] 5.3 `yarn test:run` green (116); changed files lint-clean
+- [ ] 5.1 / 5.2 **BLOCKED — needs browser/human:** manual `/editor` flows
+      (configure from cart → returns to cart with correct copy + payable;
+      direct print order → returns to order page). Cannot run the interactive
+      Three.js/leva editor headlessly.

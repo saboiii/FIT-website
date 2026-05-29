@@ -4,6 +4,7 @@ import { connectToDatabase } from '@/lib/db'
 import AppSettings from '@/models/AppSettings'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
 import { buildQuote } from '@/lib/quoting/quoteRequest'
+import { getAppSettingsId } from '@/lib/appSettingsId'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -37,7 +38,7 @@ export async function POST(req) {
   }
 
   await connectToDatabase()
-  const settings = await AppSettings.findById('app-settings').lean()
+  const settings = await AppSettings.findById(getAppSettingsId()).lean()
   const pricingConfig = settings?.quotingConfig || {}
   const deliveryTypes = settings?.additionalDeliveryTypes || []
 

@@ -14,10 +14,11 @@
 - [x] 2.1 `AppSettings.printColours: [{ name, hex, material?, priceModifier? }]`
 - [x] 2.2 `DEFAULT_PRINT_COLOURS` seeds the client's 31-colour list; densities for
       wood/marble/transparent/natural added to `pricingDefaults`
-- [ ] 2.3 Admin settings UI to curate `printColours` — **TODO (next), with the
-      `quotingConfig` admin UI from the engine change (5.3)**
+- [x] 2.3 Admin settings UI to curate `printColours` — in `QuotingPricingManagement`
+      (colour catalogue editor) via `PUT /api/admin/quoting`
 - [ ] 2.4 Editor sources colours from `AppSettings.printColours` (currently uses
-      `DEFAULT_PRINT_COLOURS`) — small follow-up once the admin UI exists
+      `DEFAULT_PRINT_COLOURS`) — **spun out to backlog `add-public-quoting-config`**
+      (needs a customer-readable settings endpoint)
 
 ## 3. Quote integration
 - [x] 3.1 Tests: stronger/higher selection costs more; denser colour ≥ plastic

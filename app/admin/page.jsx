@@ -9,6 +9,7 @@ import DeliveryTypeManagement from '@/components/Admin/DeliveryTypeManagement'
 import OrderStatusManagement from '@/components/Admin/OrderStatusManagement'
 import CustomPrintProductManagement from '@/components/Admin/CustomPrintProductManagement'
 import CustomPrintRequests from '@/components/Admin/CustomPrintRequests'
+import QuotingPricingManagement from '@/components/Admin/QuotingPricingManagement'
 import ReviewManagement from '@/components/Admin/ReviewManagement'
 import EventManagement from '@/components/Admin/EventManagement'
 import { useUser } from '@clerk/nextjs'
@@ -130,6 +131,15 @@ export default function AdminPage() {
                     Custom Print Requests
                 </button>
                 <button
+                    onClick={() => setActiveTab('quoting')}
+                    className={`px-4 cursor-pointer py-2 font-medium text-xs rounded-t-lg whitespace-nowrap ${activeTab === 'quoting'
+                        ? 'bg-black text-white'
+                        : 'text-gray-600 hover:text-gray-800 border-t border-r border-l  border-borderColor'
+                        }`}
+                >
+                    Quoting / Pricing
+                </button>
+                <button
                     onClick={() => setActiveTab('reviews')}
                     className={`px-4 cursor-pointer py-2 font-medium text-xs rounded-t-lg whitespace-nowrap ${activeTab === 'reviews'
                         ? 'bg-black text-white'
@@ -163,6 +173,8 @@ export default function AdminPage() {
             {activeTab === 'customPrint' && <CustomPrintProductManagement />}
             {/* Custom Print Requests Tab */}
             {activeTab === 'customPrintRequests' && <CustomPrintRequests />}
+            {/* Quoting / Pricing Tab */}
+            {activeTab === 'quoting' && <QuotingPricingManagement />}
             {/* Reviews Management Tab */}
             {activeTab === 'reviews' && <ReviewManagement />}
         </div>

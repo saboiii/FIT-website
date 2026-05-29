@@ -28,7 +28,8 @@
 ## 5. Pricing config (`models/AppSettings.js`)
 - [x] 5.1 `quotingConfig` fields (rates, fees, expedite, minimum, densities)
 - [x] 5.2 Defaults applied; migration-safe (legacy `printPricingFormula` retained)
-- [ ] 5.3 Admin settings UI to edit the new fields — **TODO (next): admin panel form**
+- [x] 5.3 Admin settings UI to edit the new fields — `QuotingPricingManagement`
+      + `GET/PUT /api/admin/quoting` (admin-gated, zod-validated)
 
 ## 6. Quote API (`app/api/quote/route.js`)
 - [x] 6.1 `buildQuote` tests: valid payload → itemized quote (server pricing)

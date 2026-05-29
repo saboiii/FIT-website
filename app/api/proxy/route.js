@@ -3,6 +3,7 @@ import { s3 } from "@/lib/s3";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
 import { sanitizeString } from "@/utils/validate";
+import { resolveDownloadFilename } from "@/lib/download/filename";
 import { Readable } from "stream";
 
 export const runtime = 'nodejs'
@@ -45,14 +46,20 @@ export async function GET(req) {
             return new NextResponse("Not found", { status: 404 });
         }
 
-        const filename = key.split('/').pop();
         const headers = {
             "Content-Type": s3Response.ContentType || "application/octet-stream",
             "Content-Length": s3Response.ContentLength?.toString() || undefined,
             "Cache-Control": "public, max-age=3600",
         };
-        // Only force download when explicitly requested.
+        // Only force download when explicitly requested. Always serve a real,
+        // extension-bearing filename (never "proxy") using the caller's original
+        // name when provided; sanitised against header injection.
         if (download) {
+            const requestedName = searchParams.get("filename");
+            const filename = resolveDownloadFilename({
+                requested: requestedName ? decodeURIComponent(requestedName) : undefined,
+                s3Key: key,
+            });
             headers["Content-Disposition"] = `attachment; filename="${filename}"`;
         }
 
@@ -97,13 +104,17 @@ export async function HEAD(req) {
         });
         const s3Response = await s3.send(command);
 
-        const filename = key.split('/').pop();
         const headers = {
             "Content-Type": s3Response.ContentType || "application/octet-stream",
             "Content-Length": s3Response.ContentLength?.toString() || undefined,
             "Cache-Control": "public, max-age=3600",
         };
         if (download) {
+            const requestedName = searchParams.get("filename");
+            const filename = resolveDownloadFilename({
+                requested: requestedName ? decodeURIComponent(requestedName) : undefined,
+                s3Key: key,
+            });
             headers["Content-Disposition"] = `attachment; filename="${filename}"`;
         }
 

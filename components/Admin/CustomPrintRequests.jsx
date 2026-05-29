@@ -56,7 +56,9 @@ export default function CustomPrintRequests() {
   const downloadModel = (r) => {
     if (!r.modelFile?.s3Key) return;
     const originalName = r.modelFile.originalName || r.modelFile.s3Key.split('/').pop() || 'model.stl';
-    const url = `/api/proxy?key=${encodeURIComponent(r.modelFile.s3Key)}&download=1`;
+    // Pass the original filename so the server sets Content-Disposition correctly
+    // (its header takes precedence over the anchor's download attribute).
+    const url = `/api/proxy?key=${encodeURIComponent(r.modelFile.s3Key)}&download=1&filename=${encodeURIComponent(originalName)}`;
     const a = document.createElement('a');
     a.href = url;
     a.download = originalName;

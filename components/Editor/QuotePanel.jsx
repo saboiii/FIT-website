@@ -95,7 +95,8 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName, option
       )}
 
       <div className="mb-2 text-[11px] text-light">
-        {Number(metrics.volumeCm3).toFixed(1)} cm³ · {Number(metrics.dimensionsCm?.length).toFixed(1)}×
+        Volume {Number(metrics.volumeCm3).toFixed(1)} cm³ · Box{' '}
+        {Number(metrics.dimensionsCm?.length).toFixed(1)}×
         {Number(metrics.dimensionsCm?.width).toFixed(1)}×{Number(metrics.dimensionsCm?.height).toFixed(1)} cm
       </div>
 
@@ -110,7 +111,9 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName, option
                 <li key={l.key} className="flex justify-between">
                   <span className="text-light">
                     {l.label}
-                    {l.key === 'printTime' ? ' (est.)' : ''}
+                    {l.key === 'printTime'
+                      ? ` · ~${Number(quote.inputs?.printHours ?? 0).toFixed(1)} h machine time (est.)`
+                      : ''}
                   </span>
                   <span>{money(l.amount, quote.currency)}</span>
                 </li>
@@ -127,6 +130,13 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName, option
             <span>Total</span>
             <span>{money(quote.total, quote.currency)}</span>
           </div>
+
+          {quote.minimumApplied && (
+            <p className="mt-1.5 rounded bg-borderColor/20 px-2 py-1 text-[10px] text-light">
+              Minimum order price of {money(quote.total, quote.currency)} applied — smaller
+              changes won’t move the total until it rises above this floor.
+            </p>
+          )}
         </>
       )}
 

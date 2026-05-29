@@ -567,7 +567,7 @@ const Result = () => {
                   ))}
                 </select>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {colourCatalogue.slice(0, 12).map((c) => (
+                  {colourCatalogue.map((c) => (
                     <button
                       key={c.name}
                       title={c.name}
@@ -579,6 +579,10 @@ const Result = () => {
                     />
                   ))}
                 </div>
+                <p className="text-[10px] text-light mt-1">
+                  One colour applies to the whole model. For different colours per part,
+                  use Advanced Mode (per-part colour pickers).
+                </p>
               </div>
             )}
 

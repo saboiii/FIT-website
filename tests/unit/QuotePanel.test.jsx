@@ -54,4 +54,39 @@ describe('QuotePanel', () => {
     expect(body).not.toHaveProperty('price')
     expect(body).toHaveProperty('volumeCm3', 12.3)
   })
+
+  it('surfaces the minimum order price when the floor was applied', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            quote: {
+              ...mockQuote,
+              minimumApplied: true,
+              inputs: { printHours: 2.3, weightGrams: 10, volumeCm3: 12.3 },
+            },
+          }),
+      }),
+    )
+    render(<QuotePanel metrics={metrics} settings={settings} />)
+    expect(await screen.findByText(/minimum order price/i)).toBeInTheDocument()
+  })
+
+  it('shows the estimated print hours on the print-time line', async () => {
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            quote: {
+              ...mockQuote,
+              inputs: { printHours: 2.3, weightGrams: 10, volumeCm3: 12.3 },
+            },
+          }),
+      }),
+    )
+    render(<QuotePanel metrics={metrics} settings={settings} />)
+    expect(await screen.findByText(/2\.3\s*h/i)).toBeInTheDocument()
+  })
 })

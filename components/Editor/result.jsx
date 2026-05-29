@@ -474,7 +474,7 @@ const Result = () => {
   }, [buffers, fileName, productId, variantId])
 
   return (
-    <div className="h-full w-screen">
+    <div className="relative h-full w-full overflow-hidden">
       {!scene ? (
         <div className="w-screen h-screen flex justify-center items-center">
           <div className="loader" />
@@ -506,8 +506,8 @@ const Result = () => {
           onOptionsChange={setQuoteOptions}
         />
       )}
-      {/* Simple/Advanced mode toggle */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
+      {/* Simple/Advanced mode toggle — anchored to the canvas, bottom-right */}
+      <div className="absolute bottom-4 right-4 z-40 flex flex-col gap-2 items-end">
         <button
           onClick={() => setAdvancedMode(!advancedMode)}
           className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50"

@@ -82,7 +82,7 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName, option
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 w-72 rounded-md border border-borderColor bg-baseColor p-4 shadow-sm">
+    <div className="absolute top-4 left-4 z-40 w-72 rounded-md border border-borderColor bg-baseColor p-4 shadow-sm">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold text-textColor tracking-tight">Instant Quote</h3>
         {loading && <span className="text-[10px] text-light">updating…</span>}

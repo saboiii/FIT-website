@@ -40,8 +40,9 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
    spec `generic-print-presets`)*
 5. **improve-custom-print-post-config-ux** — router return-to-origin + clear
    status copy + pay-first auto-quote at submit. *(✅ archived 2026-05-29)*
-6. **add-quote-persistence-and-sharing** — save/share quotes. Depends on (3).
-   *(not started — the remaining Phase 2 item)*
+6. **add-quote-persistence-and-sharing** — save/share quotes. *(backend done
+   2026-05-29: SavedQuote model + save/list/share/shared endpoints + pure
+   token/validity core; **active** — account/share UI remains, browser)*
 
 ## Phase 3 — Operator tooling & fixes (largely independent; parallelizable)
 
@@ -55,24 +56,29 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
     callers); removal folded into `retire-deprecated-printorder-model`.
     *(✅ archived 2026-05-29)*
 
-## Phase 4 — Refinements & tech debt (later, not started)
+## Phase 4 — Refinements & tech debt
 
 11. **add-slicer-accurate-estimation** — cura-wasm slicer behind the engine's
-    time/material interface. Depends on (3); accuracy upgrade.
-12. **add-otp-contact-verification** — OTP-verified contact channel at checkout.
-13. **retire-deprecated-printorder-model** — remove `PrintOrder`, the dead
-    `/api/print-config` routes, and stray `*.bak` files after a data audit.
+    interface. *(DEFERRED — needs browser/worker env; heuristic suffices)*
+12. **add-otp-contact-verification** — OTP contact channel at checkout.
+    *(BLOCKED — needs an SMS/WhatsApp provider)*
+13. **retire-deprecated-printorder-model** — *(partial 2026-05-29: dead `.bak` +
+    `/api/print-config` routes removed; **active** — `PrintOrder` model is still
+    live in Stripe webhook/checkout/print-order; removal needs migration + data
+    audit)*
 
-## Backlog spun out during implementation (not started)
+## Backlog spun out during implementation
 
-- **add-test-coverage-ci** — coverage thresholds + CI gating.
-- **add-input-validation-admin-endpoints** — dimension validation; range
-  thresholds need the print farm's real limits (human input).
-- **add-quote-api-rate-limiting** — needs Upstash Redis infra.
-- **add-server-side-geometry-verification** — recompute volume from the stored
-  model to stop metric tampering before payment.
-- **add-public-quoting-config** — customer-readable `printColours` so the editor
-  reflects the admin catalogue (generic-presets 2.4).
+- **add-test-coverage-ci** — *(✅ archived 2026-05-29)*
+- **add-public-quoting-config** — *(✅ archived 2026-05-29)*
+- **add-returnto-origin-capture** — *(✅ archived 2026-05-29)*
+- **add-input-validation-admin-endpoints** — *(active: structural validation +
+  admin-gate fix done; range thresholds need the print farm's limits — human)*
+- **add-server-side-geometry-verification** — *(active: STL recompute done;
+  OBJ/glTF/3MF + deviation logging remain)*
+- **add-quote-api-rate-limiting** — *(BLOCKED — needs Upstash Redis infra)*
+- **add-per-field-setting-reset** — *(DEFERRED — leva limitation; needs design)*
+- **verify-quoting-flows-browser** — *(human QA of interactive UI paths)*
 - **add-returnto-origin-capture** — explicit `returnTo` for the editor (post-config 3.1).
 - **add-per-field-setting-reset** — per-field reset (leva limitation).
 - **verify-quoting-flows-browser** — human QA checklist for the interactive UI

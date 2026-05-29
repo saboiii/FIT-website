@@ -1,7 +1,9 @@
 # Proposal: Test Coverage Thresholds & CI Gating (backlog)
 
-> Status: backlog. Spun out of `add-test-framework` (task 4.2) so that change
-> could be archived cleanly. The harness exists; this adds enforcement.
+> Status: **implemented 2026-05-29.** Vitest v8 coverage gates lib/quoting,
+> lib/download, utils/customPrintStatus (90% stmts/lines/funcs, 80% branches);
+> `.github/workflows/ci.yml` runs `yarn test:coverage` on push/PR. Spun out of
+> `add-test-framework` (task 4.2).
 
 ## Why
 

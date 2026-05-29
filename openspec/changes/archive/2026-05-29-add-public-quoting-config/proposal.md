@@ -1,6 +1,10 @@
 # Proposal: Customer-Readable Quoting Config (printColours) (backlog)
 
-> Status: backlog. Spun out of `add-generic-print-presets` (task 2.4).
+> Status: **implemented 2026-05-29.** `GET /api/quote/config` returns the
+> printColours catalogue (public, non-sensitive); the editor fetches it for the
+> generic colour choices, falling back to defaults. Spun out of
+> `add-generic-print-presets` (task 2.4). (Browser verify via
+> `verify-quoting-flows-browser`.)
 
 ## Why
 

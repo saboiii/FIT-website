@@ -1,7 +1,9 @@
 # Proposal: OTP Contact Verification at Checkout (future)
 
-> Status: backlog. Inspired by the reference flow (quote.additiveinn.com), which
-> verifies the customer's contact channel before accepting an order.
+> Status: backlog — **BLOCKED on infrastructure/decision.** Needs an SMS/WhatsApp
+> provider (account, credentials, cost approval); none exists in the repo (only
+> nodemailer email). Cannot be implemented end-to-end until a provider is chosen.
+> Inspired by the reference flow (quote.additiveinn.com).
 
 ## Why
 

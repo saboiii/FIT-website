@@ -1,6 +1,10 @@
 # Proposal: Explicit Return-To-Origin for the Editor (backlog)
 
-> Status: backlog. Spun out of `improve-custom-print-post-config-ux` (task 3.1).
+> Status: **implemented 2026-05-29.** `/editor?returnTo=` is validated by
+> `utils/safeReturnPath.safeInternalPath` (same-origin only; blocks open-redirects),
+> stored, and used for post-save navigation (falls back to context defaults). Spun
+> out of `improve-custom-print-post-config-ux` (task 3.1). (Browser verify via
+> `verify-quoting-flows-browser`.)
 
 ## Why
 

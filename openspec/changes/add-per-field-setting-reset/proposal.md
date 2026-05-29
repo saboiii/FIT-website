@@ -1,6 +1,9 @@
 # Proposal: Per-Field Reset for Print Settings (backlog)
 
-> Status: backlog. Spun out of `add-editor-reset-controls` (task 2.1).
+> Status: backlog — **DEFERRED (needs design decision).** leva has no clean inline
+> per-field reset; doing this well likely means a bespoke advanced-settings panel
+> (off leva). The global reset already covers the primary ask. Spun out of
+> `add-editor-reset-controls` (task 2.1).
 
 ## Why
 

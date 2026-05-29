@@ -1,6 +1,9 @@
 # Proposal: Slicer-Accurate Time & Filament Estimation (future)
 
-> Status: backlog. Depends on `add-instant-quoting-engine` (provides the
+> Status: backlog — **DEFERRED (needs browser/worker env).** cura-wasm is a heavy
+> WASM slicer that must run in a Web Worker and can't be meaningfully built or
+> verified headlessly here; the heuristic engine is sufficient for the instant
+> quote. Not blocking. Depends on `add-instant-quoting-engine` (provides the
 > `estimatePrintHours` / material-estimate interfaces this swaps behind).
 
 ## Why

@@ -4,7 +4,7 @@ import ShippingFields from '@/components/DashboardComponents/ProductFormFields/S
 import { useToast } from '@/components/General/ToastProvider';
 import { useAdminSettings } from '@/utils/AdminSettingsContext';
 import { FaDownload } from 'react-icons/fa6';
-import { FaSearch } from 'react-icons/fa';
+import { FaSearch, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
 export default function CustomPrintRequests() {
@@ -17,6 +17,7 @@ export default function CustomPrintRequests() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(null)
+  const [expandedConfig, setExpandedConfig] = useState(null) // requestId whose print config is expanded
   const [quoteAmount, setQuoteAmount] = useState('')
   const [note, setNote] = useState('')
   const [selectedDeliveryType, setSelectedDeliveryType] = useState('')
@@ -264,10 +265,21 @@ export default function CustomPrintRequests() {
                   </button>
                 )}
               </div>
-              {/* Inline Print Config Display */}
-              {r.printConfiguration?.printSettings && editing !== r.requestId && (
+              {/* Inline Print Config Display — explicit expand/collapse so the
+                  print-farm operator can read the full config without entering
+                  edit mode. Available regardless of edit mode. */}
+              {r.printConfiguration?.printSettings && (
+                <button
+                  onClick={() => setExpandedConfig(expandedConfig === r.requestId ? null : r.requestId)}
+                  className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-gray-600 hover:text-gray-900"
+                  aria-expanded={expandedConfig === r.requestId}
+                >
+                  {expandedConfig === r.requestId ? <FaChevronDown /> : <FaChevronRight />}
+                  Print Configuration
+                </button>
+              )}
+              {r.printConfiguration?.printSettings && expandedConfig === r.requestId && (
                 <div className="mt-2 p-3 bg-gray-50 border border-borderColor rounded text-xs">
-                  <h4 className="font-semibold text-[11px] uppercase tracking-wide mb-2 text-gray-700">Print Configuration</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
                     {Object.entries({
                       'Layer Height': `${r.printConfiguration.printSettings.layerHeight}mm`,
@@ -287,6 +299,32 @@ export default function CustomPrintRequests() {
                       </div>
                     ))}
                   </div>
+                  {(r.dimensions?.weight || r.quote?.total != null) && (
+                    <div className="mt-2 pt-2 border-t border-borderColor grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
+                      {r.dimensions?.length != null && (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-gray-500">Dimensions (cm)</span>
+                          <span className="font-medium text-gray-800">
+                            {r.dimensions.length}×{r.dimensions.width}×{r.dimensions.height}
+                          </span>
+                        </div>
+                      )}
+                      {r.dimensions?.weight != null && (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-gray-500">Weight (kg)</span>
+                          <span className="font-medium text-gray-800">{r.dimensions.weight}</span>
+                        </div>
+                      )}
+                      {r.quote?.total != null && (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-gray-500">Quote</span>
+                          <span className="font-medium text-gray-800">
+                            {String(r.quote.currency || 'sgd').toUpperCase()} {Number(r.quote.total).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {r.printConfiguration.meshColors && Object.keys(
                     r.printConfiguration.meshColors instanceof Map
                       ? Object.fromEntries(r.printConfiguration.meshColors)

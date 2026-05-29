@@ -5,7 +5,7 @@ import { HiUpload, HiCheck, HiCube, HiTrash } from 'react-icons/hi'
 import { useToast } from '@/components/General/ToastProvider'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
-import { getMimeType } from '@/utils/uploadHelpers'
+import { getMimeType, putWithProgress } from '@/utils/uploadHelpers'
 
 export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
     const [uploading, setUploading] = useState(false)
@@ -120,15 +120,13 @@ export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
             }
             const { url, key: s3Key } = await signedRes.json();
             key = s3Key;
-            // Step 2: Upload to S3
-            const uploadRes = await fetch(url, {
-                method: 'PUT',
-                headers: { 'Content-Type': contentType },
-                body: file
+            // Step 2: Upload to S3 (XHR so we can show real upload progress)
+            await putWithProgress({
+                url,
+                body: file,
+                contentType,
+                onProgress: setUploadProgress,
             });
-            if (!uploadRes.ok) {
-                throw new Error('Failed to upload model to S3');
-            }
             // Step 3: Update custom print request with model file info (store only the S3 key)
             const putRes = await fetch('/api/custom-print', {
                 method: 'PUT',

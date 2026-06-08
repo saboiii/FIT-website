@@ -36,25 +36,111 @@ and per-mesh `meshColors`.
 - AND `printConfiguration.isConfigured` is true with a `configuredAt` timestamp
 - AND the status becomes `configured`
 
-### Requirement: Instant auto-quote on configuration
+### Requirement: Instant auto-quote on simple-mode configuration
 The system SHALL compute a customer-facing instant quote via the Instant Quoting
-Engine (`lib/quoting/quote.js`) when a model is configured, persist the itemized
-quote and total onto the request, and automatically advance the request to
-`quoted` with that total. An admin MAY still override the quoted total (recorded
-in `statusHistory`). The legacy `calculatePrintCost` / `printPricingFormula`
-remains only until the admin "calculate print cost" tool migrates.
+Engine (`lib/quoting/quote.js`) when a customer saves a configuration in **simple
+mode**, persist the itemized quote and total onto the request, and automatically
+advance the request to `quoted` with that total. Advanced-mode configurations
+SHALL NOT be auto-quoted — they stay at `configured` until an admin sets a
+manual quote. An admin MAY also override an instant quote (recorded in
+`statusHistory`). The legacy `calculatePrintCost` / `printPricingFormula` remains
+only until the admin "calculate print cost" tool migrates.
 
-#### Scenario: Auto-quote on configuration
-- GIVEN a custom print request with an uploaded model and saved print settings
-- WHEN the configuration is submitted (with geometry metrics available)
+#### Scenario: Auto-quote on simple-mode configuration
+- GIVEN a custom print request with an uploaded model and a saved simple-mode
+  configuration (with geometry metrics available)
+- WHEN the configuration is submitted with `mode: 'instant'`
 - THEN the engine computes an itemized quote from the metrics and settings
 - AND the request stores the quote and `quotedAt` and advances to `quoted`
+
+#### Scenario: Advanced-mode submit stays at `configured`
+- GIVEN a custom print request with a saved advanced-mode configuration
+- WHEN the configuration is submitted with `mode: 'manual'`
+- THEN the engine is NOT invoked
+- AND the request stays at status `configured` until an admin issues a quote
 
 #### Scenario: Admin override
 - GIVEN a request already in `quoted` with an auto-computed total
 - WHEN an admin sets a different total
 - THEN the request's effective total reflects the admin value
 - AND the change is recorded in `statusHistory`
+
+### Requirement: Quote mode is persisted per request
+Each `CustomPrintRequest` SHALL record whether it was quoted instantly (simple
+mode, server-authoritative) or manually (advanced mode, admin sets the price),
+via a `quoteMode: 'instant' | 'manual'` field set when the configuration is
+saved (and defensively set to `'manual'` by the admin set-quote action).
+
+#### Scenario: Saving from simple mode marks the request instant
+- WHEN a customer saves a configuration from simple mode and the Instant Quoting
+  Engine persists a quote
+- THEN the request's `quoteMode` is `'instant'`
+
+#### Scenario: Saving from advanced mode marks the request manual
+- WHEN a customer saves a configuration from advanced mode
+- THEN the request's `quoteMode` is `'manual'`
+- AND no instant quote is persisted automatically
+
+### Requirement: Instant quotes are immediately payable with admin-default delivery
+For a request quoted by the Instant Quoting Engine, the server SHALL attach the
+admin-configured default delivery options for custom prints (the active
+`additionalDeliveryType`s whose `applicableToProductTypes` includes `'print'`)
+when the request has no delivery types yet, and SHALL record the
+geometry-derived dimensions (cm) and weight (kg from `quote.inputs.weightGrams`),
+so the cart can price delivery and the customer can proceed to checkout
+immediately.
+
+#### Scenario: Defaults are applied if none are set
+- GIVEN a custom-print request with no delivery types
+- WHEN the Instant Quoting Engine persists a quote for it
+- THEN `request.delivery.deliveryTypes` contains the active "print" delivery
+  defaults from `AppSettings.additionalDeliveryTypes`
+- AND `request.dimensions` reflects the model's bounding box and computed weight
+
+### Requirement: Manual quotes notify the admin
+When a customer submits a configuration in manual (advanced) mode, the system
+SHALL attempt to send a best-effort admin notification email summarising the
+request (via `lib/email.js` using a `lib/manualQuoteEmail` pure body builder),
+without blocking the save if email infrastructure is unavailable.
+
+#### Scenario: Email failure does not block the save
+- GIVEN email credentials are missing or the email send throws
+- WHEN a manual configuration is saved
+- THEN the request is still saved successfully and returns 200
+
+### Requirement: Cart shows the right view for each mode
+The cart SHALL display the Instant Quoting Engine total for instant prints and
+the legacy `basePrice + printFee` for manual prints; it SHALL show the generic
+(Strength/Quality/Colour) configuration view for instant prints and the
+advanced settings view for manual prints. The price-source rule SHALL live in
+the pure helper `lib/customPrintDisplayPrice.js`.
+
+#### Scenario: Instant cart row shows the engine total
+- GIVEN a quoted custom-print request with `quoteMode: 'instant'` and a `quote`
+- WHEN the cart renders the row
+- THEN the displayed price equals `quote.total`
+- AND the price label reads "Instant Quote"
+
+#### Scenario: Manual or legacy cart row uses basePrice + printFee
+- GIVEN a quoted custom-print request with `quoteMode: 'manual'` (or unset)
+- WHEN the cart renders the row
+- THEN the displayed price equals `basePrice + printFee`
+
+### Requirement: Model upload reports real progress
+When a customer uploads a 3D model for a custom-print request, the UI SHALL
+report real upload progress (0–100%) derived from the bytes sent to storage,
+rather than only 0% before and 100% after.
+
+#### Scenario: Progress reflects bytes sent
+- GIVEN a model is uploading to storage
+- WHEN 50% of the bytes have been sent
+- THEN the progress indicator shows approximately 50%
+
+#### Scenario: Progress is clamped and rounded
+- GIVEN a progress event with `loaded`/`total` bytes
+- WHEN the percentage is computed
+- THEN it is an integer clamped to the range 0–100
+- AND an unknown or zero total yields 0
 
 ### Requirement: Persisted quote breakdown
 The system SHALL store the itemized quote (the factor lines, expedite, subtotal,

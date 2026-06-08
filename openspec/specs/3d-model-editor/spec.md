@@ -75,7 +75,17 @@ itemized breakdown (material, print time, base/post-processing/special-request/
 priority/delivery fees), an expedite toggle, the total, and a low-confidence
 warning when geometry is non-watertight; the panel SHALL update as print settings
 and options change, and the displayed price SHALL be the server-authoritative
-quote.
+quote. The panel SHALL make the following explicit so a correct quote is not
+mistaken for a broken one:
+
+- When the engine floored the total to the minimum price
+  (`quote.minimumApplied`), the panel SHALL show a note that the minimum order
+  price was applied, including the floor amount.
+- The print-time line SHALL display the estimated print hours
+  (`quote.inputs.printHours`) and SHALL label print time as an estimate of
+  machine time.
+- The geometry summary SHALL distinguish the solid mesh **volume** from the
+  bounding-**box** dimensions so they are not conflated.
 
 #### Scenario: Quote updates with settings
 - GIVEN a loaded model with the quote panel shown
@@ -91,6 +101,38 @@ quote.
 - GIVEN a non-watertight model
 - WHEN the quote is shown
 - THEN the panel displays a notice that the estimate is approximate
+
+#### Scenario: Minimum price is surfaced
+- GIVEN a configuration whose computed subtotal is below the minimum price
+- WHEN the panel renders the returned quote with `minimumApplied: true`
+- THEN the panel shows a "minimum order price applied" note with the floor amount
+- AND the total equals the minimum price
+
+#### Scenario: Print time shows hours
+- GIVEN a quote whose `inputs.printHours` is 2.3
+- WHEN the panel renders the print-time line
+- THEN the estimated hours (≈2.3 h) are shown alongside the print-time price
+
+### Requirement: Editor overlay placement
+The editor's overlay controls (instant-quote panel, simple-mode configuration
+panel, and the Simple/Advanced mode toggle) SHALL be anchored to the 3D canvas
+area (a positioned ancestor) rather than the viewport, and SHALL NOT overlap the
+global chat launcher.
+
+#### Scenario: Quote panel clear of the chat launcher
+- GIVEN the global chat launcher is anchored at the bottom-left of the viewport
+- WHEN a model is loaded and the instant-quote panel is shown
+- THEN the quote panel is anchored to the canvas (not the viewport) and does not
+  occupy the same corner as the chat launcher
+
+### Requirement: Lighting preset takes effect
+When the user changes the lighting preset (rembrandt/portrait/upfront/soft), the
+viewer's light rig SHALL rebuild so the change is visible.
+
+#### Scenario: Switching presets changes lighting
+- GIVEN a model is loaded with the default lighting preset
+- WHEN the user selects a different lighting preset
+- THEN the scene's lighting visibly changes to match the selected preset
 
 ### Requirement: Reset configuration to defaults
 The system SHALL provide a reset-to-defaults control that is discoverable in both

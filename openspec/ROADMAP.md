@@ -71,6 +71,31 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
     live in Stripe webhook/checkout/print-order; removal needs migration + data
     audit)*
 
+## Phase 5 — Client manual-testing batch (2026-06-08)
+
+Items raised from client browser testing. All 7 implemented test-first, archived
+under `openspec/changes/archive/2026-06-08-*` and folded into the established
+specs (`3d-model-editor`, `custom-print-requests`).
+
+14. **refine-instant-quote-panel** — surface min-price floor, show print-time
+    hours, distinguish solid volume vs bounding box, render all admin colour
+    swatches, clarify per-part colour. *(✅ archived 2026-06-08)*
+15. **fix-editor-panel-layout** — anchor overlay panels to the canvas; move the
+    quote panel out of the chat launcher's corner. *(✅ archived 2026-06-08)*
+16. **fix-upload-progress** — XHR `upload.onprogress` for the custom-print S3
+    PUT so the bar tracks real bytes sent. *(✅ archived 2026-06-08)*
+17. **fix-editor-lighting-and-perf** — key drei `<Stage>` on `preset` so the
+    light rig rebuilds; memoize `meshColors` for steadier re-renders.
+    *(✅ archived 2026-06-08)*
+18. **add-instant-vs-manual-quote-flow** — the core of the batch. Simple mode →
+    instant CTA → server quote → admin-default delivery auto-applied → payable.
+    Advanced mode → manual quote (admin email + Stream Chat for negotiation).
+    Cart uses `quote.total` for instant; persists the generic Strength/Quality/
+    Colour view. *(✅ archived 2026-06-08)*
+19. **verify-quote-and-checkout-flows** — extract pure `customPrintDisplayPrice`
+    helper; admin set-quote defensively marks `quoteMode='manual'`. Stripe
+    checkout completion deferred to browser QA. *(✅ archived 2026-06-08)*
+
 ## Backlog spun out during implementation
 
 - **add-test-coverage-ci** — *(✅ archived 2026-05-29)*

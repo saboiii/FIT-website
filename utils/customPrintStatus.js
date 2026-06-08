@@ -27,7 +27,7 @@ export function customPrintStage(status) {
         actionNeeded: false,
         payable: false,
         title: 'Preparing your quote',
-        message: "Your configuration is in — we're finalising your quote.",
+        message: "Your configuration is in, we're finalising your quote.",
       }
     case 'quoted':
     case 'payment_pending':
@@ -36,7 +36,7 @@ export function customPrintStage(status) {
         actionNeeded: false,
         payable: true,
         title: 'Ready to checkout',
-        message: 'Your quote is ready — you can proceed to payment.',
+        message: 'Your quote is ready, you can proceed to payment.',
       }
     case 'paid':
     case 'printing':

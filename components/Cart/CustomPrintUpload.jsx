@@ -267,34 +267,55 @@ export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
                                 {new Date(savedConfig.configuredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </span>
                         </div>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Layer Height</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.layerHeight}mm</span>
+                        {savedConfig?.generic?.strength || savedConfig?.generic?.quality || savedConfig?.generic?.colour ? (
+                            // Instant-quote (simple-mode) view: the customer picked Strength /
+                            // Quality / Colour, so showing the leva-detail list is noise.
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Strength</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.generic.strength || '—'}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Quality</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.generic.quality || '—'}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-xs text-lightColor">Colour</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.generic.colour || '—'}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Wall Loops</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.wallLoops}</span>
+                        ) : (
+                            // Manual-quote (advanced-mode) view: the admin needs to see all the
+                            // detailed leva settings.
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Layer Height</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.layerHeight}mm</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Wall Loops</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.wallLoops}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Infill</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.sparseInfillDensity}% {savedConfig.printSettings.sparseInfillPattern}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Nozzle</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.nozzleDiameter}mm</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Support</span>
+                                    <span className="text-xs font-medium text-textColor">
+                                        {savedConfig.printSettings.enableSupport ? savedConfig.printSettings.supportType : 'None'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-xs text-lightColor">Print Plate</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.printPlate}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Infill</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.sparseInfillDensity}% {savedConfig.printSettings.sparseInfillPattern}</span>
-                            </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Nozzle</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.nozzleDiameter}mm</span>
-                            </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Support</span>
-                                <span className="text-xs font-medium text-textColor">
-                                    {savedConfig.printSettings.enableSupport ? savedConfig.printSettings.supportType : 'None'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center py-2">
-                                <span className="text-xs text-lightColor">Print Plate</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.printPlate}</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
                 <div className="border-t border-borderColor bg-baseColor p-6">

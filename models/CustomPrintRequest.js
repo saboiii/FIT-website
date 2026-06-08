@@ -21,6 +21,15 @@ const CustomPrintRequestSchema = new mongoose.Schema({
 
     // Print configuration
     printConfiguration: {
+        // Generic (simple-mode) selection — kept alongside printSettings so the
+        // cart can show the friendly view (Strength/Quality/Colour) for instant
+        // quotes without recomputing it from the advanced settings.
+        generic: {
+            strength: { type: String, default: null },
+            quality: { type: String, default: null },
+            colour: { type: String, default: null },
+            material: { type: String, default: null },
+        },
         meshColors: { type: Map, of: String }, // { meshName: colorHex }
         printSettings: {
             // Layer Height
@@ -89,6 +98,11 @@ const CustomPrintRequestSchema = new mongoose.Schema({
         },
     },
     quotedAt: { type: Date },
+
+    // How this request was quoted:
+    //   - 'instant' — server-authoritative price from the Instant Quoting Engine.
+    //   - 'manual'  — admin reviewed advanced settings and set the price.
+    quoteMode: { type: String, enum: ['instant', 'manual'], default: null },
 
     // Payment info
     stripeSessionId: { type: String },

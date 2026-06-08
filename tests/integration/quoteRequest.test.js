@@ -34,6 +34,18 @@ describe('buildQuote — validation', () => {
     expect(buildQuote({ ...validInput, volumeCm3: -5 }, {}).ok).toBe(false)
     expect(buildQuote({ ...validInput, volumeCm3: Infinity }, {}).ok).toBe(false)
   })
+
+  it('accepts an optional `mode` and surfaces it on result.data', () => {
+    const r = buildQuote({ ...validInput, mode: 'instant' }, {})
+    expect(r.ok).toBe(true)
+    expect(r.data.mode).toBe('instant')
+  })
+
+  it('rejects an invalid mode', () => {
+    const r = buildQuote({ ...validInput, mode: 'flexible' }, {})
+    expect(r.ok).toBe(false)
+    expect(r.status).toBe(400)
+  })
 })
 
 describe('buildQuote — server-authoritative pricing', () => {

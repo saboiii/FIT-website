@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
+import { sendEmail, wrapInTemplate } from '@/lib/email'
+import { buildManualQuoteAdminEmail } from '@/lib/manualQuoteEmail'
 
 const STATUS_RANK = {
     pending_upload: 0,
@@ -52,7 +54,7 @@ export async function PUT(req) {
         await connectToDatabase()
 
         const body = await req.json()
-        const { requestId, printSettings, meshColors } = body
+        const { requestId, printSettings, meshColors, generic, mode } = body
 
         if (!requestId) {
             return NextResponse.json({ error: 'Request ID is required' }, { status: 400 })
@@ -68,8 +70,14 @@ export async function PUT(req) {
             return NextResponse.json({ error: 'Custom print request not found' }, { status: 404 })
         }
 
-        // Update print configuration
+        // Update print configuration (preserve generic block; persist mode).
         customPrintRequest.printConfiguration = {
+            generic: generic && typeof generic === 'object' ? {
+                strength: generic.strength ?? null,
+                quality: generic.quality ?? null,
+                colour: generic.colour ?? null,
+                material: generic.material ?? null,
+            } : (customPrintRequest.printConfiguration?.generic || undefined),
             meshColors: meshColors || {},
             printSettings: {
                 layerHeight: printSettings.layerHeight,
@@ -88,10 +96,33 @@ export async function PUT(req) {
             isConfigured: true
         }
 
+        // Persist the quote mode (instant vs manual). The instant path will
+        // separately POST /api/quote to compute and persist the actual quote;
+        // the manual path stays at `configured` until an admin sets a quote.
+        if (mode === 'instant' || mode === 'manual') {
+            customPrintRequest.quoteMode = mode
+        }
+
         // Ensure status never lags behind stored data (e.g. pending_upload -> configured)
         maybeUpgradeStatusToMatchData(customPrintRequest, 'Print configuration saved');
 
         await customPrintRequest.save()
+
+        // Manual mode: best-effort notify the admin so they know to quote. Never
+        // block the save on email failure — credentials may be unset in some envs.
+        if (customPrintRequest.quoteMode === 'manual') {
+            const adminEmail = process.env.ADMIN_EMAIL || process.env.GMAIL_USER
+            if (adminEmail) {
+                try {
+                    const { subject, html } = buildManualQuoteAdminEmail({
+                        request: customPrintRequest.toObject(),
+                    })
+                    await sendEmail({ to: adminEmail, subject, html: wrapInTemplate(html) })
+                } catch (emailErr) {
+                    console.error('Manual-quote admin notification failed:', emailErr)
+                }
+            }
+        }
 
         return NextResponse.json({
             success: true,

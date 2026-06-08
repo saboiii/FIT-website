@@ -336,8 +336,11 @@ const Result = () => {
     }
   }, [fileName, showToast])
 
-  // Submit configuration for print order or save to MongoDB
-  const submitConfiguration = useCallback(async () => {
+  // Submit configuration for print order or save to MongoDB.
+  // `mode` decides the flow: 'instant' (simple) auto-quotes via /api/quote and
+  // makes the request immediately payable; 'manual' (advanced) saves config and
+  // waits for admin review (the API sends an admin notification email).
+  const submitConfiguration = useCallback(async (mode = 'manual') => {
     setSubmittingConfig(true)
     try {
       // Get current values from refs (most up-to-date)
@@ -368,6 +371,12 @@ const Result = () => {
           printPlate: currentPrintability.printPlate,
         },
         meshColors: meshColors,
+        // Simple-mode selection — sent only for instant quotes so the cart can
+        // show the friendly Strength/Quality/Colour view.
+        generic: mode === 'instant'
+          ? { strength: generic.strength, quality: generic.quality, colour: generic.colour, material: genericMaterial }
+          : undefined,
+        mode,
       }
 
       if (orderId) {
@@ -407,42 +416,54 @@ const Result = () => {
           throw new Error(error.error || 'Failed to save configuration')
         }
 
-        // Instant quote + pay-first: persist a server-authoritative quote onto the
-        // request (auto-advances it to `quoted`). Best-effort — never block the
-        // save flow if quoting fails; an admin/manual quote remains the fallback.
-        if (geometryMetrics?.volumeCm3 > 0) {
-          try {
-            await fetch('/api/quote', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                requestId: cpRequestId,
-                volumeCm3: geometryMetrics.volumeCm3,
-                dimensionsCm: {
-                  length: geometryMetrics.dimensionsCm?.length || 0,
-                  width: geometryMetrics.dimensionsCm?.width || 0,
-                  height: geometryMetrics.dimensionsCm?.height || 0,
-                },
-                confidence: geometryMetrics.confidence || 'high',
-                settings: quoteSettings,
-                options: quoteOptions,
-              }),
-            })
-          } catch (quoteErr) {
-            console.error('Auto-quote failed (config still saved):', quoteErr)
+        // Instant mode: persist a server-authoritative quote so the request is
+        // immediately payable. Surface failures (the previous best-effort silent
+        // path left customers stuck on "Preparing your quote").
+        if (mode === 'instant') {
+          if (!(geometryMetrics?.volumeCm3 > 0)) {
+            throw new Error('Geometry not measured yet — please reload the model and try again.')
           }
+          const quoteRes = await fetch('/api/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              requestId: cpRequestId,
+              mode: 'instant',
+              volumeCm3: geometryMetrics.volumeCm3,
+              dimensionsCm: {
+                length: geometryMetrics.dimensionsCm?.length || 0,
+                width: geometryMetrics.dimensionsCm?.width || 0,
+                height: geometryMetrics.dimensionsCm?.height || 0,
+              },
+              confidence: geometryMetrics.confidence || 'high',
+              settings: quoteSettings,
+              options: quoteOptions,
+            }),
+          })
+          if (!quoteRes.ok) {
+            const errBody = await quoteRes.json().catch(() => ({}))
+            throw new Error(errBody.error || 'Failed to generate instant quote')
+          }
+          showToast('Instant quote ready — checkout when you’re ready!', 'success')
+        } else {
+          showToast(
+            'Configuration sent for review — we’ll follow up with a quote shortly.',
+            'success',
+          )
         }
-
-        showToast('Print configuration saved successfully!', 'success')
         router.push(returnTo || '/cart')
       }
     } catch (error) {
       console.error('Error submitting configuration:', error)
-      showToast('Failed to save configuration. Please try again.', 'error')
+      showToast(error?.message || 'Failed to save configuration. Please try again.', 'error')
     } finally {
       setSubmittingConfig(false)
     }
-  }, [meshNames, orderId, productId, variantId, showToast, router, geometryMetrics, quoteSettings, quoteOptions, returnTo])
+  }, [
+    meshNames, orderId, productId, variantId, showToast, router,
+    geometryMetrics, quoteSettings, quoteOptions, returnTo,
+    generic, genericMaterial,
+  ])
 
   // Add save configuration button in export controls
   const saveConfigControls = useMemo(() => {
@@ -451,10 +472,12 @@ const Result = () => {
       'Download image': button(() => downloadImage()),
     }
 
-    // Always show save button if we have a scene (for custom prints or orders)
+    // Always show save button if we have a scene (for custom prints or orders).
+    // Leva lives in Advanced Mode → this button is the *manual* quote path
+    // (admin reviews the detailed settings before quoting).
     if (orderId || productId || variantId) {
-      const buttonText = orderId ? 'Submit Print Configuration' : 'Save Print Config'
-      controls[buttonText] = button(() => submitConfiguration(), { disabled: submittingConfig })
+      const buttonText = orderId ? 'Submit Print Configuration' : 'Save Print Config — Manual Quote'
+      controls[buttonText] = button(() => submitConfiguration('manual'), { disabled: submittingConfig })
     }
 
     return controls
@@ -604,6 +627,16 @@ const Result = () => {
             >
               Reset to defaults
             </button>
+
+            {(orderId || productId || variantId) && (
+              <button
+                onClick={() => submitConfiguration('instant')}
+                disabled={submittingConfig}
+                className="mt-2 w-full rounded-full bg-linear-to-r from-amber-300 to-red-400 px-3 py-2 text-xs font-semibold text-textColor shadow-sm hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingConfig ? 'Saving…' : 'Save & Get Instant Quote'}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -6,6 +6,7 @@ import CustomPrintRequest from '@/models/CustomPrintRequest'
 import { buildQuote } from '@/lib/quoting/quoteRequest'
 import { getAppSettingsId } from '@/lib/appSettingsId'
 import { recomputeMetricsFromModel } from '@/lib/quoting/serverGeometry'
+import { resolveCustomPrintDeliveryDefaults } from '@/lib/customPrintDelivery'
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 
@@ -100,6 +101,34 @@ export async function POST(req) {
     reqDoc.quote = persistQuote
     responseQuote = persistQuote
     reqDoc.quotedAt = new Date()
+    // /api/quote IS the instant path — anything persisted here is an instant
+    // quote (the manual/advanced path goes through admin set-quote).
+    reqDoc.quoteMode = 'instant'
+
+    // Auto-apply admin-default delivery for custom prints if none are set, so
+    // the cart has selectable options instead of "No delivery options".
+    const existingDelivery = reqDoc.delivery?.deliveryTypes || []
+    if (existingDelivery.length === 0) {
+      const defaults = resolveCustomPrintDeliveryDefaults(
+        settings?.additionalDeliveryTypes || [],
+      )
+      if (defaults.length > 0) {
+        reqDoc.delivery = { deliveryTypes: defaults }
+      }
+    }
+
+    // Persist geometry-derived dimensions/weight so delivery pricing tiers work.
+    const dims = persistQuote.inputs?.dimensionsCm
+    const grams = persistQuote.inputs?.weightGrams
+    if (dims && (dims.length > 0 || dims.width > 0 || dims.height > 0)) {
+      reqDoc.dimensions = {
+        length: dims.length || null,
+        width: dims.width || null,
+        height: dims.height || null,
+        weight: grams != null ? grams / 1000 : null, // grams -> kg (model unit)
+      }
+    }
+
     if (['pending_upload', 'pending_config', 'configured'].includes(reqDoc.status)) {
       reqDoc.status = 'quoted'
       reqDoc.statusHistory.push({ status: 'quoted', note: 'Auto-quoted by Instant Quoting Engine' })

@@ -609,14 +609,26 @@ function Cart() {
 
                                                 <div className='flex flex-col justify-center items-end font-medium md:text-sm text-base'>
                                                     {customPrintRequest?.status === 'quoted' ? (
-                                                        <div className="text-right">
-                                                            <span className=' text-green-600'>
-                                                                SGD {Number((customPrintRequest?.basePrice || 0) + (customPrintRequest?.printFee || 0)).toFixed(2)}
-                                                            </span>
-                                                            <div className="text-xs text-green-600 font-medium">
-                                                                Quoted
-                                                            </div>
-                                                        </div>
+                                                        (() => {
+                                                            // Instant quotes carry the engine breakdown on `quote`; manual
+                                                            // quotes use the legacy basePrice + printFee.
+                                                            const isInstant =
+                                                                customPrintRequest?.quoteMode === 'instant' &&
+                                                                Number.isFinite(customPrintRequest?.quote?.total);
+                                                            const amount = isInstant
+                                                                ? Number(customPrintRequest.quote.total)
+                                                                : Number((customPrintRequest?.basePrice || 0) + (customPrintRequest?.printFee || 0));
+                                                            return (
+                                                                <div className="text-right">
+                                                                    <span className=' text-green-600'>
+                                                                        SGD {amount.toFixed(2)}
+                                                                    </span>
+                                                                    <div className="text-xs text-green-600 font-medium">
+                                                                        {isInstant ? 'Instant Quote' : 'Quoted'}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()
                                                     ) : (
                                                         <span className=' flex items-center gap-1'>
                                                             SGD {Number(breakdownItem?.price ?? cartItem.price).toFixed(2)}

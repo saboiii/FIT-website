@@ -1,6 +1,7 @@
 # Proposal: Server-Side Geometry Verification for Quotes (backlog — security)
 
-> Status: **STL implemented 2026-05-29.** Kept active for the remaining formats +
+> Status: **STL recompute (2026-05-29) + deviation logging (2026-06-08) done.**
+> Kept active for OBJ / glTF / 3MF recompute, the deviation policy decision, and
 > integration verification.
 
 ## Done (2026-05-29)
@@ -15,15 +16,24 @@
   falls back to the client-derived quote so the save never breaks. The live
   preview still uses client metrics.
 
+## Done (2026-06-08) — deviation logging
+
+- `lib/quoting/geometryDeviation.js` — pure
+  `geometryDeviation(client, server, tolerancePct = 10)` returning
+  `{volumePctDelta, suspicious, tolerancePct}`.
+- `/api/quote` logs `console.error` with the requestId, client volume, server
+  volume, and the delta when the client lowballs by more than the tolerance.
+  The server volume still wins; the log is the abuse signal so ops can spot
+  tampering attempts or a real parse-divergence bug.
+
 ## Remaining (flagged)
 
 - **Other formats:** server-side parsing for OBJ / glTF / 3MF (heavier; glTF
   especially). Until then those formats persist the client-metric quote.
-- **Deviation policy:** currently the server value silently wins for STL. Decide
-  whether to also surface/log when client vs server volume deviates beyond a
-  tolerance (possible abuse signal).
-- **Integration verification:** the S3-fetch + persist path is guarded but was not
-  run against live S3 here (see `verify-quoting-flows-browser`).
+- **Deviation policy:** currently logged + server-wins. Decide whether to also
+  reject (HTTP 400) when deviation exceeds the tolerance. Needs product input.
+- **Integration verification:** the S3-fetch + persist path is guarded but was
+  not run against live S3 here (see `verify-quoting-flows-browser`).
 
 ## Why
 

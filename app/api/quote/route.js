@@ -6,6 +6,7 @@ import CustomPrintRequest from '@/models/CustomPrintRequest'
 import { buildQuote } from '@/lib/quoting/quoteRequest'
 import { getAppSettingsId } from '@/lib/appSettingsId'
 import { recomputeMetricsFromModel } from '@/lib/quoting/serverGeometry'
+import { geometryDeviation } from '@/lib/quoting/geometryDeviation'
 import { resolveCustomPrintDeliveryDefaults } from '@/lib/customPrintDelivery'
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
@@ -82,6 +83,22 @@ export async function POST(req) {
         const bytes = await obj.Body.transformToByteArray()
         const serverMetrics = recomputeMetricsFromModel(bytes, name)
         if (serverMetrics?.volumeCm3 > 0) {
+          // Deviation logging: if the client's volume disagrees with the
+          // server's recompute by more than the tolerance, flag it. The server
+          // value still wins (we trust the recompute), but the log lets ops
+          // notice tampering attempts or a real parse-divergence bug.
+          const dev = geometryDeviation(
+            { volumeCm3: body?.volumeCm3 },
+            { volumeCm3: serverMetrics.volumeCm3 },
+          )
+          if (dev.suspicious) {
+            console.error(
+              `[quote] geometry deviation ${dev.volumePctDelta.toFixed(1)}% > ` +
+                `${dev.tolerancePct}% for requestId=${requestId} ` +
+                `(client=${body?.volumeCm3} cm³, server=${serverMetrics.volumeCm3} cm³)`,
+            )
+          }
+
           const serverResult = buildQuote(
             {
               ...body,

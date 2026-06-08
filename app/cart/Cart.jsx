@@ -12,6 +12,7 @@ import { IoCartOutline } from 'react-icons/io5';
 import { convertToGlobalCurrency } from '@/utils/convertCurrency';
 import { getDiscountedPrice } from '@/utils/discount';
 import { customPrintStage, isCustomPrintBlockingCheckout } from '@/utils/customPrintStatus';
+import { customPrintDisplayPrice } from '@/lib/customPrintDisplayPrice';
 import { useCurrency } from '@/components/General/CurrencyContext';
 import CustomPrintUpload from '@/components/Cart/CustomPrintUpload';
 import { HiCheck, HiExclamationCircle } from 'react-icons/hi';
@@ -610,21 +611,14 @@ function Cart() {
                                                 <div className='flex flex-col justify-center items-end font-medium md:text-sm text-base'>
                                                     {customPrintRequest?.status === 'quoted' ? (
                                                         (() => {
-                                                            // Instant quotes carry the engine breakdown on `quote`; manual
-                                                            // quotes use the legacy basePrice + printFee.
-                                                            const isInstant =
-                                                                customPrintRequest?.quoteMode === 'instant' &&
-                                                                Number.isFinite(customPrintRequest?.quote?.total);
-                                                            const amount = isInstant
-                                                                ? Number(customPrintRequest.quote.total)
-                                                                : Number((customPrintRequest?.basePrice || 0) + (customPrintRequest?.printFee || 0));
+                                                            const priced = customPrintDisplayPrice(customPrintRequest);
                                                             return (
                                                                 <div className="text-right">
                                                                     <span className=' text-green-600'>
-                                                                        SGD {amount.toFixed(2)}
+                                                                        SGD {priced.amount.toFixed(2)}
                                                                     </span>
                                                                     <div className="text-xs text-green-600 font-medium">
-                                                                        {isInstant ? 'Instant Quote' : 'Quoted'}
+                                                                        {priced.label}
                                                                     </div>
                                                                 </div>
                                                             );

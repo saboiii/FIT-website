@@ -89,6 +89,10 @@ export async function PUT(request) {
     }
     doc.currency = cur
     doc.status = 'quoted'
+    // Admin-issued quotes are always 'manual' (the Instant Quoting Engine
+    // sets 'instant' itself when persisting via /api/quote). Setting this
+    // defensively keeps the cart's price-source branch deterministic.
+    doc.quoteMode = 'manual'
     doc.statusHistory.push({
       status: 'quoted',
       note: note || 'Quote created.',

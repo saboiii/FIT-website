@@ -40,9 +40,10 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
    spec `generic-print-presets`)*
 5. **improve-custom-print-post-config-ux** — router return-to-origin + clear
    status copy + pay-first auto-quote at submit. *(✅ archived 2026-05-29)*
-6. **add-quote-persistence-and-sharing** — save/share quotes. *(backend done
-   2026-05-29: SavedQuote model + save/list/share/shared endpoints + pure
-   token/validity core; **active** — account/share UI remains, browser)*
+6. **add-quote-persistence-and-sharing** — save/share quotes. *(DROPPED 2026-06-08
+   at client request; the backend was removed via `remove-saved-shared-quotes`.
+   Customers compute quotes live or have admin assign one — they don't need to
+   save or share.)*
 
 ## Phase 3 — Operator tooling & fixes (largely independent; parallelizable)
 

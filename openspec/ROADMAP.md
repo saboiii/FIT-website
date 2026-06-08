@@ -61,6 +61,9 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
 
 11. **add-slicer-accurate-estimation** — cura-wasm slicer behind the engine's
     interface. *(DEFERRED — needs browser/worker env; heuristic suffices)*
+    A lightweight alternative is proposed in
+    `add-lightweight-print-time-estimator` (layer-stack heuristic in a worker;
+    no WASM).
 12. **add-otp-contact-verification** — OTP contact channel at checkout.
     *(BLOCKED — needs an SMS/WhatsApp provider)*
 13. **retire-deprecated-printorder-model** — *(partial 2026-05-29: dead `.bak` +
@@ -84,6 +87,8 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
 - **add-per-field-setting-reset** — per-field reset (leva limitation).
 - **verify-quoting-flows-browser** — human QA checklist for the interactive UI
   paths (engine/generic/pay-first/cart/admin) not verifiable headlessly.
+- **add-lightweight-print-time-estimator** — shape-aware layer-stack heuristic in
+  a Web Worker; alternative to the deferred cura-wasm path.
 
 ## Notes
 

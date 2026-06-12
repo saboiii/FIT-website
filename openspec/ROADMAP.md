@@ -110,6 +110,11 @@ specs (`3d-model-editor`, `custom-print-requests`).
   `verify-quoting-flows-browser` item 6)*
 - **decide-geometry-deviation-policy** — *(BLOCKED — product decision: reject vs
   log-only on suspicious client/server volume deviation)*
+- **fix-instant-quote-checkout-charge** — *(✅ archived 2026-06-12; instant
+  quotes were charged `basePrice + printFee` instead of the displayed
+  `quote.total` at checkout/webhook — extracted pure
+  `customPrintChargeBreakdown`, wired into both checkout routes + Stripe
+  webhook)*
 - **add-quote-api-rate-limiting** — *(BLOCKED — needs Upstash Redis infra)*
 - **add-per-field-setting-reset** — *(DEFERRED — leva limitation; needs design)*
 - **verify-quoting-flows-browser** — *(human QA of interactive UI paths)*

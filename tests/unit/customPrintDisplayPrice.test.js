@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { customPrintDisplayPrice } from '@/lib/customPrintDisplayPrice'
+import {
+  customPrintDisplayPrice,
+  customPrintChargeBreakdown,
+} from '@/lib/customPrintDisplayPrice'
 
 describe('customPrintDisplayPrice', () => {
   it('uses quote.total for instant-quoted requests', () => {
@@ -49,5 +52,57 @@ describe('customPrintDisplayPrice', () => {
       label: 'Quoted',
       source: 'manual',
     })
+  })
+})
+
+describe('customPrintChargeBreakdown', () => {
+  const delivery = {
+    deliveryTypes: [
+      { type: 'pickup', price: 0 },
+      { type: 'courier', price: 8, customPrice: 6.5 },
+    ],
+  }
+
+  it('charges quote.total for instant-quoted requests (not basePrice + printFee)', () => {
+    const r = {
+      quoteMode: 'instant',
+      quote: { total: 42.75 },
+      basePrice: 5,
+      printFee: 0,
+      delivery,
+      currency: 'sgd',
+    }
+    const b = customPrintChargeBreakdown(r, 'courier')
+    expect(b.amount).toBe(42.75)
+    expect(b.source).toBe('instant')
+    expect(b.chosenDeliveryType).toBe('courier')
+    expect(b.deliveryFee).toBe(6.5) // customPrice wins over price
+    expect(b.total).toBe(49.25)
+    expect(b.currency).toBe('SGD')
+  })
+
+  it('charges basePrice + printFee for manual/legacy quotes', () => {
+    const r = { basePrice: 10, printFee: 15, delivery }
+    const b = customPrintChargeBreakdown(r, 'pickup')
+    expect(b.amount).toBe(25)
+    expect(b.source).toBe('manual')
+    expect(b.chosenDeliveryType).toBe('pickup')
+    expect(b.deliveryFee).toBe(0)
+    expect(b.total).toBe(25)
+  })
+
+  it('falls back to the first delivery type when the requested one is unknown', () => {
+    const r = { basePrice: 10, printFee: 0, delivery }
+    const b = customPrintChargeBreakdown(r, 'teleport')
+    expect(b.chosenDeliveryType).toBe('pickup')
+    expect(b.deliveryFee).toBe(0)
+  })
+
+  it('handles a request without delivery types', () => {
+    const b = customPrintChargeBreakdown({ basePrice: 10, printFee: 2 }, 'courier')
+    expect(b.chosenDeliveryType).toBe('')
+    expect(b.deliveryFee).toBe(0)
+    expect(b.total).toBe(12)
+    expect(b.currency).toBe('SGD')
   })
 })

@@ -7,6 +7,7 @@ import PrintOrder from "@/models/PrintOrder";
 import CheckoutSession from "@/models/CheckoutSession";
 import Order from "@/models/Order";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
+import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
 import { sendEmail, wrapInTemplate } from "@/lib/email";
 import { clerkClient } from "@clerk/nextjs/server";
 import mongoose from "mongoose";
@@ -130,20 +131,13 @@ export async function POST(req) {
                         // Use the configured base product for order linkage
                         product = customPrintBaseProduct;
 
-                        // Compute quoted pricing (base + print fee) and delivery fee from chosen delivery type
-                        const base = Number(customPrintRequest.basePrice || 0);
-                        const fee = Number(customPrintRequest.printFee || 0);
-                        customPrintQuotedPrice = base + fee;
-
-                        const availableDeliveryTypes = customPrintRequest.delivery?.deliveryTypes || [];
-                        const requestedDeliveryType = item.chosenDeliveryType || '';
-                        const requestedExists = availableDeliveryTypes.some(dt => dt.type === requestedDeliveryType);
-                        const chosenDeliveryType = requestedExists
-                            ? requestedDeliveryType
-                            : (availableDeliveryTypes[0]?.type || '');
-                        customPrintChosenDeliveryType = chosenDeliveryType;
-                        const chosenDeliveryObj = availableDeliveryTypes.find(dt => dt.type === chosenDeliveryType);
-                        customPrintDeliveryFee = Number(chosenDeliveryObj?.customPrice ?? chosenDeliveryObj?.price ?? 0);
+                        // Quoted pricing + delivery, same selector the cart
+                        // displays and checkout charges (instant → quote.total,
+                        // manual → basePrice + printFee).
+                        const charge = customPrintChargeBreakdown(customPrintRequest, item.chosenDeliveryType || '');
+                        customPrintQuotedPrice = charge.amount;
+                        customPrintChosenDeliveryType = charge.chosenDeliveryType;
+                        customPrintDeliveryFee = charge.deliveryFee;
                     }
                 } else {
                     product = await Product.findById(item.productId);

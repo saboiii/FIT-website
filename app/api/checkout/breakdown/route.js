@@ -4,6 +4,7 @@ import User from "@/models/User";
 import Event from "@/models/Event";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
 import { calculateCartItemBreakdown } from "../calculateBreakdown";
+import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
 import { authenticate } from "@/lib/authenticate";
 
 async function fetchProduct(productId) {
@@ -83,34 +84,25 @@ export async function GET(req) {
                 ].includes(customPrintRequest.status);
 
                 if (isFixedPricedCustomPrint) {
-                    // Use quoted pricing for custom prints
-                    const base = Number(customPrintRequest.basePrice || 0);
-                    const fee = Number(customPrintRequest.printFee || 0);
-                    const quotedPrice = base + fee;
-
-                    const availableDeliveryTypes = customPrintRequest.delivery?.deliveryTypes || [];
-                    const requestedDeliveryType = item.chosenDeliveryType || '';
-                    const requestedExists = availableDeliveryTypes.some(dt => dt.type === requestedDeliveryType);
-                    const chosenDeliveryType = requestedExists
-                        ? requestedDeliveryType
-                        : (availableDeliveryTypes[0]?.type || '');
-                    const chosenDeliveryObj = availableDeliveryTypes.find(dt => dt.type === chosenDeliveryType);
-                    const deliveryFee = Number(chosenDeliveryObj?.customPrice ?? chosenDeliveryObj?.price ?? 0);
+                    // Quoted pricing: instant quotes charge quote.total, manual
+                    // quotes charge basePrice + printFee — always the same amount
+                    // the cart displays (customPrintDisplayPrice).
+                    const charge = customPrintChargeBreakdown(customPrintRequest, item.chosenDeliveryType || '');
 
                     breakdown = {
                         productId: item.productId,
                         selectedVariants: item.selectedVariants || {},
                         name: product.name,
                         quantity: 1,
-                        price: quotedPrice,
-                        priceBeforeDiscount: quotedPrice,
-                        basePrice: base,
+                        price: charge.amount,
+                        priceBeforeDiscount: charge.amount,
+                        basePrice: Number(customPrintRequest.basePrice || 0),
                         variantInfo: [],
-                        chosenDeliveryType,
-                        deliveryFee,
-                        total: quotedPrice + deliveryFee,
+                        chosenDeliveryType: charge.chosenDeliveryType,
+                        deliveryFee: charge.deliveryFee,
+                        total: charge.total,
                         creatorUserId: product.creatorUserId,
-                        currency: (customPrintRequest.currency || 'sgd').toUpperCase(),
+                        currency: charge.currency,
                         customPrintRequestId: customPrintRequest.requestId,
                         customPrintStatus: customPrintRequest.status
                     };

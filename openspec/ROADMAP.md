@@ -110,6 +110,10 @@ specs (`3d-model-editor`, `custom-print-requests`).
   `verify-quoting-flows-browser` item 6)*
 - **decide-geometry-deviation-policy** — *(BLOCKED — product decision: reject vs
   log-only on suspicious client/server volume deviation)*
+- **fix-upload-endpoint-hardening** — *(✅ archived 2026-06-12; /api/upload/
+  cleanup was deletable-by-any-user for arbitrary S3 keys — now admin-gated;
+  models/viewable presign keys sanitize the client filename via
+  `lib/uploadKey.sanitizeKeyPart`)*
 - **fix-jsonld-script-injection** — *(✅ archived 2026-06-12; JSON-LD blocks now
   escape `<` via `lib/jsonLd.jsonLdString` so DB-sourced titles can't break out
   of the script tag)*

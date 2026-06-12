@@ -3,6 +3,7 @@ import { s3 } from "@/lib/s3";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { sanitizeKeyPart } from "@/lib/uploadKey";
 
 const BUCKET_NAME = process.env.NEXT_PUBLIC_S3_BUCKET_NAME;
 
@@ -69,7 +70,7 @@ export async function POST(req) {
     if (!filename || !contentType) {
         return NextResponse.json({ error: "Missing filename or contentType" }, { status: 400 });
     }
-    const key = `models/${Date.now()}-${Math.random().toString(36).slice(2)}-${filename}`;
+    const key = `models/${Date.now()}-${Math.random().toString(36).slice(2)}-${sanitizeKeyPart(filename)}`;
     const command = new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: key,

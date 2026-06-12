@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { s3 } from "@/lib/s3";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
+import { checkAdminPrivileges } from "@/lib/checkPrivileges";
 
 const BUCKET_NAME = process.env.NEXT_PUBLIC_S3_BUCKET_NAME;
 
@@ -13,6 +14,11 @@ export async function POST(req) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        // Deletes arbitrary S3 keys, so it must stay admin-only. Its sole
+        // caller is the admin ProductForm's upload-failure cleanup.
+        if (!(await checkAdminPrivileges(userId))) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         const { files } = await req.json();
 
@@ -22,7 +28,7 @@ export async function POST(req) {
 
         const deletionResults = [];
 
-        for (const filePath of files) {
+        for (const filePath of files.filter((f) => typeof f === "string" && f.trim())) {
             try {
                 await s3.send(
                     new DeleteObjectCommand({

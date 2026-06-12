@@ -14,6 +14,7 @@ import {
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { limitQuoteRequest } from '@/lib/rateLimit'
+import { checkMachineLimits, machineLimitMessage } from '@/lib/quoting/machineLimits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -66,6 +67,20 @@ export async function POST(req) {
   const result = buildQuote(body, { pricingConfig, deliveryTypes })
   if (!result.ok) {
     return NextResponse.json({ error: result.error, issues: result.issues }, { status: result.status })
+  }
+
+  // Machine capacity: reject models the farm cannot print (admin-configured
+  // limits; nothing is enforced until the admin sets them).
+  const limitsCheck = checkMachineLimits(
+    result.data.quote.inputs?.dimensionsCm,
+    (result.data.quote.inputs?.weightGrams ?? 0) / 1000,
+    settings?.machineLimits?.toObject?.() || settings?.machineLimits || null,
+  )
+  if (!limitsCheck.fits) {
+    return NextResponse.json(
+      { error: machineLimitMessage(limitsCheck.violations) },
+      { status: 422 },
+    )
   }
 
   const { quote, requestId } = result.data

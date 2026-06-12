@@ -121,6 +121,16 @@ const AppSettingsSchema = new mongoose.Schema({
         materialDensities: { type: Map, of: Number, default: undefined },
     },
 
+    // Print-farm machine capacity (admin-entered; null = no limit enforced).
+    // Used to reject un-printable models at quote time and to catch unit typos
+    // on the admin dimension endpoints. Dimensions in cm, weight in kg.
+    machineLimits: {
+        maxLengthCm: { type: Number, default: null },
+        maxWidthCm: { type: Number, default: null },
+        maxHeightCm: { type: Number, default: null },
+        maxWeightKg: { type: Number, default: null },
+    },
+
     // Available colours/materials for generic print configuration. Seeded from
     // lib/quoting/genericPresets DEFAULT_PRINT_COLOURS; admins curate to stock.
     // `material` (optional) maps to a quoting density key; `priceModifier`

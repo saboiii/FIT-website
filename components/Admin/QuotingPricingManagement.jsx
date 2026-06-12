@@ -14,10 +14,18 @@ const NUMERIC_FIELDS = [
   { key: 'minimumPrice', label: 'Minimum price', step: '0.5' },
 ]
 
+const LIMIT_FIELDS = [
+  { key: 'maxLengthCm', label: 'Max length (cm)' },
+  { key: 'maxWidthCm', label: 'Max width (cm)' },
+  { key: 'maxHeightCm', label: 'Max height (cm)' },
+  { key: 'maxWeightKg', label: 'Max weight (kg)' },
+]
+
 export default function QuotingPricingManagement() {
   const { showToast } = useToast()
   const [config, setConfig] = useState(null)
   const [colours, setColours] = useState([])
+  const [limits, setLimits] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -29,6 +37,7 @@ export default function QuotingPricingManagement() {
       if (res.ok) {
         setConfig(data.quotingConfig || {})
         setColours(data.printColours || [])
+        setLimits(data.machineLimits || {})
       } else {
         showToast(data.error || 'Failed to load quoting config', 'error')
       }
@@ -67,10 +76,18 @@ export default function QuotingPricingManagement() {
         material: c.material ? String(c.material).trim() : null,
       }))
 
+      // Empty input = no limit (null clears a previously set value)
+      const machineLimits = {}
+      for (const { key } of LIMIT_FIELDS) {
+        const raw = limits?.[key]
+        if (raw === '' || raw == null) machineLimits[key] = null
+        else if (Number.isFinite(Number(raw)) && Number(raw) > 0) machineLimits[key] = Number(raw)
+      }
+
       const res = await fetch('/api/admin/quoting', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quotingConfig, printColours }),
+        body: JSON.stringify({ quotingConfig, printColours, machineLimits }),
       })
       const data = await res.json()
       if (res.ok) {
@@ -136,6 +153,36 @@ export default function QuotingPricingManagement() {
               <option value="percent">Percent only</option>
               <option value="flat">Flat only</option>
             </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Machine limits */}
+      <div className="border border-borderColor rounded-lg overflow-hidden">
+        <div className="bg-borderColor/40 px-4 py-2 border-b border-borderColor">
+          <h3 className="text-sm font-medium text-textColor">Machine limits</h3>
+        </div>
+        <div className="p-4">
+          <p className="text-xs text-lightColor mb-3">
+            Your printers&apos; maximum build size and weight. Models larger than this are
+            rejected at quote time with a clear message. Leave a field empty for no limit.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {LIMIT_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex flex-col gap-1">
+                <label htmlFor={key} className="text-xs font-medium text-lightColor">{label}</label>
+                <input
+                  id={key}
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  placeholder="No limit"
+                  value={limits?.[key] ?? ''}
+                  onChange={(e) => setLimits((l) => ({ ...l, [key]: e.target.value }))}
+                  className="formInput text-sm"
+                />
+              </div>
+            ))}
           </div>
         </div>
       </div>

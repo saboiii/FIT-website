@@ -1,7 +1,6 @@
 # Proposal: Validate Dimensions/Inputs at Admin API Boundaries (backlog)
 
-> Status: **structural validation implemented 2026-05-29** (kept active for the
-> remaining threshold sub-item, which is **BLOCKED on a human/product decision**).
+> Status: **COMPLETE 2026-06-12** (archived; thresholds became admin-configurable machineLimits).
 > Spun off from `fix-dimension-unit-mismatch` audit.
 
 ## Done (2026-05-29)
@@ -49,3 +48,21 @@ pricing and the instant quote.
   and weight. Until then, ship only the structural validation.
 - **Risk:** low for structural validation; medium for thresholds (could reject
   legitimate large prints if set wrong) — hence the human sign-off.
+
+## Resolution (2026-06-12) — limits are admin-configurable
+
+Rather than waiting for the print farm's numbers, the client decided to make
+the range thresholds **admin-configurable**: `AppSettings.machineLimits`
+(max L/W/H cm + max weight kg, null = no limit), editable in
+Admin → Quoting & Pricing ("Machine limits" section), validated by
+`MachineLimitsSchema`, and enforced by the pure
+`lib/quoting/machineLimits.checkMachineLimits` in:
+
+- `PUT /api/admin/custom-print-requests` and
+  `POST /api/product/custom-print-config` (400 — the unit-typo catch), and
+- `POST /api/quote` (422 with a customer-safe "larger than we can print"
+  message).
+
+Nothing is enforced until the admin enters values, so no guessed thresholds
+ship. Unit tests: `tests/unit/machineLimits.test.js`,
+`tests/unit/adminConfigSchema.test.js`.

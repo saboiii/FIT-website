@@ -101,8 +101,10 @@ specs (`3d-model-editor`, `custom-print-requests`).
 - **add-test-coverage-ci** — *(✅ archived 2026-05-29)*
 - **add-public-quoting-config** — *(✅ archived 2026-05-29)*
 - **add-returnto-origin-capture** — *(✅ archived 2026-05-29)*
-- **add-input-validation-admin-endpoints** — *(active: structural validation +
-  admin-gate fix done; range thresholds need the print farm's limits — human)*
+- **add-input-validation-admin-endpoints** — *(✅ archived 2026-06-12; range
+  thresholds became admin-configurable `machineLimits` — entered in Admin →
+  Quoting & Pricing, enforced at the admin dimension endpoints (400) and the
+  quote API (422); null = no limit, so nothing is guessed)*
 - **add-server-side-geometry-verification** — *(✅ archived 2026-06-10; STL/OBJ/
   glTF-GLB/3MF recompute + deviation logging folded into the
   `instant-quoting-engine` spec. Deviation rejection policy spun out to

@@ -40,8 +40,10 @@ export async function GET(request) {
       ? settings.printColours
       : DEFAULT_PRINT_COLOURS
 
+    const machineLimits = settings.machineLimits?.toObject?.() || settings.machineLimits || {}
+
     return NextResponse.json(
-      { quotingConfig: resolvePricing(stored), printColours },
+      { quotingConfig: resolvePricing(stored), printColours, machineLimits },
       { status: 200 },
     )
   } catch (error) {
@@ -80,6 +82,10 @@ export async function PUT(request) {
     }
     if (result.data.printColours) {
       settings.printColours = result.data.printColours
+    }
+    if (result.data.machineLimits) {
+      const current = settings.machineLimits?.toObject?.() || settings.machineLimits || {}
+      settings.machineLimits = { ...current, ...result.data.machineLimits }
     }
     await settings.save()
 

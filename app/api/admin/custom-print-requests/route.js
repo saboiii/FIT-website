@@ -5,6 +5,9 @@ import CustomPrintRequest from '@/models/CustomPrintRequest'
 import Product from '@/models/Product'
 import { checkAdminPrivileges } from '@/lib/checkPrivileges'
 import { validateDimensions } from '@/lib/validation/dimensions'
+import { checkMachineLimits, machineLimitMessage } from '@/lib/quoting/machineLimits'
+import AppSettings from '@/models/AppSettings'
+import { getAppSettingsId } from '@/lib/appSettingsId'
 
 // Admin: list all custom print requests
 export async function GET() {
@@ -48,6 +51,23 @@ export async function PUT(request) {
   }
 
   await connectToDatabase()
+
+  // Range check against the admin-configured machine limits (catches unit
+  // typos like grams entered as kg; no-op until limits are set).
+  if (dimCheck.value) {
+    const appSettings = await AppSettings.findById(getAppSettingsId()).lean()
+    const limitsCheck = checkMachineLimits(
+      dimCheck.value,
+      dimCheck.value.weight ?? null,
+      appSettings?.machineLimits || null,
+    )
+    if (!limitsCheck.fits) {
+      return NextResponse.json(
+        { error: machineLimitMessage(limitsCheck.violations) },
+        { status: 400 },
+      )
+    }
+  }
 
   const doc = await CustomPrintRequest.findOne({ requestId })
   if (!doc) {

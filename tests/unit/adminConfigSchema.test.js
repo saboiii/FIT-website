@@ -49,4 +49,20 @@ describe('buildQuotingUpdate', () => {
   it('rejects an empty update', () => {
     expect(buildQuotingUpdate({}).ok).toBe(false)
   })
+
+  it('accepts machine limits (positive numbers or null to clear)', () => {
+    const r = buildQuotingUpdate({
+      machineLimits: { maxLengthCm: 30, maxWidthCm: null, maxHeightCm: 40.5, maxWeightKg: 5 },
+    })
+    expect(r.ok).toBe(true)
+    expect(r.data.machineLimits.maxLengthCm).toBe(30)
+    expect(r.data.machineLimits.maxWidthCm).toBeNull()
+  })
+
+  it('rejects non-positive or non-finite machine limits', () => {
+    expect(buildQuotingUpdate({ machineLimits: { maxLengthCm: 0 } }).ok).toBe(false)
+    expect(buildQuotingUpdate({ machineLimits: { maxWeightKg: -2 } }).ok).toBe(false)
+    expect(buildQuotingUpdate({ machineLimits: { maxHeightCm: Infinity } }).ok).toBe(false)
+    expect(buildQuotingUpdate({ machineLimits: { bogusLimit: 1 } }).ok).toBe(false)
+  })
 })

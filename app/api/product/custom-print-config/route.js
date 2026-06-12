@@ -5,6 +5,9 @@ import User from '@/models/User'
 import { authenticate } from '@/lib/authenticate'
 import { checkAdminPrivileges } from '@/lib/checkPrivileges'
 import { validateDimensions } from '@/lib/validation/dimensions'
+import { checkMachineLimits, machineLimitMessage } from '@/lib/quoting/machineLimits'
+import AppSettings from '@/models/AppSettings'
+import { getAppSettingsId } from '@/lib/appSettingsId'
 
 export async function GET(req) {
     try {
@@ -36,6 +39,23 @@ export async function POST(request) {
             return NextResponse.json({ error: dimCheck.error }, { status: 400 })
         }
         const validDimensions = dimCheck.value
+
+        // Range check vs admin-configured machine limits (unit-typo catch;
+        // no-op until limits are set in Admin -> Quoting & Pricing).
+        if (validDimensions) {
+            const appSettings = await AppSettings.findById(getAppSettingsId()).lean()
+            const limitsCheck = checkMachineLimits(
+                validDimensions,
+                validDimensions.weight ?? null,
+                appSettings?.machineLimits || null,
+            )
+            if (!limitsCheck.fits) {
+                return NextResponse.json(
+                    { error: machineLimitMessage(limitsCheck.violations) },
+                    { status: 400 },
+                )
+            }
+        }
 
         // Find or create the custom print product by slug
         let product = await Product.findOne({ slug: 'custom-print-request' })

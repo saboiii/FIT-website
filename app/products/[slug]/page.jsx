@@ -1,3 +1,4 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import ProductPage from "./ProductPage";
 
 export async function generateMetadata(props) {
@@ -108,7 +109,7 @@ export default async function ProductPageLayout(props) {
             {jsonLd && (
                 <script
                     type="application/ld+json"
-                    dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+                    dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }}
                 />
             )}
             <ProductPage />

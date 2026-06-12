@@ -1,3 +1,4 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import ShopPage from "./ShopPage";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://fixitoday.com";
@@ -40,7 +41,7 @@ function ShopLayout() {
         <>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(SHOP_JSON_LD) }}
+                dangerouslySetInnerHTML={{ __html: jsonLdString(SHOP_JSON_LD) }}
             />
             <ShopPage />
         </>

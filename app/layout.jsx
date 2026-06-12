@@ -1,3 +1,4 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
@@ -74,7 +75,7 @@ export default function RootLayout({ children }) {
           <script
             type="application/ld+json"
             suppressHydrationWarning
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(GEO_JSON_LD) }}
+            dangerouslySetInnerHTML={{ __html: jsonLdString(GEO_JSON_LD) }}
           />
         </head>
         <body className={`${inter.variable} antialiased`}>

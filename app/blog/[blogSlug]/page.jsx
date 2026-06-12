@@ -1,3 +1,4 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import { connectToDatabase } from '@/lib/db'
 import BlogPost from '@/models/BlogPost'
 import BlogPageClient from './BlogPageClient'
@@ -56,7 +57,7 @@ export default async function BlogPage({ params }) {
         <>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+                dangerouslySetInnerHTML={{ __html: jsonLdString(jsonLd) }}
             />
             <BlogPageClient post={safePost} />
         </>

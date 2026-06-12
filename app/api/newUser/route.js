@@ -6,7 +6,9 @@ import { NextResponse } from 'next/server'
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 const handler = createWebhooksHandler({
-    secret: process.env.CLERK_WEBHOOK_SECRET,
+    // Canonical name is CLERK_WEBHOOK_SECRET; WEBHOOK_SECRET kept as a fallback
+    // because the existing env files used that name.
+    secret: process.env.CLERK_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET,
     onUserCreated: async (user) => {
         try {
             const { cardToken, priceId, basedIn, business_type } = user.unsafe_metadata || {}

@@ -131,7 +131,9 @@ export async function DELETE(req) {
             try {
                 const s3 = new S3Client({ region: process.env.AWS_REGION, credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY } });
                 await s3.send(new DeleteObjectCommand({
-                    Bucket: process.env.AWS_S3_BUCKET,
+                    // NEXT_PUBLIC_S3_BUCKET_NAME is the canonical bucket var
+                    // (AWS_S3_BUCKET was never defined in any env file).
+                    Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
                     Key: request.modelFile.s3Key
                 }));
             } catch (e) {

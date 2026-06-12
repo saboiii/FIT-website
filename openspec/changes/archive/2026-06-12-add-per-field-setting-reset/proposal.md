@@ -1,6 +1,6 @@
 # Proposal: Per-Field Reset for Print Settings (backlog)
 
-> Status: backlog — **DEFERRED (needs design decision).** leva has no clean inline
+> Status: **COMPLETE 2026-06-12** (archived). leva has no clean inline
 > per-field reset; doing this well likely means a bespoke advanced-settings panel
 > (off leva). The global reset already covers the primary ask. Spun out of
 > `add-editor-reset-controls` (task 2.1).
@@ -25,3 +25,15 @@ three coarse choices — so per-field reset was deferred.
 - **Decision needed:** whether to invest in a leva customization or build a small
   bespoke advanced-settings panel (which would also unblock nicer per-field UX).
 - **Risk:** medium if it means moving off leva; low if a small affordance suffices.
+
+## Resolution (2026-06-12) — implemented as a "Modified settings" panel
+
+Client confirmed the feature was wanted. Instead of forking leva, Advanced Mode
+now shows a compact "Modified settings" card (bottom-right, above the mode
+toggle) listing every print setting that differs from its default, each with a
+one-click `↺ <default>` reset that writes through `levaStore.set` — the same
+mechanism the global reset uses, so "default" stays single-sourced from
+`defaultPrintability`. Pure diff helper `lib/editor/modifiedSettings.js`
+(humanised labels, leva path per field) is unit-tested
+(`tests/unit/modifiedSettings.test.js`). The global "Reset to defaults" is
+unchanged.

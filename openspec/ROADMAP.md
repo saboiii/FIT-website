@@ -137,10 +137,12 @@ specs (`3d-model-editor`, `custom-print-requests`).
 - **add-quote-api-rate-limiting** — *(✅ archived 2026-06-12; Upstash sliding
   window on POST /api/quote — 60/min authed by userId, 15/min anon by IP, 429 +
   Retry-After; no-op without env vars)*
-- **add-per-field-setting-reset** — *(DEFERRED — leva limitation; needs design)*
+- **add-per-field-setting-reset** — *(✅ archived 2026-06-12; Advanced Mode
+  'Modified settings' card lists changed print settings with one-click per-field
+  reset; pure diff helper unit-tested)*
 - **verify-quoting-flows-browser** — *(human QA of interactive UI paths)*
 - **add-returnto-origin-capture** — explicit `returnTo` for the editor (post-config 3.1).
-- **add-per-field-setting-reset** — per-field reset (leva limitation).
+
 - **verify-quoting-flows-browser** — human QA checklist for the interactive UI
   paths (engine/generic/pay-first/cart/admin) not verifiable headlessly.
 - **add-lightweight-print-time-estimator** — *(core implemented 2026-06-12:

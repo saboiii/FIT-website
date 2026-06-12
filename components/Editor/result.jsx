@@ -6,6 +6,7 @@ import useStore from '@/utils/store'
 import Viewer from './viewer'
 import QuotePanel from './QuotePanel'
 import { mapGenericToPrintSettings, DEFAULT_PRINT_COLOURS, QUALITY_MAP, STRENGTH_MAP } from '@/lib/quoting/genericPresets'
+import { modifiedSettings } from '@/lib/editor/modifiedSettings'
 import { useToast } from '@/components/General/ToastProvider'
 import { useState } from 'react'
 
@@ -588,6 +589,34 @@ const Result = () => {
         >
           {advancedMode ? 'Simple Mode' : 'Advanced Mode'}
         </button>
+        {advancedMode && (() => {
+          // Per-field reset: list every print setting that differs from its
+          // default with its own reset control (leva has no inline affordance).
+          const changed = modifiedSettings(printability, defaultPrintability, 'printability')
+          if (changed.length === 0) return null
+          return (
+            <div className="flex flex-col gap-1 bg-baseColor border border-borderColor rounded-md shadow-sm p-3 w-64 max-h-60 overflow-y-auto">
+              <span className="text-[10px] font-semibold uppercase text-light px-0.5 mb-0.5">
+                Modified settings
+              </span>
+              {changed.map((m) => (
+                <div key={m.key} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-textColor truncate" title={m.label}>{m.label}</span>
+                  <span className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="text-light">{String(m.value)}</span>
+                    <button
+                      onClick={() => levaStore.set({ [m.path]: m.defaultValue }, false)}
+                      title={`Reset to ${String(m.defaultValue)}`}
+                      className="rounded-full border border-borderColor px-1.5 py-0.5 text-[10px] text-light hover:text-textColor hover:bg-borderColor/20"
+                    >
+                      ↺ {String(m.defaultValue)}
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
         {!advancedMode && (
           <div className="flex flex-col gap-3 bg-baseColor border border-borderColor rounded-md shadow-sm p-3 w-56">
             <div className="flex flex-col gap-1">

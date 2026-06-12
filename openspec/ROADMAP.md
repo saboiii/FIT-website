@@ -117,8 +117,10 @@ specs (`3d-model-editor`, `custom-print-requests`).
 - **add-per-field-setting-reset** — per-field reset (leva limitation).
 - **verify-quoting-flows-browser** — human QA checklist for the interactive UI
   paths (engine/generic/pay-first/cart/admin) not verifiable headlessly.
-- **add-lightweight-print-time-estimator** — shape-aware layer-stack heuristic in
-  a Web Worker; alternative to the deferred cura-wasm path.
+- **add-lightweight-print-time-estimator** — *(core implemented 2026-06-12:
+  pure layer-stack estimator + worker, tested, shipping dark; wiring BLOCKED on
+  print-farm validation of time constants + integration decision — see the
+  change's tasks.md §3)*
 
 ## Notes
 

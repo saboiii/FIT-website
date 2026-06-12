@@ -1,8 +1,14 @@
 # Proposal: Lightweight Layer-Stack Print-Time Estimator (alternative to WASM)
 
-> Status: backlog (proposal only). Alternative to the deferred
-> `add-slicer-accurate-estimation` (cura-wasm). No code change yet — this scopes a
-> follow-up implementation. Depends on `add-instant-quoting-engine`.
+> Status: **core implemented 2026-06-12; wiring BLOCKED on validation + product
+> decision** (see `tasks.md` §3 and `design.md`). The pure estimator
+> (`lib/quoting/printTime/layerStack.js`) and worker wrapper ship dark — tested,
+> no callers — because the priced quote is server-authoritative and `/api/quote`
+> accepts metrics only; adopting the estimator for pricing means recomputing it
+> server-side from the stored model, after the print farm validates the time
+> constants against real prints. Alternative to the deferred
+> `add-slicer-accurate-estimation` (cura-wasm). Depends on
+> `add-instant-quoting-engine`.
 
 ## Why
 

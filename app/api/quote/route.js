@@ -7,7 +7,10 @@ import { buildQuote } from '@/lib/quoting/quoteRequest'
 import { getAppSettingsId } from '@/lib/appSettingsId'
 import { recomputeMetricsFromModel, supportsServerRecompute } from '@/lib/quoting/serverGeometry'
 import { geometryDeviation } from '@/lib/quoting/geometryDeviation'
-import { resolveCustomPrintDeliveryDefaults } from '@/lib/customPrintDelivery'
+import {
+  resolveCustomPrintDeliveryDefaults,
+  refreshCustomPrintDeliveryPrices,
+} from '@/lib/customPrintDelivery'
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 
@@ -134,19 +137,8 @@ export async function POST(req) {
     // quote (the manual/advanced path goes through admin set-quote).
     reqDoc.quoteMode = 'instant'
 
-    // Auto-apply admin-default delivery for custom prints if none are set, so
-    // the cart has selectable options instead of "No delivery options".
-    const existingDelivery = reqDoc.delivery?.deliveryTypes || []
-    if (existingDelivery.length === 0) {
-      const defaults = resolveCustomPrintDeliveryDefaults(
-        settings?.additionalDeliveryTypes || [],
-      )
-      if (defaults.length > 0) {
-        reqDoc.delivery = { deliveryTypes: defaults }
-      }
-    }
-
-    // Persist geometry-derived dimensions/weight so delivery pricing tiers work.
+    // Persist geometry-derived dimensions/weight first so delivery pricing
+    // (tiers in grams, volume in cm³) can be computed below.
     const dims = persistQuote.inputs?.dimensionsCm
     const grams = persistQuote.inputs?.weightGrams
     if (dims && (dims.length > 0 || dims.width > 0 || dims.height > 0)) {
@@ -155,6 +147,29 @@ export async function POST(req) {
         width: dims.width || null,
         height: dims.height || null,
         weight: grams != null ? grams / 1000 : null, // grams -> kg (model unit)
+      }
+    }
+
+    // Auto-apply admin-default delivery for custom prints if none are set (so
+    // the cart has selectable options), priced from the request's dimensions.
+    // On every re-quote, refresh non-overridden prices from CURRENT admin
+    // settings so delivery fees track the live config (admin customPrice wins).
+    const deliveryDims = reqDoc.dimensions?.length ? reqDoc.dimensions : null
+    const adminDeliveryTypes = settings?.additionalDeliveryTypes || []
+    const existingDelivery = reqDoc.delivery?.deliveryTypes || []
+    if (existingDelivery.length === 0) {
+      const defaults = resolveCustomPrintDeliveryDefaults(adminDeliveryTypes, deliveryDims)
+      if (defaults.length > 0) {
+        reqDoc.delivery = { deliveryTypes: defaults }
+      }
+    } else {
+      reqDoc.delivery = {
+        ...(reqDoc.delivery?.toObject?.() ?? reqDoc.delivery),
+        deliveryTypes: refreshCustomPrintDeliveryPrices(
+          existingDelivery.map((e) => (e?.toObject?.() ? e.toObject() : e)),
+          adminDeliveryTypes,
+          deliveryDims,
+        ),
       }
     }
 

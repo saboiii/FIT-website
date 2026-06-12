@@ -683,6 +683,10 @@ function Cart() {
                                                                     await refreshCartBreakdown();
                                                                     await refreshCustomPrintRequests();
                                                                 }}
+                                                                onDeleteComplete={async () => {
+                                                                    await refreshCartBreakdown();
+                                                                    await refreshCustomPrintRequests();
+                                                                }}
                                                             />
                                                         </div>
                                                     ) : (
@@ -693,6 +697,10 @@ function Cart() {
                                                                 customPrintRequestId: cartItem.customPrintRequestId
                                                             }}
                                                             onUploadComplete={async () => {
+                                                                await refreshCartBreakdown();
+                                                                await refreshCustomPrintRequests();
+                                                            }}
+                                                            onDeleteComplete={async () => {
                                                                 await refreshCartBreakdown();
                                                                 await refreshCustomPrintRequests();
                                                             }}

@@ -92,14 +92,17 @@ const Result = () => {
     setMeshNames(names)
   }, [scene])
 
-  // Load existing configuration from MongoDB when productId is available
+  // Load the previously saved configuration when re-editing a request, and
+  // apply it to the editor state (generic selection, leva print settings, mesh
+  // colours). Waits for the scene so the per-mesh leva controls exist before
+  // their colours are set.
   useEffect(() => {
     if (!productId) {
       setConfigLoaded(true)
       return
     }
 
-    if (configLoaded) return
+    if (configLoaded || !scene) return
 
     const loadConfigFromDB = async () => {
       try {
@@ -108,6 +111,42 @@ const Result = () => {
 
         if (response.ok) {
           const data = await response.json()
+          const cfg = data?.request?.printConfiguration
+          if (cfg?.isConfigured) {
+            const ps = cfg.printSettings || {}
+            const levaValues = {}
+            const setIf = (key, value) => {
+              if (value !== undefined && value !== null) levaValues[key] = value
+            }
+            setIf('printability.layerHeight', ps.layerHeight)
+            setIf('printability.initialLayerHeight', ps.initialLayerHeight)
+            setIf('printability.wallLoops', ps.wallLoops)
+            setIf('printability.internalSolidInfillPattern', ps.internalSolidInfillPattern)
+            setIf('printability.sparseInfillDensity', ps.sparseInfillDensity)
+            setIf('printability.sparseInfillPattern', ps.sparseInfillPattern)
+            setIf('printability.nozzleDiameter', ps.nozzleDiameter)
+            setIf('printability.enableSupport', ps.enableSupport)
+            setIf('printability.supportType', ps.supportType)
+            setIf('printability.printPlate', ps.printPlate)
+            setIf('visual.materialType', ps.materialType)
+            for (const [meshName, hex] of Object.entries(cfg.meshColors || {})) {
+              setIf(`visual.${meshName}`, hex)
+            }
+            levaStore.set(levaValues, false)
+
+            const g = cfg.generic
+            if (g?.strength || g?.quality || g?.colour) {
+              setGeneric({
+                strength: g.strength || defaultGeneric.strength,
+                quality: g.quality || defaultGeneric.quality,
+                colour: g.colour || defaultGeneric.colour,
+              })
+              setGenericMaterial(g.material || 'plastic')
+            } else if (data?.request?.quoteMode === 'manual') {
+              // Saved through the advanced flow — reopen it that way.
+              setAdvancedMode(true)
+            }
+          }
         }
       } catch (e) {
         console.error('Failed to load configuration from MongoDB:', e)
@@ -117,7 +156,7 @@ const Result = () => {
     }
 
     loadConfigFromDB()
-  }, [productId, variantId, configLoaded])
+  }, [productId, variantId, configLoaded, scene])
 
   // Leva controls for visual config, including mesh colors
   const [visualConfig, setVisualConfig] = useControls('visual', () => {
@@ -620,6 +659,15 @@ const Result = () => {
                 </p>
               </div>
             )}
+
+            <label className="flex items-center gap-2 text-[11px] text-light cursor-pointer mt-1">
+              <input
+                type="checkbox"
+                checked={lighting.autoRotate}
+                onChange={(e) => levaStore.set({ 'lighting.autoRotate': e.target.checked }, false)}
+              />
+              Auto-rotate model
+            </label>
 
             <button
               onClick={resetAllToDefaults}

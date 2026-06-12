@@ -71,13 +71,21 @@ export async function PUT(req) {
         }
 
         // Update print configuration (preserve generic block; persist mode).
-        customPrintRequest.printConfiguration = {
-            generic: generic && typeof generic === 'object' ? {
+        // Never assign `generic: undefined` — Mongoose fails casting undefined
+        // to the subdocument (advanced-mode saves with no prior generic block).
+        const existingGeneric = customPrintRequest.printConfiguration?.generic
+        const nextGeneric = generic && typeof generic === 'object'
+            ? {
                 strength: generic.strength ?? null,
                 quality: generic.quality ?? null,
                 colour: generic.colour ?? null,
                 material: generic.material ?? null,
-            } : (customPrintRequest.printConfiguration?.generic || undefined),
+            }
+            : (existingGeneric && typeof existingGeneric.toObject === 'function'
+                ? existingGeneric.toObject()
+                : existingGeneric) || null
+        customPrintRequest.printConfiguration = {
+            ...(nextGeneric ? { generic: nextGeneric } : {}),
             meshColors: meshColors || {},
             printSettings: {
                 layerHeight: printSettings.layerHeight,
@@ -132,9 +140,7 @@ export async function PUT(req) {
 
     } catch (error) {
         console.error('Error saving print configuration:', error)
-        return NextResponse.json({
-            error: 'Failed to save configuration',
-            details: error.message
-        }, { status: 500 })
+        // Full detail is logged above; never echo internals to the client.
+        return NextResponse.json({ error: 'Failed to save configuration' }, { status: 500 })
     }
 }

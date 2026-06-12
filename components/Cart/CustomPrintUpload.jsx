@@ -7,7 +7,7 @@ import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { getMimeType, putWithProgress } from '@/utils/uploadHelpers'
 
-export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
+export default function CustomPrintUpload({ cartItem, onUploadComplete, onDeleteComplete }) {
     const [uploading, setUploading] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(0)
@@ -212,6 +212,9 @@ export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
                 })
             })
             showToast('Model deleted successfully', 'success')
+            // Let the cart refresh its request map so the step checklist
+            // (upload/configure) goes back to incomplete immediately.
+            if (onDeleteComplete) await onDeleteComplete()
         } catch (error) {
             showToast(error.message || 'Failed to delete model', 'error')
         } finally {

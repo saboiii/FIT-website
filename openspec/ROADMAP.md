@@ -65,7 +65,8 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
     `add-lightweight-print-time-estimator` (layer-stack heuristic in a worker;
     no WASM).
 12. **add-otp-contact-verification** — OTP contact channel at checkout.
-    *(BLOCKED — needs an SMS/WhatsApp provider)*
+    *(DROPPED 2026-06-12 — client chose email-only; superseded by
+    `add-email-notifications-suite`)*
 13. **retire-deprecated-printorder-model** — *(partial 2026-05-29: dead `.bak` +
     `/api/print-config` routes removed; **active** — `PrintOrder` model is still
     live in Stripe webhook/checkout/print-order; removal needs migration + data

@@ -21,11 +21,47 @@ const LIMIT_FIELDS = [
   { key: 'maxWeightKg', label: 'Max weight (kg)' },
 ]
 
+// Guided questions for tuning the print-time estimate to the actual machines.
+// Each answers one knob of the time model; defaults apply when left empty.
+const TIME_MODEL_QUESTIONS = [
+  {
+    key: 'baseFlowCm3PerHour',
+    question: 'How much material does a typical print use per hour?',
+    help: 'Pick a recent 0.2mm-layer print: material used (cm³) ÷ hours it took. Mid-range FDM printers manage 8–15 cm³/h.',
+    unit: 'cm³ / hour', step: '0.5',
+  },
+  {
+    key: 'layerHeightRefMm',
+    question: 'What layer height was that print sliced at?',
+    help: 'The speed above is tied to this layer height; thinner layers are estimated proportionally slower.',
+    unit: 'mm', step: '0.05',
+  },
+  {
+    key: 'supportTimeFactor',
+    question: 'How much longer do prints with supports take?',
+    help: 'As a multiplier: 1.25 means 25% longer. Compare a supported vs unsupported print of similar size.',
+    unit: '× multiplier', step: '0.05',
+  },
+  {
+    key: 'wallTimeFactorPerLoop',
+    question: 'How much does each extra wall loop add?',
+    help: 'As a fraction per loop: 0.08 means each wall loop adds ~8% time.',
+    unit: 'fraction / loop', step: '0.01',
+  },
+  {
+    key: 'minHours',
+    question: 'What is the minimum machine time you bill?',
+    help: 'Tiny models never estimate below this (covers setup, heat-up, handling).',
+    unit: 'hours', step: '0.05',
+  },
+]
+
 export default function QuotingPricingManagement() {
   const { showToast } = useToast()
   const [config, setConfig] = useState(null)
   const [colours, setColours] = useState([])
   const [limits, setLimits] = useState({})
+  const [timeModel, setTimeModel] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -38,6 +74,7 @@ export default function QuotingPricingManagement() {
         setConfig(data.quotingConfig || {})
         setColours(data.printColours || [])
         setLimits(data.machineLimits || {})
+        setTimeModel(data.quotingConfig?.timeModel || {})
       } else {
         showToast(data.error || 'Failed to load quoting config', 'error')
       }
@@ -69,6 +106,15 @@ export default function QuotingPricingManagement() {
         if (Number.isFinite(n)) quotingConfig[key] = n
       }
       if (config?.expediteMode) quotingConfig.expediteMode = config.expediteMode
+
+      // Time model: empty answer = null (use the built-in default)
+      const timeModelOut = {}
+      for (const { key } of TIME_MODEL_QUESTIONS) {
+        const raw = timeModel?.[key]
+        if (raw === '' || raw == null) timeModelOut[key] = null
+        else if (Number.isFinite(Number(raw))) timeModelOut[key] = Number(raw)
+      }
+      quotingConfig.timeModel = timeModelOut
 
       const printColours = colours.map((c) => ({
         name: String(c.name || '').trim(),
@@ -154,6 +200,38 @@ export default function QuotingPricingManagement() {
               <option value="flat">Flat only</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Print-time setup (guided) */}
+      <div className="border border-borderColor rounded-lg overflow-hidden">
+        <div className="bg-borderColor/40 px-4 py-2 border-b border-borderColor">
+          <h3 className="text-sm font-medium text-textColor">Print time estimation — set up for your machines</h3>
+        </div>
+        <div className="p-4 flex flex-col gap-4">
+          <p className="text-xs text-lightColor">
+            Answer these to tune estimated print times (and therefore the time cost in every
+            quote) to your actual printers. Leave a field empty to keep the built-in default.
+          </p>
+          {TIME_MODEL_QUESTIONS.map(({ key, question, help, unit, step }) => (
+            <div key={key} className="flex flex-col gap-1">
+              <label htmlFor={`tm-${key}`} className="text-xs font-medium text-textColor">{question}</label>
+              <p className="text-[11px] text-lightColor">{help}</p>
+              <div className="flex items-center gap-2">
+                <input
+                  id={`tm-${key}`}
+                  type="number"
+                  step={step}
+                  min="0"
+                  placeholder="Default"
+                  value={timeModel?.[key] ?? ''}
+                  onChange={(e) => setTimeModel((t) => ({ ...t, [key]: e.target.value }))}
+                  className="formInput text-sm w-40"
+                />
+                <span className="text-xs text-lightColor">{unit}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

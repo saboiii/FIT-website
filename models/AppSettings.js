@@ -119,6 +119,15 @@ const AppSettingsSchema = new mongoose.Schema({
         minimumPrice: { type: Number, default: 5 },
         // Optional per-material density overrides (g/cm³): { pla: 1.24, ... }
         materialDensities: { type: Map, of: Number, default: undefined },
+        // Machine-speed model for the print-time estimate (null = built-in
+        // default; see lib/quoting/pricingDefaults.DEFAULT_TIME_MODEL).
+        timeModel: {
+            baseFlowCm3PerHour: { type: Number, default: null },
+            layerHeightRefMm: { type: Number, default: null },
+            supportTimeFactor: { type: Number, default: null },
+            wallTimeFactorPerLoop: { type: Number, default: null },
+            minHours: { type: Number, default: null },
+        },
     },
 
     // Print-farm machine capacity (admin-entered; null = no limit enforced).

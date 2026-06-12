@@ -4,7 +4,7 @@ import AppSettings from '@/models/AppSettings'
 import { authenticate } from '@/lib/authenticate'
 import { checkAdminPrivileges } from '@/lib/checkPrivileges'
 import { getAppSettingsId } from '@/lib/appSettingsId'
-import { resolvePricing } from '@/lib/quoting/pricingDefaults'
+import { resolvePricing, resolveTimeModel } from '@/lib/quoting/pricingDefaults'
 import { DEFAULT_PRINT_COLOURS } from '@/lib/quoting/genericPresets'
 import { buildQuotingUpdate } from '@/lib/quoting/adminConfigSchema'
 
@@ -43,7 +43,14 @@ export async function GET(request) {
     const machineLimits = settings.machineLimits?.toObject?.() || settings.machineLimits || {}
 
     return NextResponse.json(
-      { quotingConfig: resolvePricing(stored), printColours, machineLimits },
+      {
+        quotingConfig: {
+          ...resolvePricing(stored),
+          timeModel: resolveTimeModel(stored.timeModel),
+        },
+        printColours,
+        machineLimits,
+      },
       { status: 200 },
     )
   } catch (error) {

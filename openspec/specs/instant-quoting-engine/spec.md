@@ -188,3 +188,22 @@ applying built-in defaults for any unset field.
 - GIVEN an AppSettings document with no quotingConfig overrides
 - WHEN a quote is computed
 - THEN built-in default rates/fees are used
+
+### Requirement: Admin-configurable print-time model
+The system SHALL allow the admin to override the print-time heuristic's
+machine-speed parameters (`quotingConfig.timeModel`: base flow cm³/h, reference
+layer height, support multiplier, wall-loop factor, minimum hours) via the
+admin quoting endpoint, applying built-in defaults for any unset/null field.
+Every quote's estimated hours and time cost SHALL reflect the resolved model.
+
+#### Scenario: Faster configured machines lower the time cost
+- GIVEN identical geometry quoted with default flow vs `baseFlowCm3PerHour`
+  doubled
+- WHEN the quotes are computed
+- THEN the faster configuration yields fewer estimated hours and a lower
+  print-time line amount
+
+#### Scenario: Defaults when unset
+- GIVEN no timeModel overrides (or null fields)
+- WHEN a quote is computed
+- THEN the built-in DEFAULT_TIME_MODEL values are used

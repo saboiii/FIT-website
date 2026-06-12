@@ -1,6 +1,6 @@
 # Proposal: OTP Contact Verification at Checkout (future)
 
-> Status: backlog — **BLOCKED on infrastructure/decision.** Needs an SMS/WhatsApp
+> Status: **DROPPED 2026-06-12** (archived; client chose email-only — see Resolution). Originally needed an SMS/WhatsApp
 > provider (account, credentials, cost approval); none exists in the repo (only
 > nodemailer email). Cannot be implemented end-to-end until a provider is chosen.
 > Inspired by the reference flow (quote.additiveinn.com).
@@ -28,3 +28,10 @@ deliveries and missed configuration deadlines.
 - **Risks:** provider cost/setup (WhatsApp Business API), rate-limiting/abuse,
   privacy of stored contact details. Out of scope: full multi-channel
   notification system.
+
+## Resolution (2026-06-12) — dropped in favour of email-only
+
+Client decided email is sufficient — no SMS/WhatsApp provider will be set up.
+The Clerk account email is already verified at sign-up, so no extra OTP step is
+needed. The follow-on work is making sure email notifications cover all key
+use cases with polished templates — tracked in `add-email-notifications-suite`.

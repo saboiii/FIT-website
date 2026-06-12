@@ -151,6 +151,30 @@ specs (`3d-model-editor`, `custom-print-requests`).
   print-farm validation of time constants + integration decision — see the
   change's tasks.md §3)*
 
+## Phase 6 — Client decisions batch (2026-06-12)
+
+All blockers the client resolved on 2026-06-12, implemented same day:
+
+20. **fix-client-qa-batch-2026-06-12** — six browser-QA fixes (cart checklist
+    refresh, quote-panel clarity/overflow, simple-mode autorotate, config
+    restore on edit, advanced-save crash, delivery pricing). *(✅ archived)*
+21. **add-quote-api-rate-limiting** — Upstash sliding window. *(✅ archived)*
+22. **decide-geometry-deviation-policy** — REJECT (400). *(✅ archived)*
+23. **restrict-proxy-private-prefixes** — models/ private. *(✅ archived)*
+24. **add-input-validation-admin-endpoints** — admin-configurable machine
+    limits. *(✅ archived)*
+25. **add-per-field-setting-reset** — Modified-settings panel. *(✅ archived)*
+26. **add-admin-print-time-config** — guided time-model setup. *(✅ archived)*
+27. **add-otp-contact-verification** — DROPPED (email-only). *(✅ archived)*
+28. **add-email-notifications-suite** — *(ACTIVE, approved: all key use cases on
+    a polished base template; see the change's proposal)*
+29. **redesign-admin-dashboard-onboarding** — *(ACTIVE, approved: grouped
+    sidebar IA + Overview setup checklist + first-run wizard; design.md ready)*
+
+Also 2026-06-12 (no openspec change needed): single `.env` for dev +
+committed `.env.example`; fixed two env-name bugs (AWS_S3_BUCKET,
+CLERK_WEBHOOK_SECRET fallback).
+
 ## Notes
 
 - The instant quoting engine is the backbone the generic-quote/pay-first

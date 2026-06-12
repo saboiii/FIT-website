@@ -1,8 +1,6 @@
 # Proposal: Restrict the S3 Proxy for Private Prefixes (backlog — needs product decision)
 
-> Status: backlog — **BLOCKED on a product decision** (which S3 prefixes are
-> public vs private). Logged 2026-06-12 during a full-codebase security scan; no
-> code change yet.
+> Status: **COMPLETE 2026-06-12** (archived; decision: models/ private to owner/buyer/admin).
 
 ## Why
 
@@ -33,3 +31,14 @@ anyone, including customers' uploaded model files (their IP/designs) under
 - **Risk if not done:** uploaded model files are effectively
   public-by-obscurity; acceptable short-term, not long-term for paying
   customers' proprietary designs.
+
+## Decision + implementation (2026-06-12)
+
+Client decided: **`models/` is private** — visible to the uploading owner, to a
+buyer whose digital-product purchase includes the file, and to admins; product/
+blog images and public viewables stay anonymous. Implemented in
+`lib/proxyAccess.js` (`isPrivateModelKey` pure + `canAccessModelKey` checking
+CustomPrintRequest ownership, DigitalProductTransaction assets, PrintOrder
+modelUrl, then admin), enforced in both GET and HEAD of `app/api/proxy/route.js`
+with a 404 (matching a missing object, no existence oracle). Boundary-mocked
+tests in `tests/unit/proxyAccess.test.js`.

@@ -4,6 +4,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
 import { sanitizeString } from "@/utils/validate";
 import { resolveDownloadFilename } from "@/lib/download/filename";
+import { isPrivateModelKey, canAccessModelKey } from "@/lib/proxyAccess";
 import { Readable } from "stream";
 
 export const runtime = 'nodejs'
@@ -29,7 +30,14 @@ export async function GET(req) {
         return new NextResponse("Missing or invalid key", { status: 400 });
     }
 
-    if (download) {
+    // Customer-uploaded models are private: owner / digital buyer / admin only.
+    // Same 404 as a missing object so the endpoint is not an existence oracle.
+    if (isPrivateModelKey(key)) {
+        const { userId } = await auth();
+        if (!(await canAccessModelKey(key, userId))) {
+            return new NextResponse("Not found", { status: 404 });
+        }
+    } else if (download) {
         const { userId } = await auth();
         if (!userId) return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -92,7 +100,13 @@ export async function HEAD(req) {
         return new NextResponse(null, { status: 400 });
     }
 
-    if (download) {
+    // Mirror GET's privacy rule for private model keys (no existence oracle).
+    if (isPrivateModelKey(key)) {
+        const { userId } = await auth();
+        if (!(await canAccessModelKey(key, userId))) {
+            return new NextResponse(null, { status: 404 });
+        }
+    } else if (download) {
         const { userId } = await auth();
         if (!userId) return new NextResponse(null, { status: 401 });
     }

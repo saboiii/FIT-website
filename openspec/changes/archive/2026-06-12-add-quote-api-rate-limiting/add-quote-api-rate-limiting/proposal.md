@@ -1,6 +1,6 @@
 # Proposal: Rate-Limit the Quote API (backlog — needs infra)
 
-> Status: backlog. **BLOCKED on infrastructure** (a shared Redis store). Flagged
+> Status: **COMPLETE 2026-06-12** (archived; Upstash credentials provided by the client). Was flagged
 > from `add-instant-quoting-engine`: the route `app/api/quote/route.js` ships with
 > a `TODO(infra)` at the exact point a limiter should run.
 

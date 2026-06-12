@@ -13,6 +13,7 @@ import {
 } from '@/lib/customPrintDelivery'
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
+import { limitQuoteRequest } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -32,14 +33,22 @@ const MAX_RECOMPUTE_BYTES = 75 * 1024 * 1024
  * Pricing is recomputed server-side from AppSettings.quotingConfig; the client
  * cannot set the price (the input schema rejects price/rate fields).
  *
- * TODO(infra): request rate limiting is not yet wired — it needs Upstash Redis
- * (no reliable single-instance limiter on Vercel). See openspec change
- * `add-quote-api-rate-limiting`.
+ * Rate-limited via Upstash Redis (lib/rateLimit): authed traffic by userId,
+ * anonymous by IP with tighter limits. No-ops when Upstash env vars are unset.
  */
 export async function POST(req) {
   const contentLength = Number(req.headers.get('content-length') || 0)
   if (contentLength > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+  }
+
+  const { userId } = await auth()
+  const rate = await limitQuoteRequest({ userId, headers: req.headers })
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests — please retry shortly' },
+      { status: 429, headers: rate.headers },
+    )
   }
 
   let body
@@ -63,7 +72,6 @@ export async function POST(req) {
   let responseQuote = quote
 
   if (requestId) {
-    const { userId } = await auth()
     if (!userId) {
       return NextResponse.json({ error: 'Sign in to save a quote' }, { status: 401 })
     }

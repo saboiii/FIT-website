@@ -132,7 +132,9 @@ specs (`3d-model-editor`, `custom-print-requests`).
   `quote.total` at checkout/webhook — extracted pure
   `customPrintChargeBreakdown`, wired into both checkout routes + Stripe
   webhook)*
-- **add-quote-api-rate-limiting** — *(BLOCKED — needs Upstash Redis infra)*
+- **add-quote-api-rate-limiting** — *(✅ archived 2026-06-12; Upstash sliding
+  window on POST /api/quote — 60/min authed by userId, 15/min anon by IP, 429 +
+  Retry-After; no-op without env vars)*
 - **add-per-field-setting-reset** — *(DEFERRED — leva limitation; needs design)*
 - **verify-quoting-flows-browser** — *(human QA of interactive UI paths)*
 - **add-returnto-origin-capture** — explicit `returnTo` for the editor (post-config 3.1).

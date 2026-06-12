@@ -106,10 +106,11 @@ export async function POST(req) {
         const bytes = tooLarge ? null : await obj.Body.transformToByteArray()
         const serverMetrics = bytes ? await recomputeMetricsFromModel(bytes, name) : null
         if (serverMetrics?.volumeCm3 > 0) {
-          // Deviation logging: if the client's volume disagrees with the
-          // server's recompute by more than the tolerance, flag it. The server
-          // value still wins (we trust the recompute), but the log lets ops
-          // notice tampering attempts or a real parse-divergence bug.
+          // Deviation policy (product decision 2026-06-12): if the client's
+          // volume understates the server recompute by more than the
+          // tolerance, REJECT the request (tamper signal) — log for ops, no
+          // quote is persisted. Honest divergences should retry cleanly after
+          // a model reload.
           const dev = geometryDeviation(
             { volumeCm3: body?.volumeCm3 },
             { volumeCm3: serverMetrics.volumeCm3 },
@@ -118,7 +119,15 @@ export async function POST(req) {
             console.error(
               `[quote] geometry deviation ${dev.volumePctDelta.toFixed(1)}% > ` +
                 `${dev.tolerancePct}% for requestId=${requestId} ` +
-                `(client=${body?.volumeCm3} cm³, server=${serverMetrics.volumeCm3} cm³)`,
+                `(client=${body?.volumeCm3} cm³, server=${serverMetrics.volumeCm3} cm³) — rejected`,
+            )
+            return NextResponse.json(
+              {
+                error:
+                  'The model measurements sent by your browser do not match the uploaded file. ' +
+                  'Please reload the model and request the quote again.',
+              },
+              { status: 400 },
             )
           }
 

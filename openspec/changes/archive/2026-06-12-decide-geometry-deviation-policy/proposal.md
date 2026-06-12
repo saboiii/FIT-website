@@ -1,6 +1,6 @@
 # Proposal: Decide Rejection Policy for Suspicious Geometry Deviation (backlog)
 
-> Status: backlog — **BLOCKED on a product decision.** Spun out of
+> Status: **RESOLVED 2026-06-12 — decision: reject (archived).** Spun out of
 > `add-server-side-geometry-verification` (task 3.4) so that change could be
 > archived with its delivered scope.
 
@@ -39,3 +39,13 @@ Arguments either way:
 - **Code:** `app/api/quote/route.js` (one branch), tests.
 - **Risk:** low; the underpayment vector is already closed because the server
   recompute wins regardless.
+
+## Decision (2026-06-12)
+
+Client chose **reject**: a suspicious understatement now fails the persist with
+HTTP 400 ("model measurements do not match the uploaded file — reload and
+retry") in `app/api/quote/route.js`; the ops log line is kept (suffixed
+"rejected"). The `instant-quoting-engine` spec requirement "Geometry deviation
+logging" was updated to "Geometry deviation rejection". Live previews (no
+requestId) are unaffected; honest client/server divergence retries cleanly
+after a model reload.

@@ -161,20 +161,22 @@ glTF/GLB in metres.
 - THEN the server skips the recompute (logging a warning) and persists the
   client-derived quote
 
-### Requirement: Geometry deviation logging
+### Requirement: Geometry deviation rejection
 When the server recompute succeeds and the client-sent volume understates the
 server-computed volume by more than the tolerance (default 10%), the system
-SHALL log a suspicious-deviation event including the request id, both volumes,
-and the percentage delta. The server value SHALL still win. (Whether to also
-reject such requests is an open product decision —
-`decide-geometry-deviation-policy`.)
+SHALL reject the persist request with HTTP 400 (a safe, retry-oriented message)
+and SHALL log the deviation event including the request id, both volumes, and
+the percentage delta. No quote is persisted for the rejected request. (Policy
+decided 2026-06-12 — was previously log-only with server-wins.)
 
-#### Scenario: Suspicious lowball is logged
+#### Scenario: Suspicious lowball is rejected
 - GIVEN a client volume more than 10% below the server-recomputed volume
-- WHEN the persisted quote is built
-- THEN a deviation event is logged with request id, client volume, server
+- WHEN a persisted quote is requested
+- THEN the response is 400 with a message asking the customer to reload the
+  model and retry
+- AND a deviation event is logged with request id, client volume, server
   volume, and delta
-- AND the persisted quote uses the server volume
+- AND no quote is persisted
 
 ### Requirement: Quote configuration
 The system SHALL source pricing from `AppSettings.quotingConfig` (material rate

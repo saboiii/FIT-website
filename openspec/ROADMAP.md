@@ -110,6 +110,10 @@ specs (`3d-model-editor`, `custom-print-requests`).
   `verify-quoting-flows-browser` item 6)*
 - **decide-geometry-deviation-policy** — *(BLOCKED — product decision: reject vs
   log-only on suspicious client/server volume deviation)*
+- **fix-cart-custom-print-ownership** — *(✅ archived 2026-06-12; /api/cart/
+  custom-print now scopes the lookup to the owner (was an IDOR: any signed-in
+  user could cart+pay a foreign request), snapshots the display price, and no
+  longer echoes internal error objects)*
 - **fix-instant-quote-checkout-charge** — *(✅ archived 2026-06-12; instant
   quotes were charged `basePrice + printFee` instead of the displayed
   `quote.total` at checkout/webhook — extracted pure

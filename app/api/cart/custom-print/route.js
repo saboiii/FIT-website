@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { auth } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import User from '@/models/User'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
 import { authenticate } from '@/lib/authenticate'
+import { customPrintDisplayPrice } from '@/lib/customPrintDisplayPrice'
 
 // POST /api/cart/custom-print { requestId }
 export async function POST(request) {
@@ -22,7 +22,9 @@ export async function POST(request) {
     await connectToDatabase()
     const [user, reqDoc] = await Promise.all([
       User.findOne({ userId }),
-      CustomPrintRequest.findOne({ requestId }),
+      // Ownership-scoped: a foreign requestId behaves exactly like an unknown
+      // one (404), so this endpoint is not an existence oracle.
+      CustomPrintRequest.findOne({ requestId, userId }),
     ])
     if (!user) {
       console.log('[POST /api/cart/custom-print] User not found for userId:', userId);
@@ -43,15 +45,14 @@ export async function POST(request) {
           ? (availableDeliveryTypes[0].type || 'custom_print')
           : 'custom_print'
 
-      const base = Number(reqDoc.basePrice || 0)
-      const fee = Number(reqDoc.printFee || 0)
-
       user.cart.push({
         productId,
         quantity: 1,
         chosenDeliveryType: defaultDeliveryType,
         requestId: reqDoc.requestId,
-        price: reqDoc.status === 'quoted' ? (base + fee) : 0,
+        // Snapshot the same amount the cart displays and checkout charges
+        // (instant → quote.total, manual → basePrice + printFee).
+        price: reqDoc.status === 'quoted' ? customPrintDisplayPrice(reqDoc).amount : 0,
       })
     }
     await user.save()
@@ -67,6 +68,7 @@ export async function POST(request) {
     if (error && error.stack) {
       console.error('[POST /api/cart/custom-print] Stack trace:', error.stack);
     }
-    return NextResponse.json({ error: error.message || 'Unknown error', details: error.errors || error }, { status: 500 })
+    // Never echo internal error objects to the client; full detail is logged above.
+    return NextResponse.json({ error: 'Could not add the print request to the cart' }, { status: 500 })
   }
 }

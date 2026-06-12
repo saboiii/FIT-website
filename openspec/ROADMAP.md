@@ -108,7 +108,8 @@ specs (`3d-model-editor`, `custom-print-requests`).
   `instant-quoting-engine` spec. Deviation rejection policy spun out to
   `decide-geometry-deviation-policy`; live-S3 QA folded into
   `verify-quoting-flows-browser` item 6)*
-  log-only on suspicious client/server volume deviation)*
+- **decide-geometry-deviation-policy** — *(✅ resolved 2026-06-12: REJECT —
+  suspicious volume understatement now 400s instead of silently repricing)*
 - **restrict-proxy-private-prefixes** — *(BLOCKED — product decision: which S3
   prefixes are public; /api/proxy currently streams any bucket object
   anonymously, incl. customers' uploaded models under `models/`)*

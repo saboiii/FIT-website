@@ -5,7 +5,7 @@ import AppSettings from '@/models/AppSettings'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
 import { buildQuote } from '@/lib/quoting/quoteRequest'
 import { getAppSettingsId } from '@/lib/appSettingsId'
-import { recomputeMetricsFromModel } from '@/lib/quoting/serverGeometry'
+import { recomputeMetricsFromModel, supportsServerRecompute } from '@/lib/quoting/serverGeometry'
 import { geometryDeviation } from '@/lib/quoting/geometryDeviation'
 import { resolveCustomPrintDeliveryDefaults } from '@/lib/customPrintDelivery'
 import { s3 } from '@/lib/s3'
@@ -15,6 +15,10 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const MAX_BODY_BYTES = 50_000
+// Skip server geometry recompute for very large stored models (uploads allow up
+// to 100MB) — buffering those in a serverless function risks OOM. The persist
+// then falls back to client metrics, same as an unparseable file.
+const MAX_RECOMPUTE_BYTES = 75 * 1024 * 1024
 
 /**
  * POST /api/quote — Instant Quoting Engine endpoint.
@@ -69,19 +73,27 @@ export async function POST(req) {
     }
 
     // Anti-tamper: for the PERSISTED quote, recompute geometry server-side from
-    // the stored model (STL only for now) instead of trusting client metrics.
-    // Best-effort — any failure falls back to the client-derived quote so the
-    // save never breaks. The live preview still uses client metrics.
+    // the stored model (STL/OBJ/glTF/GLB/3MF) instead of trusting client
+    // metrics. Best-effort — any failure falls back to the client-derived quote
+    // so the save never breaks. The live preview still uses client metrics.
     let persistQuote = quote
     try {
       const mf = reqDoc.modelFile || {}
       const name = mf.originalName || mf.s3Key || ''
-      if (mf.s3Key && /\.stl$/i.test(name)) {
+      if (mf.s3Key && supportsServerRecompute(name)) {
         const obj = await s3.send(
           new GetObjectCommand({ Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME, Key: mf.s3Key }),
         )
-        const bytes = await obj.Body.transformToByteArray()
-        const serverMetrics = recomputeMetricsFromModel(bytes, name)
+        const tooLarge = (obj.ContentLength ?? 0) > MAX_RECOMPUTE_BYTES
+        if (tooLarge) {
+          obj.Body?.destroy?.()
+          console.warn(
+            `[quote] skipping geometry recompute for requestId=${requestId}: ` +
+              `stored model is ${obj.ContentLength} bytes (> ${MAX_RECOMPUTE_BYTES})`,
+          )
+        }
+        const bytes = tooLarge ? null : await obj.Body.transformToByteArray()
+        const serverMetrics = bytes ? await recomputeMetricsFromModel(bytes, name) : null
         if (serverMetrics?.volumeCm3 > 0) {
           // Deviation logging: if the client's volume disagrees with the
           // server's recompute by more than the tolerance, flag it. The server

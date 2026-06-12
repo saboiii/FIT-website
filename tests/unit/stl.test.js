@@ -62,16 +62,16 @@ endsolid x`
 })
 
 describe('recomputeMetricsFromModel', () => {
-  it('recomputes volume from a binary STL cube (10mm → 1 cm³)', () => {
+  it('recomputes volume from a binary STL cube (10mm → 1 cm³)', async () => {
     const buf = buildBinaryStl(cubeTriangles(10))
-    const m = recomputeMetricsFromModel(buf, 'cube.stl')
+    const m = await recomputeMetricsFromModel(buf, 'cube.stl')
     expect(m.volumeCm3).toBeCloseTo(1, 2)
     expect(m.watertight).toBe(true)
   })
 
-  it('returns null for non-STL formats (caller falls back to client metrics)', () => {
+  it('returns null for unsupported formats (caller falls back to client metrics)', async () => {
     const buf = buildBinaryStl(cubeTriangles(10))
-    expect(recomputeMetricsFromModel(buf, 'model.glb')).toBeNull()
-    expect(recomputeMetricsFromModel(buf, 'model.obj')).toBeNull()
+    expect(await recomputeMetricsFromModel(buf, 'model.fbx')).toBeNull()
+    expect(await recomputeMetricsFromModel(buf, 'model.blend')).toBeNull()
   })
 })

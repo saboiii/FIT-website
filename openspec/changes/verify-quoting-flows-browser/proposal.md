@@ -30,6 +30,13 @@ Run `yarn dev` with valid env, signed in, then verify:
 5. **Admin** — Quoting/Pricing tab loads + saves rates/fees/colours; a custom
    print request row expands to show the full config + dimensions + quote total;
    the "Model File" download keeps the original filename + extension.
+6. **Server geometry recompute vs live S3** (from
+   `add-server-side-geometry-verification` task 3.5) — persist a quote (pass a
+   `requestId`) for an uploaded STL, OBJ, GLB, and 3MF; confirm the persisted
+   quote's volume matches the editor preview (server recompute agreed), and that
+   an unsupported format (e.g. FBX) still persists the client-derived quote
+   without error. Watch the server log for unexpected
+   `[quote] geometry deviation` lines (parser divergence would show up there).
 
 ## Impact
 

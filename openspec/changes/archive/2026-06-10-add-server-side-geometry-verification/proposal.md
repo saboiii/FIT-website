@@ -1,8 +1,22 @@
 # Proposal: Server-Side Geometry Verification for Quotes (backlog — security)
 
-> Status: **STL recompute (2026-05-29) + deviation logging (2026-06-08) done.**
-> Kept active for OBJ / glTF / 3MF recompute, the deviation policy decision, and
-> integration verification.
+> Status: **COMPLETE 2026-06-10.** STL recompute (2026-05-29), deviation logging
+> (2026-06-08), and OBJ / glTF-GLB / 3MF recompute (2026-06-10) all done. The two
+> remaining non-code items were spun out so this change has no loose ends:
+> the deviation rejection policy → `decide-geometry-deviation-policy` (product
+> decision), live-S3 integration verification → `verify-quoting-flows-browser`
+> checklist item 6 (human QA).
+
+## Done (2026-06-10) — remaining formats
+
+- `lib/quoting/obj.js`, `lib/quoting/gltf.js`, `lib/quoting/threeMf.js` — pure
+  parsers (3MF uses the existing `jszip` dependency) → flat positions, matching
+  the client adapter's unit conventions (STL/OBJ/3MF mm, glTF/GLB m).
+- `recomputeMetricsFromModel` is now async and format-dispatched;
+  `supportsServerRecompute(fileName)` gates the S3 fetch in the route; stored
+  models > 75MB skip recompute (client-metric fallback) to avoid serverless OOM.
+- Tests: `tests/unit/serverGeometryFormats.test.js` (19 cases incl. transforms,
+  quads, Draco/external-buffer fallbacks, multi-format cube → 1 cm³).
 
 ## Done (2026-05-29)
 

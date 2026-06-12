@@ -103,9 +103,13 @@ specs (`3d-model-editor`, `custom-print-requests`).
 - **add-returnto-origin-capture** — *(✅ archived 2026-05-29)*
 - **add-input-validation-admin-endpoints** — *(active: structural validation +
   admin-gate fix done; range thresholds need the print farm's limits — human)*
-- **add-server-side-geometry-verification** — *(active: STL recompute +
-  deviation logging done 2026-06-08; OBJ/glTF/3MF + deviation policy decision
-  remain)*
+- **add-server-side-geometry-verification** — *(✅ archived 2026-06-10; STL/OBJ/
+  glTF-GLB/3MF recompute + deviation logging folded into the
+  `instant-quoting-engine` spec. Deviation rejection policy spun out to
+  `decide-geometry-deviation-policy`; live-S3 QA folded into
+  `verify-quoting-flows-browser` item 6)*
+- **decide-geometry-deviation-policy** — *(BLOCKED — product decision: reject vs
+  log-only on suspicious client/server volume deviation)*
 - **add-quote-api-rate-limiting** — *(BLOCKED — needs Upstash Redis infra)*
 - **add-per-field-setting-reset** — *(DEFERRED — leva limitation; needs design)*
 - **verify-quoting-flows-browser** — *(human QA of interactive UI paths)*

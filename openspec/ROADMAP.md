@@ -110,6 +110,9 @@ specs (`3d-model-editor`, `custom-print-requests`).
   `verify-quoting-flows-browser` item 6)*
 - **decide-geometry-deviation-policy** — *(BLOCKED — product decision: reject vs
   log-only on suspicious client/server volume deviation)*
+- **restrict-proxy-private-prefixes** — *(BLOCKED — product decision: which S3
+  prefixes are public; /api/proxy currently streams any bucket object
+  anonymously, incl. customers' uploaded models under `models/`)*
 - **fix-user-batch-pii-exposure** — *(✅ archived 2026-06-12; GET /api/user/
   batch was unauthenticated and returned emails/phones/addresses/Stripe ids —
   now admin-gated)*

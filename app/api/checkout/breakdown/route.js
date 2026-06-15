@@ -83,6 +83,8 @@ export async function GET(req) {
                     'delivered',
                 ].includes(customPrintRequest.status);
 
+                const isCustomPrintItem = String(item.productId || '').startsWith('custom-print:');
+
                 if (isFixedPricedCustomPrint) {
                     // Quoted pricing: instant quotes charge quote.total, manual
                     // quotes charge basePrice + printFee — always the same amount
@@ -105,6 +107,28 @@ export async function GET(req) {
                         currency: charge.currency,
                         customPrintRequestId: customPrintRequest.requestId,
                         customPrintStatus: customPrintRequest.status
+                    };
+                } else if (isCustomPrintItem) {
+                    // Custom print not yet quoted — model missing/deleted, awaiting
+                    // upload, config, or a manual admin quote. There is no charge
+                    // yet, so price/delivery are 0 (no stale snapshot leaks through).
+                    const requestId = item.customPrintRequestId || (item.productId || '').split(':')[1];
+                    breakdown = {
+                        productId: item.productId,
+                        selectedVariants: item.selectedVariants || {},
+                        name: product.name,
+                        quantity: 1,
+                        price: 0,
+                        priceBeforeDiscount: 0,
+                        basePrice: 0,
+                        variantInfo: [],
+                        chosenDeliveryType: item.chosenDeliveryType || '',
+                        deliveryFee: 0,
+                        total: 0,
+                        creatorUserId: product.creatorUserId,
+                        currency: 'SGD',
+                        customPrintRequestId: requestId,
+                        customPrintStatus: customPrintRequest?.status || 'pending'
                     };
                 } else {
                     // Normal product breakdown

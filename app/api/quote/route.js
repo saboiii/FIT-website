@@ -3,14 +3,12 @@ import { auth } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import AppSettings from '@/models/AppSettings'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
+import Product from '@/models/Product'
 import { buildQuote } from '@/lib/quoting/quoteRequest'
 import { getAppSettingsId } from '@/lib/appSettingsId'
 import { recomputeMetricsFromModel, supportsServerRecompute } from '@/lib/quoting/serverGeometry'
 import { geometryDeviation } from '@/lib/quoting/geometryDeviation'
-import {
-  resolveCustomPrintDeliveryDefaults,
-  refreshCustomPrintDeliveryPrices,
-} from '@/lib/customPrintDelivery'
+import { resolveCustomPrintDeliveryDefaults } from '@/lib/customPrintDelivery'
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { limitQuoteRequest } from '@/lib/rateLimit'
@@ -169,8 +167,9 @@ export async function POST(req) {
     // quote (the manual/advanced path goes through admin set-quote).
     reqDoc.quoteMode = 'instant'
 
-    // Persist geometry-derived dimensions/weight first so delivery pricing
-    // (tiers in grams, volume in cm³) can be computed below.
+    // Persist geometry-derived dimensions/weight (cm + kg) for display and
+    // admin reference. Delivery pricing no longer depends on these — it mirrors
+    // the product's configured delivery types (see below).
     const dims = persistQuote.inputs?.dimensionsCm
     const grams = persistQuote.inputs?.weightGrams
     if (dims && (dims.length > 0 || dims.width > 0 || dims.height > 0)) {
@@ -182,27 +181,16 @@ export async function POST(req) {
       }
     }
 
-    // Auto-apply admin-default delivery for custom prints if none are set (so
-    // the cart has selectable options), priced from the request's dimensions.
-    // On every re-quote, refresh non-overridden prices from CURRENT admin
-    // settings so delivery fees track the live config (admin customPrice wins).
-    const deliveryDims = reqDoc.dimensions?.length ? reqDoc.dimensions : null
-    const adminDeliveryTypes = settings?.additionalDeliveryTypes || []
-    const existingDelivery = reqDoc.delivery?.deliveryTypes || []
-    if (existingDelivery.length === 0) {
-      const defaults = resolveCustomPrintDeliveryDefaults(adminDeliveryTypes, deliveryDims)
-      if (defaults.length > 0) {
-        reqDoc.delivery = { deliveryTypes: defaults }
-      }
-    } else {
-      reqDoc.delivery = {
-        ...(reqDoc.delivery?.toObject?.() ?? reqDoc.delivery),
-        deliveryTypes: refreshCustomPrintDeliveryPrices(
-          existingDelivery.map((e) => (e?.toObject?.() ? e.toObject() : e)),
-          adminDeliveryTypes,
-          deliveryDims,
-        ),
-      }
+    // Delivery options for the request mirror the custom-print PRODUCT's own
+    // delivery config (admin-curated types with their set prices), exactly like
+    // a regular product. Re-resolve on every quote so the request always tracks
+    // the current product config; prices are taken as-is (NOT recomputed from
+    // the model's dimensions). Checkout charges customPrice/price downstream.
+    const customPrintProduct = await Product.findOne({ slug: 'custom-print-request' }).lean()
+    const productDeliveryTypes = customPrintProduct?.delivery?.deliveryTypes || []
+    const deliveryDefaults = resolveCustomPrintDeliveryDefaults(productDeliveryTypes)
+    if (deliveryDefaults.length > 0) {
+      reqDoc.delivery = { deliveryTypes: deliveryDefaults }
     }
 
     if (['pending_upload', 'pending_config', 'configured'].includes(reqDoc.status)) {

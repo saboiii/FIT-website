@@ -98,7 +98,7 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName, option
 
       {metrics.confidence === 'low' && (
         <p className="mb-2 rounded bg-amber-50 border border-amber-200 px-2 py-1 text-[11px] text-amber-700">
-          This model isn’t watertight — the estimate is approximate.
+          This model isn’t watertight, so the estimate is approximate.
         </p>
       )}
 

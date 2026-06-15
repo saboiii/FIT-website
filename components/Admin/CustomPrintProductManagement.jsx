@@ -4,6 +4,7 @@ import { useToast } from '@/components/General/ToastProvider'
 import PricingFields from '@/components/DashboardComponents/ProductFormFields/PricingFields'
 import ShippingFields from '@/components/DashboardComponents/ProductFormFields/ShippingFields'
 import DiscountsField from '@/components/DashboardComponents/ProductFormFields/DiscountsField'
+const DIMENSION_FIELDS = new Set(['length', 'width', 'height', 'weight'])
 import ImagesField from '@/components/DashboardComponents/ProductFormFields/ImagesField'
 import { uploadImages } from '@/utils/uploadHelpers'
 import {
@@ -37,6 +38,7 @@ export default function CustomPrintProductManagement() {
         delivery: {
             deliveryTypes: []
         },
+        dimensions: { length: '', width: '', height: '', weight: '' },
         discount: {
             eventId: '',
             percentage: '',
@@ -81,6 +83,7 @@ export default function CustomPrintProductManagement() {
                         basePrice: data.product.basePrice || { presentmentCurrency: 'SGD', presentmentAmount: 0 },
                         priceCredits: data.product.priceCredits || 0,
                         delivery: data.product.delivery || { deliveryTypes: [] },
+                        dimensions: data.product.dimensions || { length: '', width: '', height: '', weight: '' },
                         discount: data.product.discount || { eventId: '', percentage: '', minimumPrice: '', startDate: '', endDate: '' },
                         showDiscount: !!data.product.discount?.percentage || !!data.product.discount?.eventId,
                         productType: 'print'
@@ -96,6 +99,18 @@ export default function CustomPrintProductManagement() {
 
     const handleChange = (e) => {
         const { name, value } = e.target
+
+        // Dimension inputs (used by ShippingFields) live under form.dimensions.
+        if (DIMENSION_FIELDS.has(name)) {
+            setForm(prev => ({
+                ...prev,
+                dimensions: {
+                    ...prev.dimensions,
+                    [name]: value === '' ? '' : Number(value),
+                },
+            }))
+            return
+        }
 
         setForm(prev => ({
             ...prev,
@@ -132,6 +147,7 @@ export default function CustomPrintProductManagement() {
                     basePrice: normalizedBasePrice,
                     priceCredits: normalizedPriceCredits,
                     delivery: form.delivery,
+                    dimensions: form.dimensions,
                     discount: form.showDiscount ? form.discount : {}
                 })
             })
@@ -247,7 +263,24 @@ export default function CustomPrintProductManagement() {
                     allCurrencies={allCurrencies}
                 />
 
-                {/* Delivery types removed for custom print product config. Only set in print requests. */}
+                {/* Delivery options for custom prints. The admin curates which
+                    delivery types are offered and sets each price here; every
+                    custom-print request copies these options + prices verbatim
+                    (prices are NOT recalculated per model). Representative
+                    dimensions can be entered to auto-price tier/formula types;
+                    the resulting price can always be overridden per type. */}
+                <div className="border border-borderColor rounded-lg overflow-hidden">
+                    <div className="bg-borderColor/40 w-full px-4 py-2 border-b border-borderColor">
+                        <h3 className="text-sm font-medium text-textColor">Delivery</h3>
+                    </div>
+                    <div className="p-4">
+                        <ShippingFields
+                            form={form}
+                            handleChange={handleChange}
+                            setForm={setForm}
+                        />
+                    </div>
+                </div>
 
                 <DiscountsField
                     form={form}

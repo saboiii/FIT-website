@@ -15,9 +15,12 @@ const whiteTheme = {
     elevation1: '#fcfcfc',
     elevation2: '#e6e6e6',
     elevation3: '#eeeeee',
-    highlight1: '#aaaaaa',
+    // Leva text emphasis (light theme). highlight3 is the value text typed
+    // inside number/string fields — keep it near-black so it's clearly legible
+    // (was too light at #666). highlight1 is subtle text (units/placeholders).
+    highlight1: '#888888',
     highlight2: '#333333',
-    highlight3: '#666666',
+    highlight3: '#1f1f1f',
     accent1: '#ffffff',
     accent2: '#aaaaaa',
     accent3: '#666666',
@@ -159,7 +162,10 @@ const Result = () => {
     loadConfigFromDB()
   }, [productId, variantId, configLoaded, scene])
 
-  // Leva controls for visual config, including mesh colors
+  // Leva controls for visual config, including mesh colors. Mesh colours are a
+  // dropdown of the admin-curated catalogue (AppSettings.printColours) — not a
+  // free hex picker — so customers can only choose colours the farm stocks.
+  // The control value is the colour's hex; the dropdown label is its name.
   const [visualConfig, setVisualConfig] = useControls('visual', () => {
     const controls = {
       background: '#e3e3e3',
@@ -170,12 +176,22 @@ const Result = () => {
       },
     }
 
+    // Map { colourName: hex } for the leva select; de-dupe hexes so leva can
+    // resolve a value back to a single option.
+    const colourOptions = {}
+    colourCatalogue.forEach((c) => {
+      if (c?.name && c?.hex && !Object.values(colourOptions).includes(c.hex)) {
+        colourOptions[c.name] = c.hex
+      }
+    })
+    const defaultHex = colourOptions['White'] || Object.values(colourOptions)[0] || '#ffffff'
+
     meshNames.forEach((name) => {
-      controls[name] = { value: '#ffffff', label: `${name}` }
+      controls[name] = { value: defaultHex, options: colourOptions, label: `${name}` }
     })
 
     return controls
-  }, { collapsed: true }, [meshNames])
+  }, { collapsed: true }, [meshNames, colourCatalogue])
 
 
   const [lighting] = useControls('lighting', () => ({
@@ -484,7 +500,7 @@ const Result = () => {
             const errBody = await quoteRes.json().catch(() => ({}))
             throw new Error(errBody.error || 'Failed to generate instant quote')
           }
-          showToast('Instant quote ready — checkout when you’re ready!', 'success')
+          showToast('Instant quote ready, checkout when you’re ready!', 'success')
         } else {
           showToast(
             'Configuration sent for review — we’ll follow up with a quote shortly.',

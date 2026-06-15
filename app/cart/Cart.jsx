@@ -625,10 +625,13 @@ function Cart() {
                                                         })()
                                                     ) : (
                                                         <span className=' flex items-center gap-1'>
-                                                            SGD {Number(breakdownItem?.price ?? cartItem.price).toFixed(2)}
+                                                            {/* Live breakdown is the source of truth. When the request
+                                                                isn't quoted yet (or the model was deleted) the breakdown
+                                                                returns 0 — never fall back to the stale cart snapshot. */}
+                                                            SGD {Number(breakdownItem?.price ?? 0).toFixed(2)}
                                                             <span className="relative group">
                                                                 <HiExclamationCircle className="text-yellow-500 text-base cursor-pointer" />
-                                                                <span className="absolute left-1/2 font-normal -translate-x-1/2 mt-2 w-64 text-xs rounded p-4 items-center justify-center text-center opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-200 whitespace-normal bg-background border border-borderColor shadow-lg">
+                                                                <span className="absolute right-0 font-normal mt-2 w-64 text-xs rounded p-4 items-center justify-center text-center opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-200 whitespace-normal bg-background border border-borderColor shadow-lg">
                                                                     This may not be the final price and will be affected by the final quote.<br />For help, please contact <a href="mailto:fixitoday.contact@gmail.com" className="underline">fixitoday.contact@gmail.com</a>
                                                                 </span>
                                                             </span>
@@ -684,7 +687,9 @@ function Cart() {
                                                                     await refreshCustomPrintRequests();
                                                                 }}
                                                                 onDeleteComplete={async () => {
-                                                                    await refreshCartBreakdown();
+                                                                    // Full refetch: rebuild cart + request map + breakdown
+                                                                    // from server truth so the price snapshot resets to $0.
+                                                                    await fetchCartData();
                                                                     await refreshCustomPrintRequests();
                                                                 }}
                                                             />

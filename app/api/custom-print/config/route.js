@@ -70,20 +70,26 @@ export async function PUT(req) {
             return NextResponse.json({ error: 'Custom print request not found' }, { status: 404 })
         }
 
-        // Update print configuration (preserve generic block; persist mode).
-        // Never assign `generic: undefined` — Mongoose fails casting undefined
-        // to the subdocument (advanced-mode saves with no prior generic block).
+        const isManual = mode === 'manual'
+
+        // Update print configuration (persist mode). Never assign
+        // `generic: undefined` — Mongoose fails casting undefined to the
+        // subdocument. A MANUAL (advanced) save supersedes any earlier
+        // simple-mode selection entirely, so its generic block is dropped;
+        // instant saves carry the sent generic; otherwise preserve what's there.
         const existingGeneric = customPrintRequest.printConfiguration?.generic
-        const nextGeneric = generic && typeof generic === 'object'
-            ? {
-                strength: generic.strength ?? null,
-                quality: generic.quality ?? null,
-                colour: generic.colour ?? null,
-                material: generic.material ?? null,
-            }
-            : (existingGeneric && typeof existingGeneric.toObject === 'function'
-                ? existingGeneric.toObject()
-                : existingGeneric) || null
+        const nextGeneric = isManual
+            ? null
+            : generic && typeof generic === 'object'
+                ? {
+                    strength: generic.strength ?? null,
+                    quality: generic.quality ?? null,
+                    colour: generic.colour ?? null,
+                    material: generic.material ?? null,
+                }
+                : (existingGeneric && typeof existingGeneric.toObject === 'function'
+                    ? existingGeneric.toObject()
+                    : existingGeneric) || null
         customPrintRequest.printConfiguration = {
             ...(nextGeneric ? { generic: nextGeneric } : {}),
             meshColors: meshColors || {},
@@ -109,6 +115,23 @@ export async function PUT(req) {
         // the manual path stays at `configured` until an admin sets a quote.
         if (mode === 'instant' || mode === 'manual') {
             customPrintRequest.quoteMode = mode
+        }
+
+        // A manual save supersedes any prior instant quote: clear the stale
+        // server quote so the cart stops showing the old instant price, and
+        // step the request back to `configured` to await a fresh admin quote.
+        if (isManual) {
+            customPrintRequest.quote = undefined
+            customPrintRequest.quotedAt = undefined
+            if (customPrintRequest.status === 'quoted') {
+                customPrintRequest.status = 'configured'
+                customPrintRequest.statusHistory = customPrintRequest.statusHistory || []
+                customPrintRequest.statusHistory.push({
+                    status: 'configured',
+                    updatedAt: new Date(),
+                    note: 'Switched to advanced (manual) configuration — awaiting admin quote',
+                })
+            }
         }
 
         // Ensure status never lags behind stored data (e.g. pending_upload -> configured)

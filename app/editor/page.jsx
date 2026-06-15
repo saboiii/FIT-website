@@ -216,7 +216,7 @@ const Editor = () => {
 
     return (
         <div className="flex flex-col items-center justify-center h-screen">
-            <main className="flex flex-col items-center justify-center flex-1" style={{ height: 'calc(100vh - 56px)' }}>
+            <main className="flex flex-col items-center justify-center flex-1 w-full" style={{ height: 'calc(100vh - 56px)' }}>
                 {loading ? (
                     <div className="loader" />
                 ) : buffers ? (

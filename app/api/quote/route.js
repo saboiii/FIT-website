@@ -9,6 +9,7 @@ import { getAppSettingsId } from '@/lib/appSettingsId'
 import { recomputeMetricsFromModel, supportsServerRecompute } from '@/lib/quoting/serverGeometry'
 import { geometryDeviation } from '@/lib/quoting/geometryDeviation'
 import { resolveCustomPrintDeliveryDefaults } from '@/lib/customPrintDelivery'
+import { notifyCustomPrintEvent } from '@/lib/notifications/customPrint'
 import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { limitQuoteRequest } from '@/lib/rateLimit'
@@ -198,6 +199,18 @@ export async function POST(req) {
       reqDoc.statusHistory.push({ status: 'quoted', note: 'Auto-quoted by Instant Quoting Engine' })
     }
     await reqDoc.save()
+
+    // Tell the customer their instant quote is ready (email + buyer↔vendor
+    // chat). Best-effort — never fail the quote on a notification error.
+    try {
+      await notifyCustomPrintEvent({
+        event: 'quote-ready',
+        request: reqDoc.toObject(),
+        product: customPrintProduct,
+      })
+    } catch (notifyErr) {
+      console.error('Quote-ready notification failed:', notifyErr)
+    }
   }
 
   return NextResponse.json({ quote: responseQuote }, { status: 200 })

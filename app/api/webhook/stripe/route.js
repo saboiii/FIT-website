@@ -9,6 +9,7 @@ import Order from "@/models/Order";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
 import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
 import { sendEmail, wrapInTemplate } from "@/lib/email";
+import { notifyCustomPrintEvent } from "@/lib/notifications/customPrint";
 import { clerkClient } from "@clerk/nextjs/server";
 import mongoose from "mongoose";
 
@@ -138,6 +139,21 @@ export async function POST(req) {
                         customPrintQuotedPrice = charge.amount;
                         customPrintChosenDeliveryType = charge.chosenDeliveryType;
                         customPrintDeliveryFee = charge.deliveryFee;
+
+                        // Payment received → notify the customer (queued) and
+                        // the admin (start work) by email, and post a chat update
+                        // into the buyer↔vendor thread. Best-effort; never break
+                        // webhook processing on a notification failure.
+                        try {
+                            await notifyCustomPrintEvent({
+                                event: 'paid',
+                                request: customPrintRequest.toObject(),
+                                product: customPrintBaseProduct,
+                                breakdown: { ...charge, lines: customPrintRequest.quote?.lines },
+                            });
+                        } catch (notifyErr) {
+                            console.error('Paid notification failed:', notifyErr);
+                        }
                     }
                 } else {
                     product = await Product.findById(item.productId);

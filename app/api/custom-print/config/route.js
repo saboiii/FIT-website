@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
+import Product from '@/models/Product'
 import { sendEmail, wrapInTemplate } from '@/lib/email'
 import { buildManualQuoteAdminEmail } from '@/lib/manualQuoteEmail'
+import { notifyCustomPrintEvent } from '@/lib/notifications/customPrint'
 
 const STATUS_RANK = {
     pending_upload: 0,
@@ -139,8 +141,10 @@ export async function PUT(req) {
 
         await customPrintRequest.save()
 
-        // Manual mode: best-effort notify the admin so they know to quote. Never
-        // block the save on email failure — credentials may be unset in some envs.
+        // Manual mode: best-effort notify the admin so they know to quote, and
+        // tell the customer their config is in and a quote is coming (email +
+        // buyer↔vendor chat). Never block the save on notification failure —
+        // credentials/Stream may be unset in some envs.
         if (customPrintRequest.quoteMode === 'manual') {
             const adminEmail = process.env.ADMIN_EMAIL || process.env.GMAIL_USER
             if (adminEmail) {
@@ -152,6 +156,19 @@ export async function PUT(req) {
                 } catch (emailErr) {
                     console.error('Manual-quote admin notification failed:', emailErr)
                 }
+            }
+
+            try {
+                const product = await Product.findOne({ slug: 'custom-print-request' })
+                    .select('creatorUserId')
+                    .lean()
+                await notifyCustomPrintEvent({
+                    event: 'awaiting-quote',
+                    request: customPrintRequest.toObject(),
+                    product,
+                })
+            } catch (notifyErr) {
+                console.error('Awaiting-quote customer notification failed:', notifyErr)
             }
         }
 

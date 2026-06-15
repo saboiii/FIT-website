@@ -8,6 +8,7 @@ import { validateDimensions } from '@/lib/validation/dimensions'
 import { checkMachineLimits, machineLimitMessage } from '@/lib/quoting/machineLimits'
 import AppSettings from '@/models/AppSettings'
 import { getAppSettingsId } from '@/lib/appSettingsId'
+import { notifyCustomPrintEvent } from '@/lib/notifications/customPrint'
 
 // Admin: list all custom print requests
 export async function GET() {
@@ -74,6 +75,9 @@ export async function PUT(request) {
     return NextResponse.json({ error: 'Request not found' }, { status: 404 })
   }
 
+  // Which customer notification this action triggers (resolved after save).
+  let notifyEvent = null
+
   if (action === 'quote') {
     if (typeof quoteAmount !== 'number' || quoteAmount < 0) {
       return NextResponse.json({ error: 'quoteAmount must be a non-negative number' }, { status: 400 })
@@ -117,15 +121,40 @@ export async function PUT(request) {
       status: 'quoted',
       note: note || 'Quote created.',
     })
+    notifyEvent = 'quote-ready'
   } else if (action === 'cancel') {
     doc.status = 'cancelled'
     doc.statusHistory.push({ status: 'cancelled', note: note || 'Request cancelled by admin.' })
+    notifyEvent = 'cancelled'
   } else if (action === 'status' && status) {
     doc.status = status
     doc.statusHistory.push({ status, note: note || `Status updated to ${status}` })
+    // Only customer-meaningful transitions trigger a notification.
+    if (['paid', 'printing', 'printed', 'shipped', 'delivered'].includes(status)) {
+      notifyEvent = status
+    }
   }
 
   await doc.save()
+
+  // Notify the customer (email + buyer↔vendor chat) for this transition.
+  // Best-effort — never fail the admin action on a notification error.
+  if (notifyEvent) {
+    try {
+      const product = await Product.findOne({ slug: 'custom-print-request' })
+        .select('creatorUserId')
+        .lean()
+      await notifyCustomPrintEvent({
+        event: notifyEvent,
+        request: doc.toObject(),
+        product,
+        note,
+      })
+    } catch (notifyErr) {
+      console.error('[PUT /api/admin/custom-print-requests] notification failed:', notifyErr)
+    }
+  }
+
   // Remove deliveryFee from response if present
   const obj = doc.toObject()
   if ('deliveryFee' in obj) delete obj.deliveryFee

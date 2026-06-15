@@ -113,6 +113,10 @@ const CustomPrintRequestSchema = new mongoose.Schema({
     configDeadline: { type: Date }, // 7 days from payment
     reminderSent: { type: Boolean, default: false },
     autoCancelledAt: { type: Date },
+    // When we last sent a pre-payment "idle / unconfigured" nudge (distinct from
+    // the post-payment configDeadline reminder above). Drives the nudge cron's
+    // cooldown so customers aren't emailed repeatedly.
+    idleNudgeSentAt: { type: Date, default: null },
 
     // Delivery information
     shippingAddress: {

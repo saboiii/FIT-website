@@ -8,7 +8,8 @@ import CheckoutSession from "@/models/CheckoutSession";
 import Order from "@/models/Order";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
 import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
-import { sendEmail, wrapInTemplate } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
+import { buildNewSaleEmail } from "@/lib/email/templates/transactional";
 import { notifyCustomPrintEvent } from "@/lib/notifications/customPrint";
 import { clerkClient } from "@clerk/nextjs/server";
 import mongoose from "mongoose";
@@ -469,23 +470,12 @@ export async function POST(req) {
                         const creatorEmail = creatorClerkUser?.emailAddresses?.[0]?.emailAddress;
                         if (!creatorEmail) continue;
 
-                        const itemsHtml = saleData.items.map(i =>
-                            `<li>${i.name} x${i.quantity} - ${i.currency} ${i.price.toFixed(2)}</li>`
-                        ).join('');
-
-                        const bodyHtml = `
-                            <p>You have a new sale on Fix It Today!</p>
-                            <h3 style="color: #ffdd00;">Order Details:</h3>
-                            <ul>${itemsHtml}</ul>
-                            <p><b>Total: ${saleData.items[0]?.currency || 'SGD'} ${saleData.total.toFixed(2)}</b></p>
-                            <p>Log in to your dashboard to manage this order.</p>
-                        `;
-
-                        await sendEmail({
-                            to: creatorEmail,
-                            subject: 'New Sale on Fix It Today!',
-                            html: wrapInTemplate(bodyHtml),
+                        const { subject, html } = buildNewSaleEmail({
+                            total: saleData.total,
+                            currency: saleData.items[0]?.currency || 'SGD',
+                            items: saleData.items,
                         });
+                        await sendEmail({ to: creatorEmail, subject, html });
                     } catch (emailErr) {
                         console.error(`Failed to email creator ${creatorUserId}:`, emailErr);
                     }

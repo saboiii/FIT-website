@@ -67,5 +67,25 @@
 ## 7. Verify
 
 - [x] 7.1 `yarn test:run` green; lint changed files.
-- [ ] 7.2 Flag deferred: scheduler-dependent nudge email (no cron yet); restyle
-      of the 4 pre-existing emails onto the new base layout (separate pass).
+
+## 8. Restyle the 4 pre-existing emails onto the base layout
+
+- [x] 8.1 `lib/email/templates/transactional.js`: `buildOrderConfirmationEmail`
+      (customer), `buildNewSaleEmail` (creator), `buildDeliveryTypeChangedEmail`
+      (creator) — full docs via `emailLayout`.
+- [x] 8.2 Restyle `lib/manualQuoteEmail.js` to render through `emailLayout`
+      (drop the dark `wrapInTemplate` at the call site).
+- [x] 8.3 Wire: checkout confirmation, stripe new-sale, notify-delivery-change,
+      manual-quote admin. `tests/unit/transactionalEmails.test.js` (+ existing
+      manualQuoteEmail tests still green).
+
+## 9. Idle / unconfigured nudge (now that a scheduler exists)
+
+- [x] 9.1 Pure `lib/notifications/idleRequests.js#selectIdleRequests`
+      (eligible pre-payment statuses, idle threshold, cooldown) + tests.
+- [x] 9.2 `buildIdleNudgeEmail` (status-tailored copy/CTA) + tests.
+- [x] 9.3 `CustomPrintRequest.idleNudgeSentAt` field (cooldown bookkeeping).
+- [x] 9.4 `app/api/cron/custom-print-nudges` (CRON_SECRET-guarded GET; query
+      candidates → send → stamp). `vercel.json` daily cron (09:00 UTC).
+      `.env.example`: `CRON_SECRET`, `CUSTOM_PRINT_NUDGE_IDLE_DAYS`,
+      `CUSTOM_PRINT_NUDGE_COOLDOWN_DAYS`.

@@ -4,7 +4,8 @@ import { authenticate } from '@/lib/authenticate';
 import { checkAdminPrivileges } from '@/lib/checkPrivileges';
 import Product from '@/models/Product';
 import { clerkClient } from '@clerk/nextjs/server';
-import { sendEmail, wrapInTemplate } from '@/lib/email';
+import { sendEmail } from '@/lib/email';
+import { buildDeliveryTypeChangedEmail } from '@/lib/email/templates/transactional';
 
 export async function POST(request) {
     const authResult = await authenticate(request);
@@ -34,18 +35,11 @@ export async function POST(request) {
             const email = user?.emailAddresses?.[0]?.emailAddress;
             if (!email) continue;
 
-            const bodyHtml = `
-                <p>A delivery type used by your products has been updated.</p>
-                <p><b>Delivery Type:</b> ${changes.displayName || deliveryTypeName}</p>
-                <p>Please review your product delivery settings to ensure they are still correct.</p>
-                <p><a href="https://www.fixitoday.com/dashboard/products" style="color: #ffdd00;">Go to Dashboard</a></p>
-            `;
-
-            await sendEmail({
-                to: email,
-                subject: 'Delivery Type Updated - Action May Be Required',
-                html: wrapInTemplate(bodyHtml),
+            const { subject, html } = buildDeliveryTypeChangedEmail({
+                deliveryTypeName,
+                displayName: changes?.displayName,
             });
+            await sendEmail({ to: email, subject, html });
             notifiedCount++;
         } catch (err) {
             console.error(`Failed to notify creator ${creatorId}:`, err);

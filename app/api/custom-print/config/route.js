@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
 import Product from '@/models/Product'
-import { sendEmail, wrapInTemplate } from '@/lib/email'
+import { sendEmail } from '@/lib/email'
 import { buildManualQuoteAdminEmail } from '@/lib/manualQuoteEmail'
 import { notifyCustomPrintEvent } from '@/lib/notifications/customPrint'
 
@@ -152,7 +152,7 @@ export async function PUT(req) {
                     const { subject, html } = buildManualQuoteAdminEmail({
                         request: customPrintRequest.toObject(),
                     })
-                    await sendEmail({ to: adminEmail, subject, html: wrapInTemplate(html) })
+                    await sendEmail({ to: adminEmail, subject, html })
                 } catch (emailErr) {
                     console.error('Manual-quote admin notification failed:', emailErr)
                 }

@@ -54,3 +54,27 @@ user-supplied values and are unit-tested without sending mail.
 - **WHEN** a quote-ready or payment email is built for a request
 - **THEN** the HTML contains each breakdown line, the total, and the request id,
   and any user-supplied text (e.g. model file name) is HTML-escaped.
+
+### Requirement: Idle pre-payment requests are nudged on a schedule
+
+A scheduled job SHALL email a gentle reminder to customers whose custom-print
+request has sat idle in an actionable pre-payment state (uploaded-not-configured,
+configured-not-quoted, or quoted-not-paid) for at least a configurable number of
+days, and SHALL NOT re-nudge the same request within a configurable cooldown.
+The selection rule is a pure function; the scheduled route is the only
+side-effecty edge and is protected by a shared secret.
+
+#### Scenario: Idle request past the threshold is nudged once
+- **WHEN** the nudge job runs and a request in an eligible status has had no
+  activity for at least the idle threshold and was not nudged within the cooldown
+- **THEN** the customer receives a status-tailored reminder email and the
+  request's last-nudge timestamp is recorded.
+
+#### Scenario: Recently-nudged or paid requests are skipped
+- **WHEN** the nudge job runs
+- **THEN** requests nudged within the cooldown, and requests in a non-eligible
+  status (e.g. paid, printing, cancelled, pending_upload), receive no email.
+
+#### Scenario: Unauthorized invocation is rejected
+- **WHEN** the nudge route is called without the correct `CRON_SECRET` bearer token
+- **THEN** it responds 401 (or 503 when the secret is unset) and sends nothing.

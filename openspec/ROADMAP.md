@@ -166,8 +166,11 @@ All blockers the client resolved on 2026-06-12, implemented same day:
 25. **add-per-field-setting-reset** — Modified-settings panel. *(✅ archived)*
 26. **add-admin-print-time-config** — guided time-model setup. *(✅ archived)*
 27. **add-otp-contact-verification** — DROPPED (email-only). *(✅ archived)*
-28. **add-email-notifications-suite** — *(ACTIVE, approved: all key use cases on
-    a polished base template; see the change's proposal)*
+28. **add-email-notifications-suite** — *(✅ archived 2026-06-22; customer/admin
+    lifecycle + transactional emails on one light-theme base layout, buyer↔vendor
+    chat lifecycle posts + new-message emails, and a scheduled idle-request nudge
+    (free GitHub Actions cron). Specs `email-notifications`, `chat-notifications`
+    in `openspec/specs/`)*
 29. **redesign-admin-dashboard-onboarding** — *(ACTIVE, approved: grouped
     sidebar IA + Overview setup checklist + first-run wizard; design.md ready)*
 

@@ -2,11 +2,5 @@
   "buildCommand": "yarn build",
   "installCommand": "yarn install --ignore-engines",
   "framework": "nextjs",
-  "regions": ["iad1"],
-  "crons": [
-    {
-      "path": "/api/cron/custom-print-nudges",
-      "schedule": "0 9 * * *"
-    }
-  ]
+  "regions": ["iad1"]
 }

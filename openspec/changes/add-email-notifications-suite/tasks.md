@@ -86,6 +86,7 @@
 - [x] 9.2 `buildIdleNudgeEmail` (status-tailored copy/CTA) + tests.
 - [x] 9.3 `CustomPrintRequest.idleNudgeSentAt` field (cooldown bookkeeping).
 - [x] 9.4 `app/api/cron/custom-print-nudges` (CRON_SECRET-guarded GET; query
-      candidates → send → stamp). `vercel.json` daily cron (09:00 UTC).
-      `.env.example`: `CRON_SECRET`, `CUSTOM_PRINT_NUDGE_IDLE_DAYS`,
-      `CUSTOM_PRINT_NUDGE_COOLDOWN_DAYS`.
+      candidates → send → stamp). Scheduler = free GitHub Actions workflow
+      `.github/workflows/custom-print-nudges.yml` (daily 09:00 UTC; repo secrets
+      `CRON_SECRET` + `CRON_BASE_URL`). `.env.example`: `CRON_SECRET`,
+      `CUSTOM_PRINT_NUDGE_IDLE_DAYS`, `CUSTOM_PRINT_NUDGE_COOLDOWN_DAYS`.

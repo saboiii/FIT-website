@@ -50,6 +50,8 @@ export async function GET(request) {
         },
         printColours,
         machineLimits,
+        // Read-only env hint for the Overview setup checklist.
+        adminEmailPresent: Boolean(process.env.ADMIN_EMAIL || process.env.GMAIL_USER),
       },
       { status: 200 },
     )

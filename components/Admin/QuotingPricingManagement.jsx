@@ -56,7 +56,11 @@ const TIME_MODEL_QUESTIONS = [
   },
 ]
 
-export default function QuotingPricingManagement() {
+// `sections` (optional) limits which config sections render — used by the
+// onboarding wizard to reuse these exact forms step-by-step. Save always
+// persists the full loaded state, so a scoped step can't wipe other sections.
+export default function QuotingPricingManagement({ sections, compact = false }) {
+  const show = (name) => !sections || sections.includes(name)
   const { showToast } = useToast()
   const [config, setConfig] = useState(null)
   const [colours, setColours] = useState([])
@@ -158,16 +162,19 @@ export default function QuotingPricingManagement() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6 md:p-12">
-      <div>
-        <h2 className="text-lg font-semibold text-textColor mb-1">Quoting / Pricing</h2>
-        <p className="text-xs text-lightColor">
-          Rates and fees used by the Instant Quoting Engine, plus the colour/material
-          catalogue offered for generic configuration. Money is in your store currency.
-        </p>
-      </div>
+    <div className={`flex flex-col gap-6 ${compact ? '' : 'p-6 md:p-12'}`}>
+      {!compact && (
+        <div>
+          <h2 className="text-lg font-semibold text-textColor mb-1">Quoting / Pricing</h2>
+          <p className="text-xs text-lightColor">
+            Rates and fees used by the Instant Quoting Engine, plus the colour/material
+            catalogue offered for generic configuration. Money is in your store currency.
+          </p>
+        </div>
+      )}
 
       {/* Pricing config */}
+      {show('pricing') && (
       <div className="border border-borderColor rounded-lg overflow-hidden">
         <div className="bg-borderColor/40 px-4 py-2 border-b border-borderColor">
           <h3 className="text-sm font-medium text-textColor">Rates & fees</h3>
@@ -202,8 +209,10 @@ export default function QuotingPricingManagement() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Print-time setup (guided) */}
+      {show('machines') && (
       <div className="border border-borderColor rounded-lg overflow-hidden">
         <div className="bg-borderColor/40 px-4 py-2 border-b border-borderColor">
           <h3 className="text-sm font-medium text-textColor">Print time estimation — set up for your machines</h3>
@@ -234,8 +243,10 @@ export default function QuotingPricingManagement() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Machine limits */}
+      {show('machines') && (
       <div className="border border-borderColor rounded-lg overflow-hidden">
         <div className="bg-borderColor/40 px-4 py-2 border-b border-borderColor">
           <h3 className="text-sm font-medium text-textColor">Machine limits</h3>
@@ -264,8 +275,10 @@ export default function QuotingPricingManagement() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Colour catalogue */}
+      {show('colours') && (
       <div className="border border-borderColor rounded-lg overflow-hidden">
         <div className="bg-borderColor/40 px-4 py-2 border-b border-borderColor flex items-center justify-between">
           <h3 className="text-sm font-medium text-textColor">Colour / material catalogue</h3>
@@ -305,6 +318,7 @@ export default function QuotingPricingManagement() {
           ))}
         </div>
       </div>
+      )}
 
       <button
         onClick={handleSave}

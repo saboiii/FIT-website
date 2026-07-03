@@ -1,5 +1,6 @@
 'use client'
 import { buildSetupChecklist, summarizeRequests } from '@/lib/admin/setupChecklist'
+import AnalyticsPanel from '@/components/Admin/AnalyticsPanel'
 
 const STATUS_LABELS = {
     pending_upload: 'Awaiting upload',
@@ -84,6 +85,9 @@ export default function Overview({ setupData, requests, onNavigate, onOpenWizard
                     ))}
                 </div>
             </div>
+
+            {/* Site analytics (PostHog-backed; empty state when unconfigured) */}
+            <AnalyticsPanel />
         </div>
     )
 }

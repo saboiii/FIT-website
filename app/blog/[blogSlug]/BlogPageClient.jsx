@@ -1,9 +1,15 @@
 "use client"
 import Image from 'next/image'
+import Link from 'next/link'
 import MarkdownRenderer from '@/components/General/MarkdownRenderer'
 import CTALink from '@/components/General/CTALink'
 
-export default function BlogPageClient({ post }) {
+function imageSrc(path) {
+    if (!path) return null
+    return path.startsWith('http') || path.startsWith('/') ? path : `/api/proxy?key=${encodeURIComponent(path)}`
+}
+
+export default function BlogPageClient({ post, contentHtml, related = [], preview = false }) {
     if (!post) return <div className="p-8">Not found</div>
 
     const hasCTA = !!(post.cta && (post.cta.tag || post.cta.text || post.cta.url))
@@ -18,6 +24,11 @@ export default function BlogPageClient({ post }) {
     })()
     return (
         <div className="min-h-[92vh] flex flex-col items-center pt-12 pb-32 border-b border-borderColor justify-center">
+            {preview && (
+                <div className="w-full max-w-xl mx-8 mb-8 border border-amber-300 bg-amber-50 text-amber-800 rounded-md px-4 py-2 text-xs text-center">
+                    Preview — this post is not published. Only admins can see this page.
+                </div>
+            )}
             <div className="flex flex-col items-center justify-center px-8 md:px-12">
                 {hasCTA && (
                     <CTALink tag={post.cta?.tag} text={post.cta?.text} url={post.cta?.url} />
@@ -27,6 +38,7 @@ export default function BlogPageClient({ post }) {
                 </h1>
                 <p className="text-xs font-medium text-lightColor flex mb-8">
                     By {authorLabel}{post.publishDateFormatted ? `, ${post.publishDateFormatted}` : (post.publishDate ? `, ${new Date(post.publishDate).toISOString().slice(0, 10)}` : '')}
+                    {post.readingTimeMinutes ? ` · ${post.readingTimeMinutes} min read` : ''}
                 </p>
 
                 <div className="flex text-sm text-center w-3/4 md:w-1/2 items-center mb-12 justify-center">
@@ -34,10 +46,10 @@ export default function BlogPageClient({ post }) {
                 </div>
 
             </div>
-            <div className="flex w-3/5 flex-col gap-8 text-justify">
+            <div className="flex w-[90%] md:w-3/5 flex-col gap-8 text-justify">
                 {post.heroImage ? (
                     <Image
-                        src={post.heroImage.startsWith('http') || post.heroImage.startsWith('/') ? post.heroImage : `/api/proxy?key=${encodeURIComponent(post.heroImage)}`}
+                        src={imageSrc(post.heroImage)}
                         width={800}
                         height={400}
                         alt={post.title}
@@ -45,10 +57,38 @@ export default function BlogPageClient({ post }) {
                     />
                 ) : null}
                 <div className="prose max-w-none">
-                    <MarkdownRenderer source={post.content} />
+                    {contentHtml ? (
+                        <div dangerouslySetInnerHTML={{ __html: contentHtml }} />
+                    ) : (
+                        <MarkdownRenderer source={post.content} />
+                    )}
                 </div>
-
             </div>
+
+            {related.length > 0 && (
+                <div className="flex w-[90%] md:w-3/5 flex-col mt-16">
+                    <h2 className="text-sm font-medium text-textColor uppercase tracking-wide mb-3">Related articles</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {related.map((r) => (
+                            <Link
+                                key={r.slug}
+                                href={`/blog/${encodeURIComponent(r.slug)}`}
+                                className="border border-borderColor rounded-md overflow-hidden hover:bg-baseColor transition-colors"
+                            >
+                                {r.heroImage && (
+                                    <div className="relative w-full h-28 border-b border-borderColor">
+                                        <Image src={imageSrc(r.heroImage)} alt={r.title} fill className="object-cover" />
+                                    </div>
+                                )}
+                                <div className="p-3">
+                                    <p className="text-xs font-semibold text-textColor mb-1">{r.title}</p>
+                                    {r.excerpt && <p className="text-[11px] text-lightColor line-clamp-2">{r.excerpt}</p>}
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

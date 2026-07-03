@@ -95,6 +95,9 @@ function FeaturedCarousel({ posts }) {
 }
 
 function BlogList({ posts }) {
+    const [query, setQuery] = useState('')
+    const [activeTag, setActiveTag] = useState('')
+
     if (!posts || posts.length === 0) {
         return (
             <div className="w-full max-w-5xl text-xs text-lightColor mt-8 text-center">
@@ -102,9 +105,6 @@ function BlogList({ posts }) {
             </div>
         )
     }
-
-    const [query, setQuery] = useState('')
-    const [activeTag, setActiveTag] = useState('')
 
     const allTags = Array.from(new Set((posts || []).flatMap(p => p.tags || [])))
 
@@ -225,11 +225,11 @@ function Blog() {
     useEffect(() => {
         const load = async () => {
             try {
-                const res = await fetch('/api/admin/blog')
+                const res = await fetch('/api/blog')
                 const data = await res.json()
                 if (!data.ok) return
 
-                const all = (data.posts || []).filter(p => p.published)
+                const all = data.posts || []
 
                 const featuredPosts = all.filter(p => p.featured)
 

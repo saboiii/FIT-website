@@ -1,0 +1,35 @@
+name: Blog scheduled publishing
+
+# Free scheduler for scheduled blog posts. GitHub Actions triggers the
+# token-guarded endpoint every 15 minutes; the app flips due drafts to
+# published. Uses the same repository secrets as custom-print-nudges:
+#   CRON_SECRET, CRON_BASE_URL
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scheduled-publish endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_BASE_URL: ${{ secrets.CRON_BASE_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$CRON_BASE_URL" ]; then
+            echo "::error::Missing CRON_SECRET or CRON_BASE_URL repository secret" >&2
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/blog.json -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${CRON_BASE_URL%/}/api/cron/blog-scheduled")
+          echo "HTTP $code"
+          cat /tmp/blog.json 2>/dev/null || true
+          echo
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Blog cron endpoint returned HTTP $code" >&2
+            exit 1
+          fi

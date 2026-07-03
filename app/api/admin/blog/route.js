@@ -4,6 +4,19 @@ import BlogPost from '@/models/BlogPost';
 import { sanitizeString } from "@/utils/validate";
 import { authenticate } from "@/lib/authenticate";
 import { checkAdminPrivileges } from "@/lib/checkPrivileges";
+import { readingTimeMinutes } from '@/lib/blog/readingTime';
+import { extractTextFromTiptap } from '@/lib/blog/tiptapText';
+import { statusWrite, effectiveStatus } from '@/lib/blog/status';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+function computeReadingTime(body) {
+    if (body.contentFormat === 'tiptap') {
+        return readingTimeMinutes(extractTextFromTiptap(body.contentJson));
+    }
+    return readingTimeMinutes(body.content || '');
+}
 
 // Create or update a blog post. If `slug` or `_id` provided, update; otherwise create.
 export async function POST(req) {
@@ -14,20 +27,23 @@ export async function POST(req) {
     const body = await req.json();
     await connectToDatabase();
 
+    const requestedStatus = body.status || (body.published ? 'published' : 'draft');
+
     const data = {
         title: body.title,
         excerpt: body.excerpt || '',
         content: body.content || '',
+        contentJson: body.contentJson ?? null,
+        contentFormat: body.contentFormat === 'tiptap' ? 'tiptap' : 'markdown',
         heroImage: body.heroImage || '',
         cta: body.cta || {},
         tags: body.tags || [],
         categories: body.categories || [],
         featured: !!body.featured,
-        published: !!body.published,
-        publishDate: body.publishDate ? new Date(body.publishDate) : (body.published ? new Date() : null),
+        scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
         metaTitle: body.metaTitle || '',
         metaDescription: body.metaDescription || '',
-        readingTimeMinutes: body.readingTimeMinutes || 0,
+        readingTimeMinutes: computeReadingTime(body),
     };
 
     // make slug from provided slug or title
@@ -37,11 +53,15 @@ export async function POST(req) {
 
     let post;
     if (body._id) {
+        const existing = await BlogPost.findById(body._id).lean();
+        Object.assign(data, statusWrite(requestedStatus, existing?.publishDate));
         post = await BlogPost.findByIdAndUpdate(body._id, { ...data }, { new: true, upsert: true });
     } else if (body.slug) {
-        // update by slug
+        const existing = await BlogPost.findOne({ slug: body.slug }).lean();
+        Object.assign(data, statusWrite(requestedStatus, existing?.publishDate));
         post = await BlogPost.findOneAndUpdate({ slug: body.slug }, { ...data }, { new: true, upsert: true });
     } else {
+        Object.assign(data, statusWrite(requestedStatus, body.publishDate ? new Date(body.publishDate) : null));
         // ensure unique slug
         let uniqueSlug = data.slug || 'post';
         let counter = 0;
@@ -57,7 +77,12 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, post });
 }
 
+// Admin-only list / fetch (drafts included). The public site uses /api/blog.
 export async function GET(req) {
+    const { userId } = await authenticate(req);
+    const isAdmin = await checkAdminPrivileges(userId);
+    if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
     const url = new URL(req.url);
     const slug = url.searchParams.get('slug');
 
@@ -69,8 +94,8 @@ export async function GET(req) {
         return NextResponse.json({ ok: true, post });
     }
 
-    // list with basic fields
     const posts = await BlogPost.find({}).sort({ createdAt: -1 }).limit(200).lean();
+    for (const p of posts) p.status = effectiveStatus(p);
     return NextResponse.json({ ok: true, posts });
 }
 

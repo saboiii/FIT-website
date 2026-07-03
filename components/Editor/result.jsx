@@ -46,9 +46,14 @@ const defaultLighting = {
 const defaultGeneric = { strength: 'Normal', quality: 'Medium', colour: 'White' }
 
 const Result = () => {
-  const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics, returnTo } = useStore()
+  const { fileName, scene, buffers, generateScene, orderId, productId, variantId, geometryMetrics, returnTo,
+    productPrintConfig, productColours, colourVariantName } = useStore()
   const { showToast } = useToast()
   const router = useRouter()
+  // Product-print mode: a productType:"print" item bought via "Order Print".
+  // Settings are vendor-fixed and the colour picker is limited to the product's
+  // offered colours. See openspec `migrate-print-delivery-to-custom-requests`.
+  const isProductPrint = !!productPrintConfig
   // Colour/material catalogue (admin-curated via AppSettings.printColours), with
   // the built-in defaults as fallback.
   const [colourCatalogue, setColourCatalogue] = useState(DEFAULT_PRINT_COLOURS)
@@ -73,6 +78,19 @@ const Result = () => {
       .catch(() => {})
     return () => { active = false }
   }, [])
+
+  // The colours the customer may pick. For product prints this is the product's
+  // offered colours only (hex resolved from the admin catalogue by name when an
+  // option was saved without one); otherwise the full admin catalogue.
+  const effectiveColours = useMemo(() => {
+    if (isProductPrint && productColours?.length) {
+      return productColours.map((c) => ({
+        name: c.name,
+        hex: c.hex || colourCatalogue.find((x) => x.name === c.name)?.hex || '#cccccc',
+      }))
+    }
+    return colourCatalogue
+  }, [isProductPrint, productColours, colourCatalogue])
 
   // Refs to store current values for submission
   const currentPrintabilityRef = useRef({})
@@ -107,6 +125,14 @@ const Result = () => {
     }
 
     if (configLoaded || !scene) return
+
+    // Product prints: no saved request to load — apply the vendor's fixed
+    // settings and default to the first offered colour. Settings are locked.
+    if (isProductPrint) {
+      applyGeneric({ ...defaultGeneric, colour: effectiveColours[0]?.name || defaultGeneric.colour })
+      setConfigLoaded(true)
+      return
+    }
 
     const loadConfigFromDB = async () => {
       try {
@@ -160,7 +186,8 @@ const Result = () => {
     }
 
     loadConfigFromDB()
-  }, [productId, variantId, configLoaded, scene])
+    // applyGeneric intentionally omitted (defined below; stable enough here).
+  }, [productId, variantId, configLoaded, scene, isProductPrint, effectiveColours])
 
   // Leva controls for visual config, including mesh colors. Mesh colours are a
   // dropdown of the admin-curated catalogue (AppSettings.printColours) — not a
@@ -331,6 +358,20 @@ const Result = () => {
   // the same printSettings advanced mode edits.
   const applyGeneric = useCallback((next) => {
     setGeneric(next)
+    // Product prints: settings are vendor-fixed; only the colour changes.
+    if (isProductPrint && productPrintConfig) {
+      const colour = effectiveColours.find((c) => c.name === next.colour)
+      levaStore.set({
+        'printability.layerHeight': productPrintConfig.layerHeight,
+        'printability.wallLoops': productPrintConfig.wallLoops,
+        'printability.sparseInfillDensity': productPrintConfig.sparseInfillDensity,
+        'printability.nozzleDiameter': productPrintConfig.nozzleDiameter,
+        'printability.enableSupport': productPrintConfig.enableSupport,
+        ...(colour?.hex ? Object.fromEntries(meshNames.map((n) => [`visual.${n}`, colour.hex])) : {}),
+      }, false)
+      setGenericMaterial(productPrintConfig.materialType || 'plastic')
+      return
+    }
     const m = mapGenericToPrintSettings(next, colourCatalogue)
     setGenericMaterial(m.materialType)
     levaStore.set({
@@ -342,7 +383,7 @@ const Result = () => {
         ? Object.fromEntries(meshNames.map((n) => [`visual.${n}`, m.colourHex]))
         : {}),
     }, false)
-  }, [meshNames, colourCatalogue])
+  }, [meshNames, colourCatalogue, isProductPrint, productPrintConfig, effectiveColours])
 
   // Reset every setting (visual/lighting/printability + mesh colours) and the
   // generic selection back to defaults. Shared by the leva control and the
@@ -435,25 +476,7 @@ const Result = () => {
         mode,
       }
 
-      if (orderId) {
-        // Handle direct print order submission
-        const response = await fetch(`/api/user/print-order/${orderId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            configuration: configurationData,
-          }),
-        })
-
-        if (response.ok) {
-          showToast('Print configuration submitted successfully!', 'success')
-          router.push(returnTo || '/account')
-        } else {
-          throw new Error('Failed to submit configuration')
-        }
-      } else if (productId) {
+      if (productId) {
         // Save custom print configuration to MongoDB
         const cpRequestId = variantId // variantId is the requestId for custom prints
         const response = await fetch('/api/custom-print/config', {
@@ -520,6 +543,34 @@ const Result = () => {
     geometryMetrics, quoteSettings, quoteOptions, returnTo,
     generic, genericMaterial,
   ])
+
+  // Product-print "Add to Cart": settings are vendor-fixed, so we only record
+  // the chosen colour (as the colour variant) on the cart item. The webhook
+  // computes the fixed quote + creates the CustomPrintRequest on payment.
+  const addProductPrintToCart = useCallback(async () => {
+    setSubmittingConfig(true)
+    try {
+      const cartItem = {
+        productId,
+        quantity: 1,
+        chosenDeliveryType: 'printDelivery',
+        selectedVariants: colourVariantName ? { [colourVariantName]: generic.colour } : {},
+      }
+      const res = await fetch('/api/user/cart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cartItem }),
+      })
+      if (!res.ok) throw new Error('Failed to add to cart')
+      showToast('Added to cart!', 'success')
+      router.push(returnTo || '/cart')
+    } catch (error) {
+      console.error('Add product print to cart failed:', error)
+      showToast(error?.message || 'Failed to add to cart. Please try again.', 'error')
+    } finally {
+      setSubmittingConfig(false)
+    }
+  }, [productId, colourVariantName, generic.colour, showToast, router, returnTo])
 
   // Add save configuration button in export controls
   const saveConfigControls = useMemo(() => {
@@ -599,12 +650,14 @@ const Result = () => {
       )}
       {/* Simple/Advanced mode toggle — anchored to the canvas, bottom-right */}
       <div className="absolute bottom-4 right-4 z-40 flex flex-col gap-2 items-end">
-        <button
-          onClick={() => setAdvancedMode(!advancedMode)}
-          className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50"
-        >
-          {advancedMode ? 'Simple Mode' : 'Advanced Mode'}
-        </button>
+        {!isProductPrint && (
+          <button
+            onClick={() => setAdvancedMode(!advancedMode)}
+            className="px-3 py-1.5 text-xs font-medium bg-white border border-gray-300 rounded shadow-sm hover:bg-gray-50"
+          >
+            {advancedMode ? 'Simple Mode' : 'Advanced Mode'}
+          </button>
+        )}
         {advancedMode && (() => {
           // Per-field reset: list every print setting that differs from its
           // default with its own reset control (leva has no inline affordance).
@@ -635,43 +688,52 @@ const Result = () => {
         })()}
         {!advancedMode && (
           <div className="flex flex-col gap-3 bg-baseColor border border-borderColor rounded-md shadow-sm p-3 w-56">
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase text-light px-0.5">Strength</span>
-              <div className="grid grid-cols-3 gap-1">
-                {Object.keys(STRENGTH_MAP).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => applyGeneric({ ...generic, strength: s })}
-                    className={`text-[11px] px-2 py-1.5 rounded border transition-colors ${
-                      generic.strength === s
-                        ? 'bg-textColor text-background border-textColor'
-                        : 'bg-background text-textColor border-borderColor hover:bg-borderColor/20'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {isProductPrint && (
+              <p className="text-[10px] text-light px-0.5">
+                Print settings are fixed for this product — choose a colour.
+              </p>
+            )}
+            {!isProductPrint && (
+              <>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-semibold uppercase text-light px-0.5">Strength</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {Object.keys(STRENGTH_MAP).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => applyGeneric({ ...generic, strength: s })}
+                        className={`text-[11px] px-2 py-1.5 rounded border transition-colors ${
+                          generic.strength === s
+                            ? 'bg-textColor text-background border-textColor'
+                            : 'bg-background text-textColor border-borderColor hover:bg-borderColor/20'
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="flex flex-col gap-1">
-              <span className="text-[10px] font-semibold uppercase text-light px-0.5">Quality</span>
-              <div className="grid grid-cols-3 gap-1">
-                {Object.keys(QUALITY_MAP).map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => applyGeneric({ ...generic, quality: q })}
-                    className={`text-[11px] px-2 py-1.5 rounded border transition-colors ${
-                      generic.quality === q
-                        ? 'bg-textColor text-background border-textColor'
-                        : 'bg-background text-textColor border-borderColor hover:bg-borderColor/20'
-                    }`}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-semibold uppercase text-light px-0.5">Quality</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {Object.keys(QUALITY_MAP).map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => applyGeneric({ ...generic, quality: q })}
+                        className={`text-[11px] px-2 py-1.5 rounded border transition-colors ${
+                          generic.quality === q
+                            ? 'bg-textColor text-background border-textColor'
+                            : 'bg-background text-textColor border-borderColor hover:bg-borderColor/20'
+                        }`}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             {meshNames.length > 0 && (
               <div className="flex flex-col gap-1">
@@ -681,12 +743,12 @@ const Result = () => {
                   onChange={(e) => applyGeneric({ ...generic, colour: e.target.value })}
                   className="formInput text-xs"
                 >
-                  {colourCatalogue.map((c) => (
+                  {effectiveColours.map((c) => (
                     <option key={c.name} value={c.name}>{c.name}</option>
                   ))}
                 </select>
                 <div className="flex flex-wrap gap-1.5 mt-1">
-                  {colourCatalogue.map((c) => (
+                  {effectiveColours.map((c) => (
                     <button
                       key={c.name}
                       title={c.name}
@@ -698,10 +760,12 @@ const Result = () => {
                     />
                   ))}
                 </div>
-                <p className="text-[10px] text-light mt-1">
-                  One colour applies to the whole model. For different colours per part,
-                  use Advanced Mode (per-part colour pickers).
-                </p>
+                {!isProductPrint && (
+                  <p className="text-[10px] text-light mt-1">
+                    One colour applies to the whole model. For different colours per part,
+                    use Advanced Mode (per-part colour pickers).
+                  </p>
+                )}
               </div>
             )}
 
@@ -721,7 +785,15 @@ const Result = () => {
               Reset to defaults
             </button>
 
-            {(orderId || productId || variantId) && (
+            {isProductPrint ? (
+              <button
+                onClick={addProductPrintToCart}
+                disabled={submittingConfig}
+                className="mt-2 w-full rounded-full bg-linear-to-r from-amber-300 to-red-400 px-3 py-2 text-xs font-semibold text-textColor shadow-sm hover:opacity-95 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submittingConfig ? 'Adding…' : 'Add to Cart'}
+              </button>
+            ) : (orderId || productId || variantId) && (
               <button
                 onClick={() => submitConfiguration('instant')}
                 disabled={submittingConfig}

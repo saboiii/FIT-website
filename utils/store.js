@@ -24,6 +24,13 @@ const useStore = create((set, get) => ({
   requestId: null,
   isCustomPrint: false,
   returnTo: null, // validated same-origin path to return to after saving
+  // Product-print editor mode (productType:"print" bought via "Order Print"):
+  // the vendor's fixed config + offered colours, so the editor locks settings
+  // and constrains the colour picker. See openspec change
+  // `migrate-print-delivery-to-custom-requests`.
+  productPrintConfig: null, // product.printConfig (fixed settings) or null
+  productColours: null, // [{name,hex}] offered colours, or null
+  colourVariantName: null, // the colour-type variant's name (for selectedVariants)
 
   setFileName: (fileName) => set({ fileName, scene: null, geometryMetrics: null }),
   setBuffers: (buffers) => set({ buffers, scene: null, geometryMetrics: null }),

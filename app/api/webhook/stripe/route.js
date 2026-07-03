@@ -3,16 +3,19 @@ import Stripe from "stripe";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
 import Product from "@/models/Product";
-import PrintOrder from "@/models/PrintOrder";
 import CheckoutSession from "@/models/CheckoutSession";
 import Order from "@/models/Order";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
+import AppSettings from "@/models/AppSettings";
+import { getAppSettingsId } from "@/lib/appSettingsId";
+import { buildProductPrintRequestInput, colourNameFromVariants } from "@/lib/customPrint/productRequest";
+import { computeProductPrintQuote } from "@/lib/customPrint/productQuote";
 import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
+import { randomUUID } from "crypto";
 import { sendEmail } from "@/lib/email";
 import { buildNewSaleEmail } from "@/lib/email/templates/transactional";
 import { notifyCustomPrintEvent } from "@/lib/notifications/customPrint";
 import { clerkClient } from "@clerk/nextjs/server";
-import mongoose from "mongoose";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: "2025-05-28.basil",
@@ -71,7 +74,6 @@ export async function POST(req) {
 
             // Create order history entries and handle print orders
             const orders = [];
-            const printOrderPromises = [];
             const orderItems = []; // For the new Order model
 
             // Fetch payment method details from Stripe
@@ -104,6 +106,9 @@ export async function POST(req) {
 
             // Load the base product used to represent custom print requests in orders
             const customPrintBaseProduct = await Product.findOne({ slug: 'custom-print-request' });
+
+            // Server pricing config for product-print fixed quotes (best-effort).
+            const appSettings = await AppSettings.findById(getAppSettingsId()).lean();
 
             for (const item of user.cart) {
                 let product = null;
@@ -288,117 +293,86 @@ export async function POST(req) {
                     await product.save();
                 }
 
-                // Create print orders for print delivery items
-                if (item.chosenDeliveryType === "printDelivery") {
-                    let printOrderData;
-
-                    if (isCustomPrint && customPrintRequest) {
-                        const computedQuoted = Number(customPrintQuotedPrice ?? (Number(customPrintRequest.basePrice || 0) + Number(customPrintRequest.printFee || 0)));
-                        const computedDelivery = Number(customPrintDeliveryFee ?? 0);
-                        // For custom prints, no specific creator, handled by admin
-                        printOrderData = {
-                            orderId: `PO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                            stripeSessionId: session.id,
-                            userId: new mongoose.Types.ObjectId(user._id),
-                            creatorId: null, // Admin handled
-                            productId: null,
-                            productTitle: 'Custom 3D Print',
-                            quantity: 1,
-                            basePrice: Number(customPrintRequest.basePrice || 0),
-                            printFee: Number(customPrintRequest.printFee || 0),
-                            deliveryFee: computedDelivery,
-                            totalAmount: computedQuoted + computedDelivery,
-                            selectedVariants: {},
-                            variantInfo: [],
-                            variantName: null,
-                            currency: customPrintRequest.currency || 'SGD',
-                            modelUrl: customPrintRequest.modelFile?.s3Url,
-                            status: 'pending_config',
-                            customPrintRequestId: customPrintRequest._id,
-                            isCustomUpload: true,
-                            printConfiguration: customPrintRequest.printConfiguration,
-                        };
-                    } else {
-                        // Find creator user
-                        const creatorUser = await User.findOne({ userId: product.creatorUserId });
-                        if (!creatorUser) {
-                            console.error(`Creator user not found for userId: ${product.creatorUserId}`);
-                            continue;
-                        }
-
-                        // Generate unique order ID
-                        const orderId = `PO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-                        // Get variant info from selectedVariants
-                        let variantName = null;
-                        let variantInfo = [];
-                        if (item.selectedVariants && Object.keys(item.selectedVariants).length > 0) {
-                            variantName = Object.entries(item.selectedVariants)
-                                .map(([type, option]) => `${type}: ${option}`)
-                                .join(", ");
-
-                            // Build variantInfo with fees
-                            if (product.variantTypes && product.variantTypes.length > 0) {
-                                for (const [variantTypeName, selectedOption] of Object.entries(item.selectedVariants)) {
-                                    const variantType = product.variantTypes.find(vt => vt.name === variantTypeName);
-                                    if (variantType) {
-                                        const option = variantType.options.find(opt => opt.name === selectedOption);
-                                        if (option) {
-                                            variantInfo.push({
-                                                type: variantTypeName,
-                                                option: selectedOption,
-                                                additionalFee: option.additionalFee || 0
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Calculate base price
-                        let basePrice = product.basePrice?.presentmentAmount || 0;
-                        let totalPrice = basePrice;
-
-                        // Add variant fees
-                        if (variantInfo.length > 0) {
-                            const variantFees = variantInfo.reduce((sum, v) => sum + v.additionalFee, 0);
-                            totalPrice += variantFees;
-                        }
-
-                        printOrderData = {
-                            orderId: orderId,
-                            stripeSessionId: session.id,
-                            userId: new mongoose.Types.ObjectId(user._id),
-                            creatorId: new mongoose.Types.ObjectId(creatorUser._id),
-                            productId: item.productId,
-                            productTitle: product.name,
-                            quantity: item.quantity || 1,
-                            basePrice: basePrice,
-                            printFee: 0, // Can be calculated later
-                            deliveryFee: item.deliveryFee || 0,
-                            totalAmount: totalPrice,
-                            selectedVariants: item.selectedVariants || {},
-                            variantInfo: variantInfo,
-                            variantName: variantName,
-                            currency: product.basePrice?.presentmentCurrency || 'SGD',
-                            modelUrl: product.viewableModel,
-                            status: 'pending_config',
-                        };
-
-                        // If print configuration was stored in cart item before checkout, use it
-                        if (item.printConfiguration) {
-                            printOrderData.printConfiguration = item.printConfiguration;
-                            printOrderData.status = 'configured';
-                            printOrderData.printConfiguration.configuredAt = new Date();
+                // Product-sourced print jobs become CustomPrintRequests (admin
+                // queue + print-time/colour markers + email/chat lifecycle).
+                // Custom uploads were already marked paid above. PrintOrder is
+                // retired — no longer written. See openspec change
+                // `migrate-print-delivery-to-custom-requests`.
+                if (
+                    item.chosenDeliveryType === "printDelivery" &&
+                    !isCustomPrint &&
+                    product?.productType === 'print' &&
+                    product.viewableModel &&
+                    product.printConfig
+                ) {
+                    // Charge = product base price + selected variant fees.
+                    let variantFees = 0;
+                    if (item.selectedVariants && product.variantTypes?.length > 0) {
+                        for (const [variantTypeName, selectedOption] of Object.entries(item.selectedVariants)) {
+                            const variantType = product.variantTypes.find(vt => vt.name === variantTypeName);
+                            const option = variantType?.options.find(opt => opt.name === selectedOption);
+                            if (option) variantFees += option.additionalFee || 0;
                         }
                     }
-
-                    printOrderPromises.push(new PrintOrder(printOrderData).save());
+                    const chargeTotal = (product.basePrice?.presentmentAmount || 0) + variantFees;
+                    try {
+                        const input = buildProductPrintRequestInput({
+                            product,
+                            chosenColour: colourNameFromVariants(item.selectedVariants),
+                            user: {
+                                userId,
+                                email: user.email,
+                                name: user.name || session.customer_details?.name || user.email,
+                            },
+                            colourCatalogue: appSettings?.printColours || [],
+                        });
+                        let quote = null;
+                        try {
+                            quote = await computeProductPrintQuote({
+                                product,
+                                quoteSettings: input.quoteSettings,
+                                pricingConfig: appSettings?.quotingConfig || {},
+                                deliveryTypes: appSettings?.additionalDeliveryTypes || [],
+                            });
+                        } catch (quoteErr) {
+                            console.error('Product print quote failed (non-fatal):', quoteErr);
+                        }
+                        const { quoteSettings, ...requestFields } = input;
+                        const productRequest = await CustomPrintRequest.create({
+                            requestId: randomUUID(),
+                            ...requestFields,
+                            basePrice: chargeTotal, // charge = product price
+                            currency: (product.basePrice?.presentmentCurrency || 'SGD').toLowerCase(),
+                            status: 'paid',
+                            paidAt: new Date(),
+                            stripeSessionId: session.id,
+                            stripePaymentIntentId: session.payment_intent,
+                            quote: quote || undefined,
+                            quotedAt: quote ? new Date() : undefined,
+                            statusHistory: [{ status: 'paid', note: 'Product print purchased via Stripe' }],
+                        });
+                        try {
+                            await notifyCustomPrintEvent({
+                                event: 'paid',
+                                request: productRequest.toObject(),
+                                product,
+                                breakdown: {
+                                    amount: chargeTotal,
+                                    deliveryFee: item.deliveryFee || 0,
+                                    total: chargeTotal + (item.deliveryFee || 0),
+                                    currency: (product.basePrice?.presentmentCurrency || 'SGD').toUpperCase(),
+                                    chosenDeliveryType: item.chosenDeliveryType,
+                                    lines: quote?.lines,
+                                },
+                            });
+                        } catch (notifyErr) {
+                            console.error('Product print paid notification failed:', notifyErr);
+                        }
+                    } catch (reqErr) {
+                        console.error('Failed to create product print CustomPrintRequest:', reqErr);
+                    }
                 }
             }
-
-            // Wait for all print orders to be created
-            await Promise.all(printOrderPromises);
 
             // Create the comprehensive Order record
             const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

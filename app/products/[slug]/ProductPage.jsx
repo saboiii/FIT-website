@@ -275,7 +275,7 @@ function ProductPage() {
         }
     };
 
-    const handleAddToPrintCart = async (product) => {
+    const handleAddToPrintCart = (product) => {
         if (isOwnProduct) {
             return;
         }
@@ -285,35 +285,10 @@ function ProductPage() {
             return;
         }
 
-        // Validate variant selection for new variant types system
-        if (product.variantTypes && product.variantTypes.length > 0 && !areAllVariantsSelected()) {
-            alert("Please select all variant options before adding to print cart.");
-            return;
-        }
-
-        setIsPrintAdding(true);
-        try {
-            const cartItem = {
-                productId: product._id,
-                quantity: 1,
-                selectedVariants: selectedVariantOptions,
-                chosenDeliveryType: "printDelivery",
-            };
-
-            const res = await fetch("/api/user/cart", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cartItem }),
-            });
-
-            setIsPrintAdding(false);
-            setShowPrintAdded(true);
-            setTimeout(() => setShowPrintAdded(false), 3000);
-        } catch (error) {
-            alert(error || "Failed to add print item to cart.");
-        } finally {
-            setIsPrintAdding(false);
-        }
+        // For print products the colour is chosen and print settings are shown
+        // (locked) in the editor, which then adds the item to the cart. See
+        // openspec change `migrate-print-delivery-to-custom-requests`.
+        router.push(`/editor?productId=${product._id}`);
     };
 
     // Handle variant option selection for new variant types system
@@ -723,6 +698,13 @@ function ProductPage() {
                                             </>
                                         </button>
                                     ) : (
+                                        // For print-on-demand products the "Order Print" button below is the
+                                        // purchase path; only show the generic "Add to Cart" when the product
+                                        // also sells a digital download. See openspec change
+                                        // `migrate-print-delivery-to-custom-requests`.
+                                        product.productType !== 'print' ||
+                                        (product.delivery?.deliveryTypes || []).some(dt => (dt?.type || dt) === 'digital')
+                                    ) ? (
                                         <button
                                             className='formBlackButton gap-2'
                                             onClick={() => handleAddToCart(product)}
@@ -759,7 +741,7 @@ function ProductPage() {
                                                 </>
                                             )}
                                         </button>
-                                    )}                                    {/* Print Button - only show if product has a 3D model */}
+                                    ) : null}                                    {/* Print Button - only show if product has a 3D model */}
                                     {/* Only show print order button if NOT digital-only product */}
                                     {product.viewableModel && !(
                                         Array.isArray(product.delivery?.deliveryTypes) &&
@@ -767,31 +749,14 @@ function ProductPage() {
                                         product.delivery.deliveryTypes[0]?.type === 'digital'
                                     ) && (
                                         <button
-                                            className='flex items-center justify-center gap-2 px-4 py-2 border border-borderColor text-sm font-medium rounded hover:bg-borderColor/10 transition-colors'
+                                            className='formBlackButton gap-2'
                                             onClick={() => handleAddToPrintCart(product)}
-                                            disabled={isPrintAdding || showPrintAdded || !areAllVariantsSelected()}
+                                            disabled={checkingOwnership || isOutOfStock()}
                                         >
-                                            {isPrintAdding ? (
-                                                <>
-                                                    Creating print order
-                                                    <div className='animate-spin border border-t-transparent border-current h-3 w-3 rounded-full' />
-                                                </>
-                                            ) : showPrintAdded ? (
-                                                <>
-                                                    Print order created
-                                                    <IoMdCheckmark size={16} className='transition-opacity duration-300' />
-                                                </>
-                                            ) : !areAllVariantsSelected() ? (
-                                                <>
-                                                    Select all options
-                                                    <BiPrinter size={16} className='inline opacity-50' />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    Order Print
-                                                    <BiPrinter size={16} className='inline' />
-                                                </>
-                                            )}
+                                            <>
+                                                Order Print
+                                                <BiPrinter size={16} className='inline' />
+                                            </>
                                         </button>
                                     )}
                                 </div>

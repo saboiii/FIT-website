@@ -118,7 +118,9 @@ export async function POST(req) {
           )
         }
         const bytes = tooLarge ? null : await obj.Body.transformToByteArray()
-        const serverMetrics = bytes ? await recomputeMetricsFromModel(bytes, name) : null
+        const serverMetrics = bytes
+          ? await recomputeMetricsFromModel(bytes, name, body?.settings)
+          : null
         if (serverMetrics?.volumeCm3 > 0) {
           // Deviation policy (product decision 2026-06-12): if the client's
           // volume understates the server recompute by more than the
@@ -155,6 +157,12 @@ export async function POST(req) {
             { pricingConfig, deliveryTypes },
           )
           if (serverResult.ok) persistQuote = serverResult.data.quote
+          // Record the shape-aware time alongside the priced (volume-only)
+          // estimate for print-farm validation. Not priced — see
+          // add-lightweight-print-time-estimator tasks 3.2/3.3.
+          if (serverMetrics.printHoursShapeAware > 0 && persistQuote.inputs) {
+            persistQuote.inputs.printHoursShapeAware = serverMetrics.printHoursShapeAware
+          }
         }
       }
     } catch (verifyErr) {

@@ -11,6 +11,7 @@ import BasicInfo from './ProductFormFields/BasicInfo';
 import ImagesField from './ProductFormFields/ImagesField';
 import ProductTypeCategory from './ProductFormFields/ProductTypeCategory';
 import ViewableModelField from './ProductFormFields/ViewableModelField';
+import PrintConfigField from './ProductFormFields/PrintConfigField';
 import PaidAssetsField from './ProductFormFields/PaidAssetsField';
 import ShippingFields from './ProductFormFields/ShippingFields';
 import PricingFields from './ProductFormFields/PricingFields';
@@ -68,8 +69,10 @@ function ProductForm({ mode = "Create", product = null }) {
 
     const [openSection, setOpenSection] = useState({
         details: true,
+        printConfig: false,
         shipping: false,
         pricing: false,
+        stock: false,
     });
 
     const defaultForm = {
@@ -712,6 +715,31 @@ function ProductForm({ mode = "Create", product = null }) {
             </div>
 
 
+            {form.productType === 'print' && (
+                <div className="flex flex-col w-full border border-borderColor rounded-sm">
+                    <button
+                        type="button"
+                        className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
+                        onClick={() => setOpenSection(s => ({ ...s, printConfig: !s.printConfig }))}
+                    >
+                        Print Configuration
+                        {openSection.printConfig ? <GoChevronDown /> : <GoChevronRight />}
+                    </button>
+                    <div
+                        className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-6"
+                        style={{
+                            maxHeight: openSection.printConfig ? 5000 : 0,
+                            overflow: openSection.printConfig ? 'visible' : 'hidden',
+                            opacity: openSection.printConfig ? 1 : 0,
+                            pointerEvents: openSection.printConfig ? 'auto' : 'none'
+                        }}
+                    >
+                        <PrintConfigField form={form} setForm={setForm} />
+                    </div>
+                </div>
+            )}
+
+
             <div ref={shippingSectionRef} className="flex flex-col w-full border border-borderColor rounded-sm">
                 <button
                     type="button"
@@ -755,38 +783,11 @@ function ProductForm({ mode = "Create", product = null }) {
                 >
                     <PricingFields form={form} setForm={setForm} allCurrencies={allCurrencies} missingFields={missingFields} />
 
-                    {/* Stock Management */}
-                    <div className="border border-borderColor rounded-lg p-4 space-y-3">
-                        <h3 className="font-medium text-sm text-textColor">Stock Management</h3>
-                        <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={form.infiniteStock || false}
-                                onChange={(e) => setForm(f => ({ ...f, infiniteStock: e.target.checked }))}
-                                className="rounded"
-                            />
-                            Infinite Stock (never runs out)
-                        </label>
-                        {!form.infiniteStock && (
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-lightColor">Total Stock</label>
-                                <input
-                                    type="number"
-                                    name="stock"
-                                    min="0"
-                                    value={form.stock ?? ''}
-                                    onChange={(e) => setForm(f => ({ ...f, stock: e.target.value === '' ? '' : Number(e.target.value) }))}
-                                    className="formInput text-sm w-32"
-                                    placeholder="Stock quantity"
-                                />
-                                <p className="text-xs text-extraLight">Per-variant stock can be set in the Variant Types section below.</p>
-                            </div>
-                        )}
-                    </div>
-
                     <VariantTypesField
                         form={form}
                         setForm={setForm}
+                        productType={form.productType}
+                        printColours={adminSettings?.printColours || []}
                         isDigitalDelivery={form.delivery?.deliveryTypes?.some(dt => dt.type === 'digital' || dt === 'digital')}
                         onVariantImageUpload={async (file) => {
                             const formData = new FormData();
@@ -799,6 +800,52 @@ function ProductForm({ mode = "Create", product = null }) {
                     />
 
                     <DiscountsField form={form} setForm={setForm} events={events} />
+                </div>
+            </div>
+
+
+            <div className="flex flex-col w-full border border-borderColor rounded-sm">
+                <button
+                    type="button"
+                    className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
+                    onClick={() => setOpenSection(s => ({ ...s, stock: !s.stock }))}
+                >
+                    Stock
+                    {openSection.stock ? <GoChevronDown /> : <GoChevronRight />}
+                </button>
+                <div
+                    className="formDrawer flex flex-col w-full p-4 gap-3"
+                    style={{
+                        maxHeight: openSection.stock ? 5000 : 0,
+                        overflow: openSection.stock ? 'visible' : 'hidden',
+                        opacity: openSection.stock ? 1 : 0,
+                        pointerEvents: openSection.stock ? 'auto' : 'none'
+                    }}
+                >
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={form.infiniteStock || false}
+                            onChange={(e) => setForm(f => ({ ...f, infiniteStock: e.target.checked }))}
+                            className="rounded"
+                        />
+                        Infinite Stock (never runs out)
+                    </label>
+                    {!form.infiniteStock && (
+                        <div className="space-y-1">
+                            <label className="text-xs font-medium text-lightColor">Total Stock</label>
+                            <input
+                                type="number"
+                                name="stock"
+                                min="0"
+                                value={form.stock ?? ''}
+                                onChange={(e) => setForm(f => ({ ...f, stock: e.target.value === '' ? '' : Number(e.target.value) }))}
+                                className="formInput text-sm w-32"
+                                placeholder="Stock quantity"
+                            />
+                            <p className="text-xs text-extraLight">Per-variant stock can be set in the Variant Types section under Pricing.</p>
+                        </div>
+                    )}
                 </div>
             </div>
 

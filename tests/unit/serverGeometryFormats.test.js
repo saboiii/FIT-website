@@ -244,6 +244,20 @@ describe('recomputeMetricsFromModel (multi-format)', () => {
     expect(m.watertight).toBe(true)
   })
 
+  it('adds a shape-aware print-time estimate only when settings are passed', async () => {
+    const obj = cubeCorners(20).map(([x, y, z]) => `v ${x} ${y} ${z}`)
+    for (let i = 0; i < CUBE_INDEX.length; i += 3) {
+      obj.push(`f ${CUBE_INDEX[i] + 1} ${CUBE_INDEX[i + 1] + 1} ${CUBE_INDEX[i + 2] + 1}`)
+    }
+    const bytes = enc(obj.join('\n'))
+    expect((await recomputeMetricsFromModel(bytes, 'part.obj')).printHoursShapeAware).toBeUndefined()
+    const withTime = await recomputeMetricsFromModel(bytes, 'part.obj', {
+      infillPercent: 20,
+      layerHeightMm: 0.2,
+    })
+    expect(withTime.printHoursShapeAware).toBeGreaterThan(0)
+  })
+
   it('returns null for unsupported formats', async () => {
     expect(await recomputeMetricsFromModel(enc('blah'), 'part.fbx')).toBeNull()
     expect(await recomputeMetricsFromModel(enc('blah'), 'part.blend')).toBeNull()

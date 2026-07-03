@@ -4,11 +4,18 @@ import { MdExpandMore, MdExpandLess, MdOutlineLightbulb, MdAdd } from 'react-ico
 import { BiPalette } from 'react-icons/bi'
 import { IoMdPricetag } from 'react-icons/io'
 
-export default function VariantTypesField({ form, setForm, isDigitalDelivery, onVariantImageUpload }) {
+export default function VariantTypesField({ form, setForm, isDigitalDelivery, onVariantImageUpload, productType, printColours = [] }) {
     // Check if digital delivery is selected
     const isDigitalProduct = !!isDigitalDelivery
     const [expandedVariants, setExpandedVariants] = useState(false)
     const [expandedVariantTypes, setExpandedVariantTypes] = useState({})
+    // Pending colour hex per variant-type index, for colour-type variants.
+    const [pendingHex, setPendingHex] = useState({})
+
+    // Colour-type variants (e.g. "Colour", "Color") get a colour palette: the
+    // admin print-filament catalogue for print products (exclusive to prints),
+    // a free-form picker for shop products.
+    const isColourType = (name) => /colou?r/i.test(name || '')
 
     const toggleVariantType = (index) => {
         setExpandedVariantTypes(prev => ({
@@ -206,6 +213,55 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                                         />
                                                     </div>
                                                 </div>
+
+                                                {isColourType(variantType.name) && (
+                                                    <div className="space-y-2 p-3 bg-white border border-borderColor rounded-lg">
+                                                        <label className="text-xs font-medium text-lightColor flex items-center gap-1">
+                                                            <BiPalette className="text-purple-600" /> Colour
+                                                        </label>
+                                                        {productType === 'print' ? (
+                                                            printColours.length > 0 ? (
+                                                                <div className="space-y-1.5">
+                                                                    <p className="text-[11px] text-extraLight">Printing colours — must match available filament stock.</p>
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {printColours.map((c) => {
+                                                                            const selected = pendingHex[typeIdx] === c.hex
+                                                                            return (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    key={c.name}
+                                                                                    title={c.hex}
+                                                                                    onClick={() => {
+                                                                                        const nameInput = document.getElementById(`optionName-${typeIdx}`)
+                                                                                        if (nameInput) nameInput.value = c.name
+                                                                                        setPendingHex((h) => ({ ...h, [typeIdx]: c.hex }))
+                                                                                    }}
+                                                                                    className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${selected ? 'border-textColor bg-borderColor/40' : 'border-borderColor hover:bg-borderColor/20'}`}
+                                                                                >
+                                                                                    <span className="inline-block h-3 w-3 rounded-full border border-borderColor" style={{ backgroundColor: c.hex }} />
+                                                                                    {c.name}
+                                                                                </button>
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="text-[11px] text-amber-700">No printing colours configured yet — add them in your admin colour catalogue.</p>
+                                                            )
+                                                        ) : (
+                                                            <div className="space-y-1.5">
+                                                                <p className="text-[11px] text-extraLight">Pick any colour — print filament colours are reserved for print products.</p>
+                                                                <input
+                                                                    type="color"
+                                                                    value={pendingHex[typeIdx] || '#000000'}
+                                                                    onChange={(e) => setPendingHex((h) => ({ ...h, [typeIdx]: e.target.value }))}
+                                                                    className="h-8 w-16 rounded border border-borderColor cursor-pointer"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
                                                 {onVariantImageUpload && (
                                                     <div className="space-y-2">
                                                         <label className="text-xs font-medium text-lightColor">Variant Image (optional)</label>
@@ -242,11 +298,12 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                                                         console.error('Failed to upload variant image:', e);
                                                                     }
                                                                 }
+                                                                const hex = isColourType(variantType.name) ? (pendingHex[typeIdx] ?? null) : null;
                                                                 setForm(f => ({
                                                                     ...f,
                                                                     variantTypes: f.variantTypes.map((vt, i) =>
                                                                         i === typeIdx
-                                                                            ? { ...vt, options: [...(vt.options || []), { name, additionalFee, stock, image: imageKey }] }
+                                                                            ? { ...vt, options: [...(vt.options || []), { name, additionalFee, stock, image: imageKey, hex }] }
                                                                             : vt
                                                                     )
                                                                 }));
@@ -254,6 +311,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                                                 feeInput.value = '';
                                                                 if (stockInput) stockInput.value = '';
                                                                 if (imageInput) imageInput.value = '';
+                                                                setPendingHex(h => ({ ...h, [typeIdx]: undefined }));
                                                             }
                                                         }
                                                     }}
@@ -279,7 +337,11 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                                                         className="w-8 h-8 rounded object-cover border border-borderColor"
                                                                     />
                                                                 )}
-                                                                <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                                                {option.hex ? (
+                                                                    <span className="w-4 h-4 rounded-full border border-borderColor" style={{ backgroundColor: option.hex }} title={option.hex}></span>
+                                                                ) : (
+                                                                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                                                )}
                                                                 <div>
                                                                     <span className="text-sm font-medium text-textColor">{option.name}</span>
                                                                     {option.additionalFee > 0 && (

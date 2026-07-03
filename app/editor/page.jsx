@@ -21,7 +21,6 @@ const Result = dynamic(() => import('@/components/Editor/result'), {
 const Editor = () => {
     const { user, isLoaded } = useUser()
     const searchParams = useSearchParams()
-    const orderId = searchParams.get('orderId')
     const productId = searchParams.get('productId')
     const variantId = searchParams.get('variantId')
     const requestId = searchParams.get('requestId') // NEW: Custom print request ID
@@ -33,7 +32,6 @@ const Editor = () => {
     useEffect(() => {
         useStore.getState().setReturnTo(safeInternalPath(returnTo))
     }, [returnTo])
-    const [orderData, setOrderData] = useState(null)
     const [productData, setProductData] = useState(null)
     const [customRequestData, setCustomRequestData] = useState(null) // NEW
     const [loading, setLoading] = useState(false)
@@ -85,51 +83,6 @@ const Editor = () => {
         loadCustomRequest()
     }, [requestId, isLoaded, user])
 
-    // Load order data and associated 3D model when orderId is provided
-    useEffect(() => {
-        if (!orderId || !isLoaded || !user) return
-
-        const loadOrderData = async () => {
-            setLoading(true)
-            try {
-                const orderRes = await fetch(`/api/user/print-order/${orderId}`)
-                if (!orderRes.ok) {
-                    throw new Error('Failed to load order')
-                }
-                const order = await orderRes.json()
-                setOrderData(order)
-
-                // Load the 3D model file
-                if (order.modelUrl) {
-                    const modelRes = await fetch(`/api/proxy?key=${encodeURIComponent(order.modelUrl)}`)
-                    if (modelRes.ok) {
-                        const modelBuffer = await modelRes.arrayBuffer()
-                        const buffers = new Map()
-
-                        // Determine file extension from the model URL
-                        const fileName = order.modelUrl.split('/').pop() || 'model.glb'
-                        buffers.set(fileName, modelBuffer)
-
-                        const { setBuffers, setFileName } = useStore.getState()
-                        setBuffers(buffers)
-                        setFileName(fileName)
-
-                        useStore.setState({
-                            textOriginalFile: arrayBufferToBase64(modelBuffer),
-                            orderId: orderId, // Store order ID in state for later use
-                        })
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading order:', error)
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        loadOrderData()
-    }, [orderId, isLoaded, user])
-
     // Load product data and associated 3D model when productId is provided (for cart items)
     useEffect(() => {
         if (!productId || !isLoaded || !user) return
@@ -144,6 +97,17 @@ const Editor = () => {
                 }
                 const product = await productRes.json()
                 setProductData(product)
+
+                // Product-print mode: surface the vendor's fixed config + the
+                // colour-type variant's options so the editor can lock settings
+                // and constrain the colour picker.
+                const colourVariant = (product.variantTypes || []).find((vt) => /colou?r/i.test(vt.name))
+                const isProductPrint = product.productType === 'print' && !!product.printConfig
+                useStore.setState({
+                    productPrintConfig: isProductPrint ? product.printConfig : null,
+                    productColours: isProductPrint ? (colourVariant?.options || []).map((o) => ({ name: o.name, hex: o.hex })) : null,
+                    colourVariantName: colourVariant?.name || null,
+                })
 
                 // Load the 3D model file
                 if (product.viewableModel) {
@@ -176,6 +140,15 @@ const Editor = () => {
 
         loadProductData()
     }, [productId, variantId, isLoaded, user])
+
+    // The store is module-level, so clear product-print mode when this editor
+    // session isn't a product (e.g. navigating to a custom upload) — otherwise a
+    // stale `productPrintConfig` would wrongly lock settings.
+    useEffect(() => {
+        if (!productId) {
+            useStore.setState({ productPrintConfig: null, productColours: null, colourVariantName: null })
+        }
+    }, [productId])
 
     const onDrop = useCallback(async (acceptedFiles) => {
         const buffers = new Map()
@@ -221,7 +194,7 @@ const Editor = () => {
                     <div className="loader" />
                 ) : buffers ? (
                     <Result />
-                ) : (orderId || productId || requestId) ? (
+                ) : (productId || requestId) ? (
                     <div className="flex flex-col items-center justify-center gap-4">
                         <div className="loader" />
                         <p className="text-lightColor text-sm">Loading 3D model...</p>

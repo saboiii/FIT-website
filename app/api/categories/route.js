@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import AppSettings from "@/models/AppSettings";
+import { getAppSettingsId } from "@/lib/appSettingsId";
 
 export async function GET(request) {
     try {
         await connectToDatabase();
 
-        function getAppSettingsId() {
-            return process.env.NODE_ENV === 'development' ? 'app-settings-dev' : 'app-settings';
-        }
         let settings = await AppSettings.findById(getAppSettingsId());
         if (!settings) {
             settings = new AppSettings({

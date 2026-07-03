@@ -84,6 +84,11 @@ const VariantOptionSchema = new mongoose.Schema({
     additionalFee: { type: Number, required: true, default: 0 },
     stock: { type: Number, required: false, min: 0 },
     image: { type: String, required: false, default: null },
+    // Colour swatch for colour-type variants. For print products this is the
+    // admin filament-stock hex; for shop products it's a free-form colour. Used
+    // by the print-delivery flow to colour the model. See openspec change
+    // `migrate-print-delivery-to-custom-requests`.
+    hex: { type: String, required: false, default: null },
 }, { _id: true });
 
 const VariantTypeSchema = new mongoose.Schema({
@@ -108,6 +113,20 @@ const ProductSchema = new mongoose.Schema(
         stock: { type: Number, required: false, min: 0 },
         infiniteStock: { type: Boolean, default: false },
         productType: { type: String, enum: ["print", "shop"], required: true, default: "shop" },
+
+        // Print-delivery products (productType: "print"): the vendor's FIXED
+        // advanced print config (→ a fixed quote). The customer cannot change
+        // these settings; colour is chosen via a colour-type variant (whose
+        // options carry `hex`). See openspec change
+        // `migrate-print-delivery-to-custom-requests`.
+        printConfig: {
+            layerHeight: { type: Number, default: 0.2 },
+            materialType: { type: String, enum: ['plastic', 'resin', 'metal', 'sandstone'], default: 'plastic' },
+            wallLoops: { type: Number, default: 2 },
+            sparseInfillDensity: { type: Number, default: 20 },
+            nozzleDiameter: { type: Number, default: 0.4 },
+            enableSupport: { type: Boolean, default: false },
+        },
 
         // Legacy category system (for backward compatibility)
         category: { type: Number, required: false, default: 0 },

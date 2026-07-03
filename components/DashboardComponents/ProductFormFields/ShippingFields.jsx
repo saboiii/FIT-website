@@ -32,17 +32,21 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
 
     useEffect(() => {
         if (initialized) return;
+        const savedTypes = form.delivery?.deliveryTypes || []
+        // In edit mode the product loads async, so `form.delivery` is empty on the
+        // first pass. Don't lock initialization on that empty pass — wait for the
+        // saved types to arrive, then seed from them. (Create mode flips
+        // `initialized` on the first user toggle, in toggleDeliveryType.)
+        if (savedTypes.length === 0) return;
         const selected = {}
-        if (form.delivery?.deliveryTypes && form.delivery.deliveryTypes.length > 0) {
-            form.delivery.deliveryTypes.forEach(dt => {
-                selected[dt.type] = {
-                    enabled: true,
-                    customPrice: dt.customPrice ?? dt.price ?? null,
-                    customDescription: dt.customDescription ?? '',
-                    defaultPrice: dt.price ?? null
-                }
-            })
-        }
+        savedTypes.forEach(dt => {
+            selected[dt.type] = {
+                enabled: true,
+                customPrice: dt.customPrice ?? dt.price ?? null,
+                customDescription: dt.customDescription ?? '',
+                defaultPrice: dt.price ?? null
+            }
+        })
         setSelectedDeliveryTypes(selected)
         setInitialized(true)
     }, [form.delivery?.deliveryTypes, initialized])
@@ -79,7 +83,11 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
         setSelectedDeliveryTypes(resetToDefaultPriceHelper(selectedDeliveryTypes, typeName))
     }
 
-    // Update form when selected delivery types change
+    // Push local selection → form whenever the USER changes it. Depends only on
+    // `selectedDeliveryTypes` (not `form.delivery`): the comparison reads `prev`
+    // inside the updater, so an async product load filling `form.delivery` can no
+    // longer re-trigger this effect with a stale-empty selection and wipe the
+    // saved types. (The init effect above seeds the selection from the load.)
     useEffect(() => {
         const deliveryTypes = Object.entries(selectedDeliveryTypes)
             .filter(([_, data]) => data.enabled)
@@ -90,20 +98,12 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
                 customDescription: data.customDescription || null
             }))
 
-        // Only update if there's an actual change
-        const currentTypes = form.delivery?.deliveryTypes || []
-        const hasChanged = JSON.stringify(currentTypes) !== JSON.stringify(deliveryTypes)
-
-        if (hasChanged) {
-            setForm(prev => ({
-                ...prev,
-                delivery: {
-                    ...prev.delivery,
-                    deliveryTypes
-                }
-            }))
-        }
-    }, [selectedDeliveryTypes, form.delivery?.deliveryTypes, setForm])
+        setForm(prev => {
+            const currentTypes = prev.delivery?.deliveryTypes || []
+            if (JSON.stringify(currentTypes) === JSON.stringify(deliveryTypes)) return prev
+            return { ...prev, delivery: { ...prev.delivery, deliveryTypes } }
+        })
+    }, [selectedDeliveryTypes, setForm])
 
     // Filter delivery types based on search query
     const filteredDeliveryTypes = availableDeliveryTypes

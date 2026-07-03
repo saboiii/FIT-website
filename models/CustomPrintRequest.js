@@ -9,6 +9,18 @@ const CustomPrintRequestSchema = new mongoose.Schema({
     userEmail: { type: String, required: true },
     userName: { type: String, required: true },
 
+    // Where this request came from:
+    //   - 'upload'  — customer uploaded their own model (the original flow).
+    //   - 'product' — a productType:"print" product bought with print delivery;
+    //                 fixed vendor print config + fixed quote, customer picks
+    //                 colour only. `modelFile.s3Key` reuses the product model.
+    // See openspec change `migrate-print-delivery-to-custom-requests`.
+    source: { type: String, enum: ['upload', 'product'], default: 'upload' },
+    sourceProduct: {
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
+        variantId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    },
+
     // Uploaded model
     modelFile: {
         originalName: { type: String, required: false },
@@ -95,6 +107,9 @@ const CustomPrintRequestSchema = new mongoose.Schema({
             volumeCm3: { type: Number },
             weightGrams: { type: Number },
             printHours: { type: Number },
+            // Shape-aware layer-stack estimate, recorded for print-farm
+            // validation only — NOT priced (see add-lightweight-print-time-estimator).
+            printHoursShapeAware: { type: Number },
         },
     },
     quotedAt: { type: Date },

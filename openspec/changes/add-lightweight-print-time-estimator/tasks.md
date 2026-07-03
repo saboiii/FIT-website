@@ -19,18 +19,21 @@
       the heuristic. (Headless-verifiable only as a module; browser execution is
       covered by the wiring task below.)
 
-## 3. Wiring + validation (BLOCKED — needs product decision + real-model validation)
-- [ ] 3.1 **Decide the integration point.** The live quote is server-authoritative
-      and `/api/quote` accepts geometry METRICS only (by design — see
-      `instant-quoting-engine` spec). A client-side layer-stack number can be
-      displayed, but cannot feed the priced quote without either (a) server-side
-      recompute from the stored model in the persist path (positions are already
-      available there via `recomputeMetricsFromModel`), or (b) accepting a
-      client-sent shape factor (rejected: tamper vector). Recommend (a).
+## 3. Wiring + validation
+- [x] 3.1 **Integration point chosen: (a) server-side recompute.** Done
+      2026-06-22 — `recomputeMetricsFromModel(buffer, name, settings)` also runs
+      the layer-stack estimator on the parsed positions, and the persist branch
+      of `POST /api/quote` records it as `quote.inputs.printHoursShapeAware` on
+      the `CustomPrintRequest`. **Informational only** — the priced quote still
+      uses the volume-only heuristic, so no total changes. Resolves the
+      proposal's open question ("quote both numbers for comparison until we trust
+      the new model"). Option (b) (client-sent shape factor) stays rejected.
 - [ ] 3.2 **Validate against real prints** before pricing with it: compare
       heuristic vs layer-stack vs actual slicer/printer times on the print
       farm's reference models; tune `flowMm3PerS` / `perLayerOverheadS`.
-      Owner: client / print-farm operator.
+      Owner: client / print-farm operator. *(Unblocked for data gathering:
+      `printHoursShapeAware` is now recorded next to the priced `printHours` on
+      every instant-quoted request.)*
 - [ ] 3.3 After validation: feature-flag the swap behind the
       `estimatePrintHours` seam (heuristic remains the fallback), add the spec
       delta (print-time becomes shape-aware), and wire the worker into the

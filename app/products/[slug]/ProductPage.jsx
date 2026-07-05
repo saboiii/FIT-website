@@ -1,6 +1,7 @@
 'use client'
 import { useUser } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
+import posthog from 'posthog-js';
 import { useEffect, useRef, useState } from 'react';
 import { GoChevronLeft, GoChevronRight, GoDownload, GoPlus, GoStar, GoStarFill } from 'react-icons/go';
 import Image from 'next/image';
@@ -235,6 +236,10 @@ function ProductPage() {
                     if (!cartRes.ok) {
                         throw new Error('Failed to add custom print to cart');
                     }
+                    posthog.capture('product_added_to_cart', {
+                        product_id: product._id,
+                        source: 'custom_print_request',
+                    });
                     setShowAdded(true);
                     setTimeout(() => setShowAdded(false), 3000);
                     router.push('/cart');
@@ -260,6 +265,12 @@ function ProductPage() {
                 body: JSON.stringify({ cartItem }),
             });
 
+            posthog.capture('product_added_to_cart', {
+                product_id: product._id,
+                product_type: product.productType,
+                price: product.basePrice?.presentmentAmount || 0,
+                source: 'product_page',
+            });
             setIsAdding(false);
             setShowAdded(true);
             setTimeout(() => setShowAdded(false), 3000);
@@ -702,7 +713,11 @@ function ProductPage() {
                                         // purchase path; only show the generic "Add to Cart" when the product
                                         // also sells a digital download. See openspec change
                                         // `migrate-print-delivery-to-custom-requests`.
+                                        // Exception: the custom-print-request base product — its "Add to
+                                        // Cart" starts the upload-a-model request flow, which needs no
+                                        // vendor-supplied viewable model.
                                         product.productType !== 'print' ||
+                                        product.slug === 'custom-print-request' ||
                                         (product.delivery?.deliveryTypes || []).some(dt => (dt?.type || dt) === 'digital')
                                     ) ? (
                                         <button
@@ -734,6 +749,13 @@ function ProductPage() {
                                                     Select all options
                                                     <GoPlus size={16} className='inline opacity-50' />
                                                 </>
+                                            ) : product.slug === 'custom-print-request' ? (
+                                                // Same handler (creates the request + cart upload flow),
+                                                // but customers are ordering a print, not buying stock.
+                                                <>
+                                                    Order Print
+                                                    <BiPrinter size={16} className='inline' />
+                                                </>
                                             ) : (
                                                 <>
                                                     Add to Cart
@@ -758,6 +780,17 @@ function ProductPage() {
                                                 <BiPrinter size={16} className='inline' />
                                             </>
                                         </button>
+                                    )}
+                                    {/* A print product with no viewable model can't be ordered through
+                                        either path — say so instead of rendering nothing. */}
+                                    {product.productType === 'print' &&
+                                        !product.viewableModel &&
+                                        product.slug !== 'custom-print-request' &&
+                                        !(product.delivery?.deliveryTypes || []).some(dt => (dt?.type || dt) === 'digital') && (
+                                        <p className="text-xs text-lightColor border border-borderColor rounded-md px-4 py-3 bg-baseColor">
+                                            Print ordering isn&apos;t available for this product yet — the
+                                            seller hasn&apos;t uploaded a printable model.
+                                        </p>
                                     )}
                                 </div>
                             )}

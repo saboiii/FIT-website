@@ -3,7 +3,6 @@ import ProductForm from "@/components/DashboardComponents/ProductForm";
 import { useUser } from "@clerk/nextjs";
 import { useRouter, useParams } from "next/navigation"
 import { useEffect, useState } from "react";
-import { DashProvider } from '@/components/dashboard-ui';
 
 function EditProduct() {
     // `isLoaded` (not `isLoading`) is Clerk's readiness flag — the old guard
@@ -35,15 +34,12 @@ function EditProduct() {
         fetchProduct();
     }, [productId, user, isLoaded, router]);
 
+    // The rail/DashProvider come from CreatorShell via app/dashboard/layout.jsx.
     return (
-        <DashProvider>
-            <div className='mx-auto w-full max-w-[1200px] px-6 py-8'>
-                <ProductForm
-                    mode="Edit"
-                    product={productToEdit}
-                />
-            </div>
-        </DashProvider>
+        <ProductForm
+            mode="Edit"
+            product={productToEdit}
+        />
     )
 }
 

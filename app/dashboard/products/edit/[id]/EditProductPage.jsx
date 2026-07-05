@@ -1,21 +1,20 @@
 'use client'
-
+// Product edit wrapper — access gate only; the rail/DashProvider come from
+// CreatorShell via app/dashboard/layout.jsx.
 import EditProduct from "./EditProduct";
 import Fallback from "@/app/dashboard/Fallback";
 import useAccess from "@/utils/useAccess";
-import { DashProvider, SkeletonRow } from '@/components/dashboard-ui';
+import { SkeletonRow } from '@/components/dashboard-ui';
 
 function EditProductPage() {
     const { loading, canAccess } = useAccess();
 
     if (loading) return (
-        <DashProvider>
-            <div className='mx-auto w-full max-w-[720px] px-6 py-12 flex flex-col gap-3'>
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
-            </div>
-        </DashProvider>
+        <div className='max-w-[720px] flex flex-col gap-3'>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+        </div>
     );
 
     if (!canAccess) return <Fallback />;

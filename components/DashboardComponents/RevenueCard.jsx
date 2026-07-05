@@ -68,11 +68,26 @@ export default function RevenueCard({ products, prefix }) {
         </div>
     )
 
+    // The chart fills the card (client feedback 2026-07-05): the card is a
+    // flex column and its content block (DashCard's own children wrapper,
+    // reached via the child selector because DashCard is a shared primitive)
+    // grows, so the chart stretches to the grid row height set by the
+    // neighbouring tiles instead of leaving dead whitespace below.
     return (
-        <DashCard title="Revenue" action={chips} className="h-full">
-            <p className="dash-label mb-3">Daily gross · last {range} days</p>
-            <motion.div key={range} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={swap}>
-                <div className="h-[220px] w-full">
+        <DashCard
+            title="Revenue"
+            action={chips}
+            className="h-full flex flex-col [&>div]:flex-1 [&>div]:min-h-0 [&>div]:flex [&>div]:flex-col"
+        >
+            <p className="dash-label mb-3">Daily gross, last {range} days</p>
+            <motion.div
+                key={range}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={swap}
+                className="flex-1 min-h-[220px] w-full"
+            >
+                <div className="h-full w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={series} margin={{ top: 8, right: 4, left: 4, bottom: 0 }}>
                             <XAxis

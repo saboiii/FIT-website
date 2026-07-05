@@ -70,7 +70,7 @@ describe('Creator payout statements stub (add-creator-payout-statements)', () =>
     it('renders the honest empty state, the pill and the ghost layout', () => {
         render(<PayoutsPage />)
         expect(screen.getByText('Payouts')).toBeInTheDocument()
-        expect(screen.getByText('Payout Statements — Coming Soon')).toBeInTheDocument()
+        expect(screen.getByText('Payout Statements Coming Soon')).toBeInTheDocument()
         expect(screen.getByText(/balance, payout history and per-order breakdowns/i)).toBeInTheDocument()
         expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0)
         // The ghost ledger is hidden from the a11y tree — clearly non-live.
@@ -85,10 +85,10 @@ describe('Creator payout statements stub (add-creator-payout-statements)', () =>
 describe('Discount codes stub (add-discount-codes)', () => {
     it('renders the empty state with a visibly disabled New Code button', () => {
         render(<DiscountsPage />)
-        expect(screen.getByText('Discount Codes — Coming Soon')).toBeInTheDocument()
+        expect(screen.getByText('Discount Codes Coming Soon')).toBeInTheDocument()
         const newCode = screen.getByRole('button', { name: /New Code/ })
         expect(newCode).toBeDisabled()
-        expect(newCode).toHaveAttribute('title', 'Needs backend — coming soon')
+        expect(newCode).toHaveAttribute('title', 'Needs backend, coming soon')
         expect(screen.getByText('Coming soon')).toBeInTheDocument()
     })
 })
@@ -141,7 +141,7 @@ describe('Listing duplicate + per-product analytics stubs (products list)', () =
         await screen.findByText('Alpha Widget')
         const duplicate = screen.getByRole('button', { name: 'Duplicate' })
         expect(duplicate).toBeDisabled()
-        expect(duplicate).toHaveAttribute('title', 'Needs backend — coming soon')
+        expect(duplicate).toHaveAttribute('title', 'Needs backend, coming soon')
     })
 
     it('Performance opens a peek with the honest analytics stub', async () => {
@@ -149,7 +149,7 @@ describe('Listing duplicate + per-product analytics stubs (products list)', () =
         await screen.findByText('Alpha Widget')
         fireEvent.click(screen.getByRole('button', { name: 'Performance' }))
         const dialog = await screen.findByRole('dialog')
-        expect(within(dialog).getByText('Product Performance — Coming Soon')).toBeInTheDocument()
+        expect(within(dialog).getByText('Product Performance Coming Soon')).toBeInTheDocument()
         expect(within(dialog).getByText('Coming soon')).toBeInTheDocument()
         expect(within(dialog).getByText(/views, add-to-carts, sales and conversion/i)).toBeInTheDocument()
     })

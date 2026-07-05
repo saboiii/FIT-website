@@ -1,9 +1,11 @@
 // RTL smokes for the redesigned creator home (blueprint §5.1–5.2):
 // greeting fallback name, revenue card sales[] guard, needs-attention rows,
-// and the orders ledger + peek parity surface.
+// the orders ledger (collapsible date strips) + peek parity surface, and the
+// shared CreatorShell rail the home renders inside.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import Dashboard from '@/app/dashboard/Dashboard'
+import CreatorShell from '@/components/DashboardComponents/CreatorShell'
 
 // jsdom has no ResizeObserver (Recharts' ResponsiveContainer observes).
 global.ResizeObserver = global.ResizeObserver || class {
@@ -15,6 +17,10 @@ global.ResizeObserver = global.ResizeObserver || class {
 let mockUser = null
 vi.mock('@clerk/nextjs', () => ({
     useUser: () => ({ user: mockUser, isLoaded: true }),
+}))
+vi.mock('next/navigation', () => ({
+    usePathname: () => '/dashboard',
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 vi.mock('@/utils/useAccess', () => ({
     default: () => ({ loading: false, canAccess: true, isAdmin: false }),
@@ -61,6 +67,14 @@ beforeEach(() => {
     mockUser = { id: 'user_1', firstName: null, createdAt: '2024-01-01T00:00:00Z', publicMetadata: {} }
 })
 
+// The home always renders inside the shared shell (app/dashboard/layout.jsx),
+// which also owns the shop-identity fetch the greeting/checklist read.
+const renderHome = () => render(
+    <CreatorShell>
+        <Dashboard />
+    </CreatorShell>,
+)
+
 afterEach(() => {
     cleanup()
     localStorage.clear()
@@ -70,7 +84,7 @@ afterEach(() => {
 describe('Creator home', () => {
     it('greets with the fallback name when there is no display name or first name', async () => {
         stubFetch({})
-        render(<Dashboard />)
+        renderHome()
         expect(await screen.findByText('there.')).toBeInTheDocument()
         expect(screen.getByText(/^Good (morning|afternoon|evening),$/)).toBeInTheDocument()
     })
@@ -82,22 +96,36 @@ describe('Creator home', () => {
                 { _id: 'p2', name: 'Gadget', sales: [{ quantity: 2, price: 5, createdAt: new Date().toISOString() }] },
             ],
         })
-        render(<Dashboard />)
+        renderHome()
         expect(await screen.findByText('Revenue')).toBeInTheDocument()
-        expect(screen.getByText(/Daily gross · last 30 days/)).toBeInTheDocument()
+        expect(screen.getByText(/Daily gross, last 30 days/)).toBeInTheDocument()
         expect(screen.getByText('Gross volume')).toBeInTheDocument()
+        // "Shop pulse" was renamed to a self-explanatory title.
+        expect(screen.getByText('Store at a glance')).toBeInTheDocument()
+        expect(screen.queryByText('Shop pulse')).toBeNull()
+    })
+
+    it('renders inside the shared shell rail with Home as the active link', async () => {
+        stubFetch({})
+        renderHome()
+        await screen.findByText('there.')
+        expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
+        expect(screen.getByRole('link', { name: 'My products' })).toHaveAttribute('href', '/dashboard/products')
+        expect(screen.getByRole('link', { name: 'Payouts' })).toHaveAttribute('href', '/dashboard/payouts')
+        expect(screen.getByRole('link', { name: 'Discounts' })).toHaveAttribute('href', '/dashboard/discounts')
+        expect(screen.getByRole('link', { name: 'Messages' })).toHaveAttribute('href', '/dashboard/messages')
     })
 
     it('shows a needs-attention row when the inbox reports unread messages', async () => {
         stubFetch({ inbox: { channels: [{ unreadCount: 2 }, { unreadCount: 0 }] } })
-        render(<Dashboard />)
+        renderHome()
         expect(await screen.findByText('2 unread messages')).toBeInTheDocument()
         expect(screen.getByText('Needs attention')).toBeInTheDocument()
     })
 
     it('hides the needs-attention block when nothing needs attention', async () => {
         stubFetch({})
-        render(<Dashboard />)
+        renderHome()
         await screen.findByText('there.')
         expect(screen.queryByText('Needs attention')).toBeNull()
     })
@@ -121,7 +149,7 @@ describe('Creator home', () => {
                 },
             ],
         })
-        render(<Dashboard />)
+        renderHome()
 
         // Ledger row with product, total, and the hatch-mapped pending pill.
         const rowProduct = await screen.findByText('Widget')
@@ -137,9 +165,43 @@ describe('Creator home', () => {
         expect(screen.getByText('Tracking ID')).toBeInTheDocument()
     })
 
+    it('collapses and re-expands a ledger day from its date strip', async () => {
+        stubFetch({
+            products: [{ _id: 'p1', name: 'Widget', basePrice: { presentmentCurrency: 'SGD' } }],
+            orderUsers: [
+                {
+                    userId: 'buyer_1',
+                    firstName: 'Ada',
+                    orderHistory: [
+                        {
+                            _id: 'order123456789',
+                            status: 'pending',
+                            createdAt: new Date().toISOString(),
+                            cartItem: { productId: 'p1', quantity: 1, price: 11.32 },
+                        },
+                    ],
+                },
+            ],
+        })
+        renderHome()
+        await screen.findByText('Widget')
+
+        // The date strip carries the day's order count and starts expanded.
+        const strip = screen.getByRole('button', { name: /1 order$/ })
+        expect(strip).toHaveAttribute('aria-expanded', 'true')
+
+        fireEvent.click(strip)
+        expect(strip).toHaveAttribute('aria-expanded', 'false')
+        expect(screen.queryByText('Widget')).toBeNull()
+
+        fireEvent.click(strip)
+        expect(strip).toHaveAttribute('aria-expanded', 'true')
+        expect(screen.getByText('Widget')).toBeInTheDocument()
+    })
+
     it('shows the setup checklist with hatch-todo rows deep-linking to each task', async () => {
         stubFetch({}) // nothing configured → 0/5 done
-        render(<Dashboard />)
+        renderHome()
         expect(await screen.findByText('Set up your shop')).toBeInTheDocument()
         expect(screen.getByText('0/5 done')).toBeInTheDocument()
         expect(screen.getByRole('link', { name: /Finish Stripe payouts onboarding/ })).toHaveAttribute(
@@ -175,7 +237,7 @@ describe('Creator home', () => {
                 },
             ], // sale ✓ — Stripe onboarding is the one left
         })
-        render(<Dashboard />)
+        renderHome()
         const summary = await screen.findByText('Setup 4/5')
         expect(screen.queryByText('Set up your shop')).toBeNull()
 
@@ -207,7 +269,7 @@ describe('Creator home', () => {
                 },
             ],
         })
-        render(<Dashboard />)
+        renderHome()
         await screen.findByText('Widget') // ledger row → all data settled
         expect(screen.queryByText('Set up your shop')).toBeNull()
         expect(screen.queryByText(/^Setup \d\/5$/)).toBeNull()

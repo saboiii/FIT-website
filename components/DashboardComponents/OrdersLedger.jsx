@@ -7,8 +7,8 @@
 // mesh-colour swatches + copy-JSON, and CSV export (now a quiet header action).
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { IoCopyOutline, IoDownloadOutline } from 'react-icons/io5'
-import { DashCard, DottedRow, EmptyState, FreshnessStamp, LedgerTable, PeekPanel, StatusPill } from '@/components/dashboard-ui'
+import { IoChevronDownOutline, IoCopyOutline, IoDownloadOutline } from 'react-icons/io5'
+import { DashCard, DottedRow, EmptyState, FreshnessStamp, PeekPanel, StatusPill } from '@/components/dashboard-ui'
 import { useOrderStatuses, getStatusDisplayName } from '@/utils/useOrderStatuses'
 import { useToast } from '../General/ToastProvider'
 import { formatMoney } from './format'
@@ -49,11 +49,17 @@ function CopyButton({ text, label, onCopy }) {
     )
 }
 
+// One grid template for the ledger header and every row (kept in sync).
+const LEDGER_COLS = 'minmax(0, 2.5fr) minmax(48px, 0.5fr) minmax(88px, 1fr) minmax(96px, 1fr)'
+
 export default function OrdersLedger({ orders, onPatch, prefix, updatedAt }) {
     const [selectedOrder, setSelectedOrder] = useState(null)
     const [trackingId, setTrackingId] = useState('')
     const [updating, setUpdating] = useState(false)
     const [showAll, setShowAll] = useState(false)
+    // Collapsed day-groups (client feedback 2026-07-05): every day starts
+    // expanded; the white date strip toggles its own rows.
+    const [collapsedDays, setCollapsedDays] = useState(() => new Set())
     const { showToast } = useToast()
     const { orderStatuses: regularOrderStatuses } = useOrderStatuses('order')
     const { orderStatuses: printOrderStatuses } = useOrderStatuses('printOrder')
@@ -78,33 +84,21 @@ export default function OrdersLedger({ orders, onPatch, prefix, updatedAt }) {
             const key = dayjs(order.orderedAt).format('YYYY-MM-DD')
             let group = byDay.find((g) => g.key === key)
             if (!group) {
-                group = { key, label: dayjs(order.orderedAt).format('D MMM YYYY'), rows: [] }
+                group = { key, label: dayjs(order.orderedAt).format('D MMM YYYY'), orders: [] }
                 byDay.push(group)
             }
-            group.rows.push({
-                key: order.orderId,
-                onClick: () => setSelectedOrder(order),
-                selected: selectedOrder?.orderId === order.orderId,
-                cells: [
-                    <div key="order" className="min-w-0">
-                        <p className="text-[13px] font-medium truncate">{order.productName}</p>
-                        <p className="dash-data dash-soft truncate">
-                            #{order.orderId.slice(-8).toUpperCase()} · {order.buyerFirstName || order.buyerEmail || 'Unknown'}
-                        </p>
-                    </div>,
-                    <span key="qty" className="dash-data">{order.quantity}</span>,
-                    <span key="total" className="dash-data">
-                        {prefix}
-                        {formatMoney(order.price || 0)}
-                    </span>,
-                    <StatusPill key="status" tone={statusTone(order.orderStatus)}>
-                        {getStatusDisplayName(order.orderStatus, allStatuses)}
-                    </StatusPill>,
-                ],
-            })
+            group.orders.push(order)
         })
         return byDay
-    }, [visible, selectedOrder, allStatuses, prefix])
+    }, [visible])
+
+    const toggleDay = (key) =>
+        setCollapsedDays((prev) => {
+            const next = new Set(prev)
+            if (next.has(key)) next.delete(key)
+            else next.add(key)
+            return next
+        })
 
     const copyToClipboard = async (text) => {
         try {
@@ -225,16 +219,78 @@ export default function OrdersLedger({ orders, onPatch, prefix, updatedAt }) {
                 />
             ) : (
                 <>
-                    <LedgerTable
-                        columns={[
-                            { key: 'order', label: 'Order', width: 'minmax(0, 2.5fr)' },
-                            { key: 'qty', label: 'Qty', width: 'minmax(48px, 0.5fr)', align: 'right' },
-                            { key: 'total', label: 'Total', width: 'minmax(88px, 1fr)', align: 'right' },
-                            { key: 'status', label: 'Status', width: 'minmax(96px, 1fr)', align: 'right' },
-                        ]}
-                        groups={groups}
-                        className="-mx-2"
-                    />
+                    <div className="-mx-5">
+                        {/* Column header sits outside the scroll box so it never scrolls away. */}
+                        <div className="grid px-5 py-2" style={{ gridTemplateColumns: LEDGER_COLS }}>
+                            <span className="dash-label">Order</span>
+                            <span className="dash-label text-right">Qty</span>
+                            <span className="dash-label text-right">Total</span>
+                            <span className="dash-label text-right">Status</span>
+                        </div>
+
+                        {/* The ledger body scrolls inside itself instead of endlessly
+                            extending the page (client feedback 2026-07-05). */}
+                        <div className="max-h-[560px] dash-scroll">
+                            {groups.map((group) => {
+                                const collapsed = collapsedDays.has(group.key)
+                                return (
+                                    <section key={group.key}>
+                                        {/* Date strip: full-width card-background band, sticky
+                                            within the scroll box; click collapses the day. */}
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleDay(group.key)}
+                                            aria-expanded={!collapsed}
+                                            className="dash-hoverable sticky top-0 z-10 flex w-full items-center gap-2 border-y border-[var(--dash-line)] bg-[var(--dash-card)] px-5 py-2 text-left cursor-pointer hover:bg-[var(--dash-canvas)]"
+                                        >
+                                            <IoChevronDownOutline
+                                                size={13}
+                                                aria-hidden="true"
+                                                className={`shrink-0 text-[var(--dash-ink-soft)] ${collapsed ? '-rotate-90' : ''}`}
+                                            />
+                                            <span className="dash-label">{group.label}</span>
+                                            <span className="dash-data dash-soft ml-auto">
+                                                {group.orders.length} order{group.orders.length === 1 ? '' : 's'}
+                                            </span>
+                                        </button>
+
+                                        {!collapsed && (
+                                            <div className="divide-y divide-[var(--dash-line)]">
+                                                {group.orders.map((order) => (
+                                                    <button
+                                                        key={order.orderId}
+                                                        type="button"
+                                                        onClick={() => setSelectedOrder(order)}
+                                                        className={`dash-hoverable grid w-full items-center px-5 py-2.5 text-left cursor-pointer hover:bg-[var(--dash-canvas)] ${
+                                                            selectedOrder?.orderId === order.orderId ? 'bg-[var(--dash-sun-soft)]' : ''
+                                                        }`}
+                                                        style={{ gridTemplateColumns: LEDGER_COLS }}
+                                                    >
+                                                        <div className="min-w-0">
+                                                            <p className="text-[13px] font-medium truncate">{order.productName}</p>
+                                                            <p className="dash-data dash-soft truncate">
+                                                                #{order.orderId.slice(-8).toUpperCase()}, {order.buyerFirstName || order.buyerEmail || 'Unknown'}
+                                                            </p>
+                                                        </div>
+                                                        <span className="dash-data text-right">{order.quantity}</span>
+                                                        <span className="dash-data text-right">
+                                                            {prefix}
+                                                            {formatMoney(order.price || 0)}
+                                                        </span>
+                                                        <span className="text-right">
+                                                            <StatusPill tone={statusTone(order.orderStatus)}>
+                                                                {getStatusDisplayName(order.orderStatus, allStatuses)}
+                                                            </StatusPill>
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </section>
+                                )
+                            })}
+                        </div>
+                    </div>
                     {sorted.length > 8 && (
                         <div className="flex justify-end pt-3">
                             <button
@@ -342,7 +398,7 @@ export default function OrdersLedger({ orders, onPatch, prefix, updatedAt }) {
                                 {formatMoney(selectedOrder.price || 0)}
                             </DottedRow>
                             <DottedRow label="Delivery">
-                                <span className="capitalize">{selectedOrder.deliveryType || '—'}</span>
+                                <span className="capitalize">{selectedOrder.deliveryType || 'Not specified'}</span>
                             </DottedRow>
                             <DottedRow label="Ordered">
                                 {dayjs(selectedOrder.orderedAt).format('D MMM YYYY, HH:mm')}
@@ -353,7 +409,7 @@ export default function OrdersLedger({ orders, onPatch, prefix, updatedAt }) {
                             <h4 className="dash-label mb-1">Customer</h4>
                             <DottedRow label="Name">{selectedOrder.buyerFirstName || 'N/A'}</DottedRow>
                             <DottedRow label="Email">
-                                <span className="truncate max-w-[200px]">{selectedOrder.buyerEmail || '—'}</span>
+                                <span className="truncate max-w-[200px]">{selectedOrder.buyerEmail || 'Not provided'}</span>
                                 {selectedOrder.buyerEmail && (
                                     <CopyButton text={selectedOrder.buyerEmail} label="Copy email" onCopy={copyToClipboard} />
                                 )}

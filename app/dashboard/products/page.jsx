@@ -1,8 +1,10 @@
 'use client'
 // Creator products list — "the stockroom shelf" (blueprint §5.4).
-// Hero: the table itself. GlassBar carries the WORKING name search and the
-// view's sun CTA; ViewTabs derive Live/Hidden/Out-of-stock client-side;
-// name & numberSold sorts are fixed (they compared the wrong fields before).
+// Hero: the table itself. The shared rail comes from CreatorShell via
+// app/dashboard/layout.jsx. A quiet card-background search input (no glass,
+// no shadow — client polish 2026-07-05) sits beside the view's sun CTA;
+// ViewTabs derive Live/Hidden/Out-of-stock client-side; name & numberSold
+// sorts are fixed (they compared the wrong fields before).
 
 import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
@@ -10,7 +12,7 @@ import { useRouter } from 'next/navigation'
 import React, { useEffect, useMemo, useState } from 'react'
 import { GoChevronDown, GoChevronUp, GoPlus } from 'react-icons/go'
 import { IoStatsChartOutline, IoStorefrontOutline } from 'react-icons/io5'
-import { ComingSoon, DashProvider, EmptyState, GlassBar, PeekPanel, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
+import { ComingSoon, EmptyState, PeekPanel, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
 import { currencyPrefix, formatMoney } from '@/components/DashboardComponents/format'
 
 // Tailwind needs literal class strings (no runtime interpolation of variants).
@@ -135,27 +137,29 @@ function MyProducts() {
     const goCreate = () => router.push('/dashboard/products/create')
 
     return (
-        <DashProvider>
-            <div className="mx-auto w-full max-w-[1200px] px-6 py-12 flex flex-col gap-4">
-                <h1 className="dash-title">Products</h1>
+        <div className="flex flex-col gap-4">
+            <h1 className="dash-title">Products</h1>
 
-                <GlassBar>
-                    <input
-                        type="search"
-                        aria-label="Search products"
-                        placeholder="Search products…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                        className="flex-1 min-w-0 bg-transparent text-[13px] px-2 py-1.5 focus:outline-none"
-                    />
-                    <Link
-                        href="/dashboard/products/create"
-                        className="dash-hoverable flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] shrink-0"
-                    >
-                        New Product
-                        <GoPlus aria-hidden="true" />
-                    </Link>
-                </GlassBar>
+            {/* Quiet search row — a hairline pill on the card surface; focus is
+                only the token border shift + faint halo (no outline ring, no
+                drop shadow). */}
+            <div className="flex items-center gap-3">
+                <input
+                    type="search"
+                    aria-label="Search products"
+                    placeholder="Search products…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="flex-1 min-w-0 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-4 py-2 text-[13px]"
+                />
+                <Link
+                    href="/dashboard/products/create"
+                    className="dash-hoverable flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] shrink-0"
+                >
+                    New Product
+                    <GoPlus aria-hidden="true" />
+                </Link>
+            </div>
 
                 <ViewTabs
                     tabs={[
@@ -179,7 +183,7 @@ function MyProducts() {
                         <EmptyState
                             icon={<IoStorefrontOutline />}
                             title="Stock Your Shelf"
-                            body="Products you create appear here — add photos, pricing, and delivery once, then sell on the storefront."
+                            body="Products you create appear here. Add photos, pricing, and delivery once, then sell on the storefront."
                             cta="New Product"
                             onCta={goCreate}
                         />
@@ -198,7 +202,7 @@ function MyProducts() {
 
                         {visibleProducts.length === 0 ? (
                             <p className="px-4 py-8 text-[13px] text-[var(--dash-ink-soft)] text-center">
-                                No products match — try another search or view.
+                                No products match. Try another search or view.
                             </p>
                         ) : (
                             <div className="divide-y divide-[var(--dash-line)]">
@@ -262,7 +266,7 @@ function MyProducts() {
                                                 <button
                                                     type="button"
                                                     disabled
-                                                    title="Needs backend — coming soon"
+                                                    title="Needs backend, coming soon"
                                                     className="text-[13px] text-[var(--dash-ink-soft)] opacity-0 group-hover:opacity-40 whitespace-nowrap cursor-not-allowed"
                                                 >
                                                     Duplicate
@@ -285,12 +289,11 @@ function MyProducts() {
                 >
                     <EmptyState
                         icon={<IoStatsChartOutline />}
-                        title="Product Performance — Coming Soon"
+                        title="Product Performance Coming Soon"
                         body="A per-product table of views, add-to-carts, sales and conversion (plus revenue and referrers) will appear here once creator analytics are wired to PostHog."
                     />
                 </PeekPanel>
-            </div>
-        </DashProvider>
+        </div>
     )
 }
 

@@ -87,6 +87,41 @@ describe('dashboard-ui primitives', () => {
         expect(onClose).toHaveBeenCalled()
     })
 
+    it('Esc closes only the topmost of stacked overlays', () => {
+        // ConfirmDialog over a PeekPanel — the exact "cancel request" flow.
+        const closePeek = vi.fn()
+        const closeConfirm = vi.fn()
+        render(
+            <>
+                <PeekPanel open onClose={closePeek} title="Request fbf7">
+                    body
+                </PeekPanel>
+                <ConfirmDialog open onClose={closeConfirm} onConfirm={vi.fn()} title="Cancel this request?" />
+            </>,
+        )
+        fireEvent.keyDown(window, { key: 'Escape' })
+        expect(closeConfirm).toHaveBeenCalledTimes(1)
+        expect(closePeek).not.toHaveBeenCalled()
+    })
+
+    it('body scroll unlocks after stacked overlays both close', () => {
+        document.body.style.overflow = ''
+        const { rerender } = render(
+            <>
+                <PeekPanel open onClose={vi.fn()} title="Peek">body</PeekPanel>
+                <ConfirmDialog open onClose={vi.fn()} onConfirm={vi.fn()} title="Sure?" />
+            </>,
+        )
+        expect(document.body.style.overflow).toBe('hidden')
+        rerender(
+            <>
+                <PeekPanel open={false} onClose={vi.fn()} title="Peek">body</PeekPanel>
+                <ConfirmDialog open={false} onClose={vi.fn()} onConfirm={vi.fn()} title="Sure?" />
+            </>,
+        )
+        expect(document.body.style.overflow).toBe('')
+    })
+
     it('EmptyState has exactly one primary CTA', () => {
         render(<EmptyState title="No Test Prints Yet" body="Add a model to calibrate." cta="Add Test Print" onCta={vi.fn()} />)
         expect(screen.getAllByRole('button')).toHaveLength(1)

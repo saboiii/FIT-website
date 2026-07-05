@@ -56,6 +56,11 @@ function Dashboard() {
     const [displayNameError, setDisplayNameError] = useState('')
     const [displayNameSaved, setDisplayNameSaved] = useState(false)
 
+    // Hour read post-mount: the server render can't know the client's clock,
+    // and a mismatched salutation trips a hydration warning.
+    const [hour, setHour] = useState(null)
+    useEffect(() => setHour(new Date().getHours()), [])
+
     useEffect(() => {
         if (!user || !isLoaded) return
         const fetchProducts = async () => {
@@ -363,7 +368,7 @@ function Dashboard() {
             <main className="flex-1 min-w-0 flex flex-col gap-4">
                 <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-2">
                     <HeroGreeting
-                        salutation={salutationFor(new Date().getHours())}
+                        salutation={hour === null ? 'Hello,' : salutationFor(hour)}
                         name={heroName}
                         context={`${dayjs().format('dddd D MMMM YYYY')} · ${ordersThisMonth} order${ordersThisMonth === 1 ? '' : 's'} this month`}
                     />

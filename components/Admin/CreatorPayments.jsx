@@ -16,7 +16,7 @@ import {
     SkeletonRow,
     FreshnessStamp,
 } from '@/components/dashboard-ui'
-import { barSelectCls, barDateCls, quietPillCls } from './dashPanelUi'
+import { barSelectCls, barDateCls, quietPillCls, useUrlSub } from './dashPanelUi'
 
 // Payments as accounting (blueprint §9.10): three sub-views over the same
 // loaded sessions — the ledger, the payout run, and the month statements.
@@ -40,7 +40,7 @@ export default function CreatorPayments() {
     const [enrichedSessions, setEnrichedSessions] = useState([])
     const [productCache, setProductCache] = useState({})
     const [userCache, setUserCache] = useState({})
-    const [subView, setSubView] = useState('transactions')
+    const [subView, setSubView] = useUrlSub(SUB_VIEWS.map((v) => v.key), 'transactions')
     const [peekSessionId, setPeekSessionId] = useState(null)
 
     // Date range states
@@ -927,6 +927,9 @@ export default function CreatorPayments() {
                                                 </span>
                                             </div>
                                             <div className="mb-2">{stripeChip(enrichedCreatorData?.user)}</div>
+                                            {enrichedCreatorData?.user?.phone && enrichedCreatorData.user.phone !== 'No phone' && (
+                                                <DottedRow label="Phone">{enrichedCreatorData.user.phone}</DottedRow>
+                                            )}
                                             <DottedRow label="Product revenue">{money(saleData.productRevenue)}</DottedRow>
                                             <DottedRow label="Shipping revenue">{money(saleData.shippingRevenue)}</DottedRow>
                                             <DottedRow label="Items">{saleData.items.length}</DottedRow>

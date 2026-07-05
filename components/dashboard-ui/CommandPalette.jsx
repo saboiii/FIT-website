@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { IoSearchOutline } from 'react-icons/io5'
 import { sheet, swap } from '@/lib/motion/tokens'
-import useScrollLock from './useScrollLock'
+import useScrollLock, { useEscToClose } from './useScrollLock'
 import ComingSoon from './ComingSoon'
 
 /**
@@ -61,6 +61,7 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
     const inputRef = useRef(null)
     const listRef = useRef(null)
     useScrollLock(open)
+    useEscToClose(open, onClose) // topmost-overlay-only Esc via the shared stack
 
     // Global shortcuts — live for the whole life of the shell.
     useEffect(() => {
@@ -71,13 +72,7 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
                 else onOpen()
                 return
             }
-            if (open) {
-                if (e.key === 'Escape') {
-                    e.preventDefault()
-                    onClose()
-                }
-                return
-            }
+            if (open) return
             if (e.key === '/') {
                 const el = document.activeElement
                 const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
@@ -91,12 +86,14 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
         return () => window.removeEventListener('keydown', onKey)
     }, [open, onOpen, onClose])
 
-    // Fresh sheet each open.
+    // Fresh sheet each open: reset, load recents (state, not render-time
+    // localStorage — SSR-safe), focus after the panel exists in the DOM.
+    const [recentIds, setRecentIds] = useState([])
     useEffect(() => {
         if (!open) return
         setQuery('')
         setActiveIndex(0)
-        // Focus after the panel exists in the DOM.
+        setRecentIds(readRecents())
         const t = setTimeout(() => inputRef.current?.focus(), 0)
         return () => clearTimeout(t)
     }, [open])
@@ -110,12 +107,12 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
                 .map((g) => ({ ...g, items: g.items.filter((i) => matches(i, q)) }))
                 .filter((g) => g.items.length > 0)
         }
-        const recents = readRecents()
+        const recents = recentIds
             .map((id) => allItems.find((i) => i.id === id))
             .filter(Boolean)
         const base = recents.length > 0 ? [{ key: 'recent', label: 'Recent', items: recents }] : []
         return [...base, ...groups]
-    }, [groups, allItems, query, open]) // eslint-disable-line react-hooks/exhaustive-deps -- re-read recents each open
+    }, [groups, allItems, query, recentIds])
 
     const flatItems = useMemo(
         () => visibleGroups.flatMap((g) => g.items.map((item) => ({ item, group: g.key }))),

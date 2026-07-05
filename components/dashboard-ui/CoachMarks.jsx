@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { settle } from '@/lib/motion/tokens'
+import { useEscToClose } from './useScrollLock'
 
 /**
  * CoachMarks — per-panel guided tour (blueprint §9.11).
@@ -139,15 +140,8 @@ export default function CoachMarks({ steps = [], open, onClose, panelKey }) {
         }
     }, [open, step, measure, reduced])
 
-    // Esc closes (counts as seen).
-    useEffect(() => {
-        if (!open) return undefined
-        const onKey = (e) => {
-            if (e.key === 'Escape') finish()
-        }
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [open, finish])
+    // Esc closes (counts as seen); topmost-overlay-only via the shared stack.
+    useEscToClose(open, finish)
 
     if (!open || !step || !rect) return null
 

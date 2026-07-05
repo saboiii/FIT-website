@@ -163,7 +163,7 @@ export default function Overview({ setupData, requests, fetchedAt, onNavigate, o
                     value={summary.unquoted}
                     hint="needs a price from you"
                     variant={summary.unquoted > 0 ? 'sun' : 'paper'}
-                    onClick={() => onNavigate('customPrintRequests')}
+                    onClick={() => onNavigate('customPrintRequests', 'needs_quote')}
                     actionLabel="Open queue"
                 />
                 <StatTile
@@ -171,7 +171,7 @@ export default function Overview({ setupData, requests, fetchedAt, onNavigate, o
                     value={summary.paidNotPrinted}
                     hint="ready for the printer"
                     variant="paper"
-                    onClick={() => onNavigate('customPrintRequests')}
+                    onClick={() => onNavigate('customPrintRequests', 'paid')}
                     actionLabel="Open queue"
                 />
             </div>

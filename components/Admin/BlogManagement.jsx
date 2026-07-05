@@ -165,6 +165,8 @@ export default function BlogManagement() {
     const autosaveTimer = useRef(null)
     const formRef = useRef(form)
     formRef.current = form
+    // A pending autosave must not fire after the panel unmounts (tab switch).
+    useEffect(() => () => clearTimeout(autosaveTimer.current), [])
 
     const fetchList = async () => {
         setLoading(true)

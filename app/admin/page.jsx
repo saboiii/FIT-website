@@ -211,7 +211,9 @@ function AdminDashboard() {
     const paramTab = searchParams.get('tab')
     const activeTab = VALID_TABS.has(paramTab) ? paramTab : 'overview'
     const setActiveTab = useCallback(
-        (key) => router.replace(`/admin?tab=${key}`, { scroll: false }),
+        // Optional `sub` deep-links into a panel's ViewTab (§9.3); omitting it
+        // drops any stale sub from the previous panel.
+        (key, sub) => router.replace(`/admin?tab=${key}${sub ? `&sub=${encodeURIComponent(sub)}` : ''}`, { scroll: false }),
         [router],
     )
 
@@ -313,17 +315,17 @@ function AdminDashboard() {
             perform: () => setActiveTab(item.key),
         }))
         const settings = [
-            { id: 'set:rates', label: 'Change pricing rates', tab: 'quoting' },
-            { id: 'set:expedite', label: 'Change expedite fees', tab: 'quoting' },
-            { id: 'set:limits', label: 'Edit machine limits', tab: 'quoting' },
-            { id: 'set:colour', label: 'Add a colour', tab: 'quoting' },
+            { id: 'set:rates', label: 'Change pricing rates', tab: 'quoting', sub: 'rates' },
+            { id: 'set:expedite', label: 'Change expedite fees', tab: 'quoting', sub: 'fees' },
+            { id: 'set:limits', label: 'Edit machine limits', tab: 'quoting', sub: 'limits' },
+            { id: 'set:colour', label: 'Add a colour', tab: 'quoting', sub: 'colours' },
             { id: 'set:calibrate', label: 'Calibrate print times', tab: 'printTiming' },
             { id: 'set:deliveryType', label: 'Add a delivery type', tab: 'delivery' },
         ].map((s) => ({
             id: s.id,
             label: s.label,
             description: `Opens ${NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === s.tab)?.label}`,
-            perform: () => setActiveTab(s.tab),
+            perform: () => setActiveTab(s.tab, s.sub),
         }))
         const actions = [
             {

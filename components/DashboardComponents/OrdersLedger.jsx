@@ -183,7 +183,7 @@ export default function OrdersLedger({ orders, onPatch, prefix, updatedAt }) {
             order.contact?.phone ? `${order.contact.phone.countryCode} ${order.contact.phone.number}` : '',
         ])
         const csvContent = [headers, ...csvData]
-            .map((row) => row.map((field) => `"${field}"`).join(','))
+            .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(','))
             .join('\n')
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
         const link = document.createElement('a')

@@ -4,6 +4,7 @@ import { useToast } from '@/components/General/ToastProvider'
 import { toDatetimeLocal } from '@/utils/datetimeLocal'
 import { DashCard, ViewTabs, GlassBar, StatusPill, ConfirmDialog, FreshnessStamp } from '@/components/dashboard-ui'
 import { inputCls, labelCls, quietBtnCls, badTextBtnCls, DashSelect } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import { useUrlSub } from './dashPanelUi'
 
 const EMPTY_CAMPAIGN = { subject: '', intro: '', articleIds: [], audience: { type: 'all', interestIds: [] }, scheduledFor: '' }
 
@@ -576,7 +577,7 @@ const SECTIONS = [
 
 export default function NewsletterManagement() {
     const { showToast } = useToast()
-    const [section, setSection] = useState('campaigns')
+    const [section, setSection] = useUrlSub(SECTIONS.map((s) => s.key), 'campaigns')
     const Active = SECTIONS.find((s) => s.key === section)?.component || Campaigns
 
     return (

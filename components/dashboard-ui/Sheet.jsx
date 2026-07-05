@@ -1,8 +1,7 @@
 'use client'
-import { useEffect } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { sheet, swap, swapExit } from '@/lib/motion/tokens'
-import useScrollLock from './useScrollLock'
+import useScrollLock, { useEscToClose } from './useScrollLock'
 
 /**
  * Tier-2 modal sheet (§4.8 #11): warm-glass scrim that fades in and blurs
@@ -11,12 +10,7 @@ import useScrollLock from './useScrollLock'
  */
 export default function Sheet({ open, onClose, side = 'center', label, widthClass, children }) {
     useScrollLock(open)
-    useEffect(() => {
-        if (!open) return undefined
-        const onKey = (e) => e.key === 'Escape' && onClose?.()
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [open, onClose])
+    useEscToClose(open, onClose)
 
     const panelMotion =
         side === 'right'

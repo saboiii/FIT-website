@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAdminSettings } from '@/utils/AdminSettingsContext';
 import { getDeliveryTypeApplicability as getDeliveryTypeApplicabilityHelper, toggleDeliveryType as toggleDeliveryTypeHelper, updateCustomPrice as updateCustomPriceHelper, updateCustomDescription as updateCustomDescriptionHelper, resetToDefaultPrice as resetToDefaultPriceHelper } from '@/utils/deliveryTypeHelpers'
 import { MdCheckCircle, MdRadioButtonUnchecked } from 'react-icons/md'
@@ -13,6 +13,7 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
     const [selectedDeliveryTypes, setSelectedDeliveryTypes] = useState({})
     const [initialized, setInitialized] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
+    const seededRef = useRef(false)
 
     // Use admin settings context for delivery types
     const { settings: adminSettings, loading: adminSettingsLoading, error: adminSettingsError } = useAdminSettings();
@@ -44,6 +45,7 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
                 defaultPrice: dt.price ?? null
             }
         })
+        seededRef.current = true
         setSelectedDeliveryTypes(selected)
         setInitialized(true)
     }, [form.delivery?.deliveryTypes, initialized])
@@ -86,11 +88,19 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
     // longer re-trigger this effect with a stale-empty selection and wipe the
     // saved types. (The init effect above seeds the selection from the load.)
     useEffect(() => {
+        // The sync triggered by the init seeding itself would rewrite the
+        // saved entries in normalized form (pinning `customPrice`, nulling
+        // descriptions) even though the user changed nothing — skip exactly
+        // that one run so an untouched form round-trips byte-identical.
+        if (seededRef.current) {
+            seededRef.current = false
+            return
+        }
         const deliveryTypes = Object.entries(selectedDeliveryTypes)
             .filter(([_, data]) => data.enabled)
             .map(([type, data]) => ({
                 type,
-                price: data.customPrice ?? 0,
+                price: data.customPrice ?? data.defaultPrice ?? 0,
                 customPrice: data.customPrice,
                 customDescription: data.customDescription || null
             }))

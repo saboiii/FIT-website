@@ -25,6 +25,7 @@ import RequestPeek, {
     statusTone,
     normalizeMeshColors,
 } from './RequestPeek'
+import { useUrlSub } from './dashPanelUi'
 
 // Saved views over the queue (§5.8) — every lifecycle status maps to a view.
 const VIEWS = [
@@ -55,7 +56,7 @@ export default function CustomPrintRequests() {
     const [tourOpen, setTourOpen] = useState(false)
     const tourOffer = useTourOffer('customPrintRequests')
     const [search, setSearch] = useState('')
-    const [view, setView] = useState('all')
+    const [view, setView] = useUrlSub(VIEWS.map((v) => v.key), 'all')
     const [menuFor, setMenuFor] = useState(null) // requestId whose "…" menu is open
     const [peek, setPeek] = useState(null) // { id, editor }
     const [cancelTarget, setCancelTarget] = useState(null) // requestId pending confirm

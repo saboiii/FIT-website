@@ -85,8 +85,9 @@ function Main({ adbanner }) {
                 />
             )}
             {Boolean(content?.darkOverlay) && (
-                // darkOverlay is a 0–80 percentage (legacy boolean true = 50)
-                <div className="absolute inset-0 bg-black z-[5]" style={{ opacity: (content.darkOverlay === true ? 50 : Number(content.darkOverlay) || 0) / 100 }} />
+                // darkOverlay is a 0–80 percentage (legacy boolean true = 50);
+                // clamp so a raw API write can never black out the hero
+                <div className="absolute inset-0 bg-black z-[5]" style={{ opacity: Math.min(80, content.darkOverlay === true ? 50 : Number(content.darkOverlay) || 0) / 100 }} />
             )}
             <div className="relative z-10 flex flex-col items-center w-full text-background text-center px-4">
                 {isImageLoaded && (

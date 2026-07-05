@@ -12,6 +12,7 @@ import { DashCard, GlassBar, SkeletonRow, CoachMarks, useTourOffer, TourOfferStr
 import { labelCls, quietBtnCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 import { IoRefresh } from 'react-icons/io5'
 import { MdOpenInNew } from 'react-icons/md'
+import { useUrlSub } from './dashPanelUi'
 
 const defaultContentSections = [
     {
@@ -117,7 +118,7 @@ function OptionCard({ selected, onClick, title, body }) {
 export default function ContentManagement() {
     const { showToast } = useToast()
     const [contentSections, setContentSections] = useState(defaultContentSections)
-    const [selectedSection, setSelectedSection] = useState(defaultContentSections[0].id)
+    const [selectedSection, setSelectedSection] = useUrlSub(defaultContentSections.map((s) => s.id), defaultContentSections[0].id)
     const [content, setContent] = useState(null)
     const [isLoading, setIsLoading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)

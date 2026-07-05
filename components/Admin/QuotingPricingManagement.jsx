@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { DashCard, ViewTabs, GlassBar, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
+import { DashCard, ViewTabs, GlassBar, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS, ComingSoon } from '@/components/dashboard-ui'
 import { inputCls, quietBtnCls, DashSelect } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 // Rate-card metadata (blueprint §5.14 + §9.3): label + one-line help + unit
@@ -429,6 +429,14 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
             {tab === 'colours' && (
                 <DashCard title="Colours" action={addColourBtn}>
                     {colourRows()}
+                    {/* Honest stub (openspec add-print-farm-inventory): spool-level
+                        filament stock per colour needs its own backend. */}
+                    <div className="mt-4 pt-3 border-t border-[var(--dash-line)] flex items-center gap-2 flex-wrap">
+                        <span className="text-[13px] dash-soft">
+                            Spool tracking — per-colour filament stock with low-spool warnings
+                        </span>
+                        <ComingSoon />
+                    </div>
                 </DashCard>
             )}
 

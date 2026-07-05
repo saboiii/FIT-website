@@ -852,13 +852,24 @@ export default function CreatorPayments() {
                 title={peekSession ? `Session ${peekSession.sessionId.substring(0, 14)}…` : ''}
                 widthClass="max-w-[520px]"
                 actions={peekSession && (
-                    <button
-                        type="button"
-                        onClick={() => markSessionAsProcessed(peekSession.sessionId, !peekSession.processed)}
-                        className={quietPillCls}
-                    >
-                        {peekSession.processed ? 'Mark as pending' : 'Mark as processed'}
-                    </button>
+                    <>
+                        {/* Honest stub (openspec add-refunds-ui): no refund endpoint yet. */}
+                        <button
+                            type="button"
+                            disabled
+                            title="Refunds — coming soon"
+                            className="dash-hoverable rounded-full px-3.5 py-1.5 text-[13px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-bad)] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Refund…
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => markSessionAsProcessed(peekSession.sessionId, !peekSession.processed)}
+                            className={quietPillCls}
+                        >
+                            {peekSession.processed ? 'Mark as pending' : 'Mark as processed'}
+                        </button>
+                    </>
                 )}
             >
                 {peekSession && (

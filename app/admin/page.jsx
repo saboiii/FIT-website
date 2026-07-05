@@ -14,6 +14,8 @@ import CustomPrintRequests from '@/components/Admin/CustomPrintRequests'
 import QuotingPricingManagement from '@/components/Admin/QuotingPricingManagement'
 import PrintTimeCalibration from '@/components/Admin/PrintTimeCalibration'
 import ReviewManagement from '@/components/Admin/ReviewManagement'
+import CustomersPanel from '@/components/Admin/CustomersPanel'
+import NotificationsBell from '@/components/DashboardComponents/NotificationsBell'
 import EventManagement from '@/components/Admin/EventManagement'
 import Overview from '@/components/Admin/Overview'
 import OnboardingWizard from '@/components/Admin/OnboardingWizard'
@@ -32,6 +34,7 @@ import {
     IoCubeOutline,
     IoReceiptOutline,
     IoCardOutline,
+    IoPeopleOutline,
     IoStarOutline,
     IoPrintOutline,
     IoFolderOpenOutline,
@@ -91,6 +94,12 @@ const NAV_GROUPS = [
                 label: 'Reviews',
                 icon: IoStarOutline,
                 description: 'Moderate product reviews.',
+            },
+            {
+                key: 'customers',
+                label: 'Customers',
+                icon: IoPeopleOutline,
+                description: 'Customer list with orders, value and requests — coming soon.',
             },
         ],
     },
@@ -179,6 +188,7 @@ const PANELS = {
     quoting: QuotingPricingManagement,
     printTiming: PrintTimeCalibration,
     reviews: ReviewManagement,
+    customers: CustomersPanel,
 }
 
 const VALID_TABS = new Set(['overview', ...Object.keys(PANELS)])
@@ -482,7 +492,10 @@ function AdminDashboard() {
                     <aside
                         className={`hidden md:flex flex-col gap-4 shrink-0 sticky top-24 ${railCollapsed ? 'w-16' : 'w-60'}`}
                     >
-                        {railSearch}
+                        <div className={`flex ${railCollapsed ? 'flex-col items-center gap-1' : 'items-center gap-2'}`}>
+                            <div className={railCollapsed ? '' : 'flex-1 min-w-0'}>{railSearch}</div>
+                            <NotificationsBell />
+                        </div>
                         {navList(setActiveTab, { collapsed: railCollapsed })}
                         <div className={railCollapsed ? 'flex justify-center' : 'flex justify-end pr-1'}>
                             <button

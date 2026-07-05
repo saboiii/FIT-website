@@ -11,7 +11,7 @@ import {
     SkeletonRow,
     FreshnessStamp,
 } from '@/components/dashboard-ui';
-import { barSelectCls } from './dashPanelUi';
+import { barSelectCls, quietPillCls } from './dashPanelUi';
 
 // Rating rendered as ink dots (§5.9) — ●●●●○ — with the value for a11y.
 function RatingDots({ value }) {
@@ -346,6 +346,15 @@ function ReviewManagement() {
                                                                 .join(', ')}
                                                         </span>
                                                     )}
+                                                    {/* Honest stub (blueprint §6 review replies — no openspec change filed yet). */}
+                                                    <button
+                                                        type="button"
+                                                        disabled
+                                                        title="Reply to reviews — coming soon"
+                                                        className={`${quietPillCls} ml-auto px-3 py-1`}
+                                                    >
+                                                        Reply
+                                                    </button>
                                                 </div>
                                             </div>
                                         ))}

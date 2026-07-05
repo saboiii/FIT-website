@@ -130,6 +130,15 @@ function Campaigns({ showToast }) {
                             Cancel edit
                         </button>
                     )}
+                    {/* Honest stub (openspec add-newsletter-test-send): no test-send endpoint yet. */}
+                    <button
+                        type="button"
+                        disabled
+                        title="Send test to me — coming soon"
+                        className={quietBtnCls}
+                    >
+                        Send test to me
+                    </button>
                     <button onClick={() => saveCampaign()} disabled={busy} className={sunBtnCls}>
                         {form.scheduledFor ? 'Save & schedule' : 'Save draft'}
                     </button>

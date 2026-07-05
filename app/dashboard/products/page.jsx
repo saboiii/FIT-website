@@ -9,13 +9,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React, { useEffect, useMemo, useState } from 'react'
 import { GoChevronDown, GoChevronUp, GoPlus } from 'react-icons/go'
-import { IoStorefrontOutline } from 'react-icons/io5'
-import { DashProvider, EmptyState, GlassBar, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
+import { IoStatsChartOutline, IoStorefrontOutline } from 'react-icons/io5'
+import { ComingSoon, DashProvider, EmptyState, GlassBar, PeekPanel, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
 import { currencyPrefix, formatMoney } from '@/components/DashboardComponents/format'
 
 // Tailwind needs literal class strings (no runtime interpolation of variants).
-const HEAD_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_110px]'
-const ROW_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px] md:grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_110px]'
+const HEAD_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_230px]'
+const ROW_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px] md:grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_230px]'
 
 // Out of stock: not infinite AND (all per-option stocks 0 when options carry
 // stock, otherwise total stock 0).
@@ -66,6 +66,8 @@ function MyProducts() {
     const [query, setQuery] = useState('');
     const [tab, setTab] = useState('all');
     const [sort, setSort] = useState({ field: 'createdAt', dir: 'desc' });
+    // Per-product analytics peek — honest stub (openspec add-creator-product-analytics).
+    const [peekProduct, setPeekProduct] = useState(null);
 
     useEffect(() => {
         if (!user) return;
@@ -239,7 +241,7 @@ function MyProducts() {
                                             <span className="dash-data text-right hidden md:block">{stockDisplay(product)}</span>
                                             <span className="dash-data text-right hidden md:block">{product.numberSold || 0}</span>
                                             <span className="dash-data text-right text-[var(--dash-ink-soft)] hidden md:block">{created}</span>
-                                            <span className="hidden md:flex justify-end">
+                                            <span className="hidden md:flex justify-end items-center gap-3">
                                                 {product.slug && (
                                                     <Link
                                                         href={`/products/${product.slug}`}
@@ -249,6 +251,22 @@ function MyProducts() {
                                                         View in store
                                                     </Link>
                                                 )}
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); setPeekProduct(product) }}
+                                                    className="text-[13px] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 whitespace-nowrap cursor-pointer"
+                                                >
+                                                    Performance
+                                                </button>
+                                                {/* Honest stub (openspec add-listing-manager-extras): no duplicate endpoint yet. */}
+                                                <button
+                                                    type="button"
+                                                    disabled
+                                                    title="Needs backend — coming soon"
+                                                    className="text-[13px] text-[var(--dash-ink-soft)] opacity-0 group-hover:opacity-40 whitespace-nowrap cursor-not-allowed"
+                                                >
+                                                    Duplicate
+                                                </button>
                                             </span>
                                         </div>
                                     )
@@ -257,6 +275,20 @@ function MyProducts() {
                         )}
                     </div>
                 )}
+
+                {/* Per-product analytics — honest stub (openspec add-creator-product-analytics). */}
+                <PeekPanel
+                    open={Boolean(peekProduct)}
+                    onClose={() => setPeekProduct(null)}
+                    title={peekProduct?.name || ''}
+                    actions={<ComingSoon />}
+                >
+                    <EmptyState
+                        icon={<IoStatsChartOutline />}
+                        title="Product Performance — Coming Soon"
+                        body="A per-product table of views, add-to-carts, sales and conversion (plus revenue and referrers) will appear here once creator analytics are wired to PostHog."
+                    />
+                </PeekPanel>
             </div>
         </DashProvider>
     )

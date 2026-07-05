@@ -16,6 +16,7 @@ import RevenueCard from '@/components/DashboardComponents/RevenueCard'
 import OrdersLedger from '@/components/DashboardComponents/OrdersLedger'
 import ExpressWidget from '@/components/DashboardComponents/ExpressWidget'
 import SetupChecklist from '@/components/DashboardComponents/SetupChecklist'
+import NotificationsBell from '@/components/DashboardComponents/NotificationsBell'
 import { currencyPrefix, formatMoney } from '@/components/DashboardComponents/format'
 
 dayjs.extend(relativeTime)
@@ -23,6 +24,8 @@ dayjs.extend(relativeTime)
 const NAV_LINKS = [
     { href: '/dashboard', label: 'Home', active: true },
     { href: '/dashboard/products', label: 'My products' },
+    { href: '/dashboard/payouts', label: 'Payouts' },
+    { href: '/dashboard/discounts', label: 'Discounts' },
     { href: '/dashboard/messages', label: 'Messages' },
     { href: '/account', label: 'Account settings' },
 ]
@@ -256,7 +259,10 @@ function Dashboard() {
                 top strip on mobile. */}
             <aside className="shrink-0 lg:w-52 flex flex-col gap-6">
                 <div id="shop-name">
-                    <span className="dash-label">Your shop</span>
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="dash-label">Your shop</span>
+                        <NotificationsBell />
+                    </div>
                     {displayNameAvailable ? (
                         editingName ? (
                             <div className="mt-1 flex flex-col gap-2">

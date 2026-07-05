@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { IoDownloadOutline, IoPrintOutline } from 'react-icons/io5'
 import ShippingFields from '@/components/DashboardComponents/ProductFormFields/ShippingFields'
 import { useToast } from '@/components/General/ToastProvider'
-import { PeekPanel, DottedRow, Timeline, StatusPill } from '@/components/dashboard-ui'
+import { PeekPanel, DottedRow, Timeline, StatusPill, ComingSoon } from '@/components/dashboard-ui'
 
 // Status vocabulary shared by the queue list and the peek (§5.8).
 export const STATUS_LABELS = {
@@ -320,9 +320,17 @@ export default function RequestPeek({
                         <DottedRow label="Est. print time">{`≈ ${Number(printHours).toFixed(1)} h`}</DottedRow>
                     )}
                     {r.quote?.total != null && (
-                        <DottedRow label="Quote total" className="font-medium">
-                            {`${String(r.quote.currency || 'sgd').toUpperCase()} ${Number(r.quote.total).toFixed(2)}`}
-                        </DottedRow>
+                        <>
+                            <DottedRow label="Quote total" className="font-medium">
+                                {`${String(r.quote.currency || 'sgd').toUpperCase()} ${Number(r.quote.total).toFixed(2)}`}
+                            </DottedRow>
+                            {/* Honest stub (openspec add-quote-review-state): quotes have no
+                                validity window yet — the value stays a dash, never a fake date. */}
+                            <DottedRow label="Valid until">
+                                <span className="dash-soft">—</span>
+                                <ComingSoon />
+                            </DottedRow>
+                        </>
                     )}
                 </div>
             )}

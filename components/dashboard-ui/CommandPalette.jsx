@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { IoSearchOutline } from 'react-icons/io5'
 import { sheet, swap } from '@/lib/motion/tokens'
 import useScrollLock from './useScrollLock'
+import ComingSoon from './ComingSoon'
 
 /**
  * ⌘K command palette (§4.8 #16, §9.1/9.6). Always mounted inside the shell so
@@ -196,7 +197,15 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
 
                 <div id="dash-palette-list" ref={listRef} role="listbox" aria-label="Commands" className="dash-scroll max-h-[50vh] py-2">
                     {flatItems.length === 0 && (
-                        <p className="px-5 py-6 text-[13px] dash-soft">No matches — try a panel name or a setting.</p>
+                        <>
+                            <p className="px-5 py-6 text-[13px] dash-soft">No matches — try a panel name or a setting.</p>
+                            {/* Honest stub (blueprint §6 palette entity search — no openspec
+                                change filed yet): non-interactive footer, no dead button. */}
+                            <div className="flex items-center gap-2 px-5 pb-4 border-t border-[var(--dash-line)] pt-3">
+                                <span className="text-[12px] dash-soft">Searching orders &amp; customers</span>
+                                <ComingSoon />
+                            </div>
+                        </>
                     )}
                     {visibleGroups.map((group) => (
                         <div key={group.key} className="px-2 pb-1">

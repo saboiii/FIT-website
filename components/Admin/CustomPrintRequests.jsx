@@ -168,7 +168,7 @@ export default function CustomPrintRequests() {
             await navigator.clipboard.writeText(id)
             showToast('Request ID copied.', 'success')
         } catch {
-            showToast('Copy failed — select the ID manually.', 'error')
+            showToast('Copy failed. Select the ID manually.', 'error')
         }
     }
 
@@ -204,35 +204,44 @@ export default function CustomPrintRequests() {
 
     return (
         <div className="p-4 md:p-6">
-            <GlassBar className="flex-wrap">
-                <label data-tour="requests-search" className="flex items-center gap-2 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-full px-3 py-1.5 w-full sm:w-auto sm:min-w-[220px]">
-                    <IoSearchOutline size={14} className="shrink-0 text-[var(--dash-ink-soft)]" aria-hidden="true" />
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Search model, email, or ID…"
-                        aria-label="Search requests"
-                        className="w-full min-w-0 bg-transparent outline-none text-[13px]"
-                    />
-                </label>
+            {/* Stable bar layout (client polish, 2026-07-05): tabs own the flexible
+                left region and scroll inside it; the controls on the right are a
+                shrink-0 group. Growing tab counts never push anything around. */}
+            <GlassBar>
                 <ViewTabs
+                    className="flex-1 min-w-0"
                     tabs={VIEWS.map((v) => ({ key: v.key, label: v.label, count: counts[v.key] }))}
                     active={view}
                     onChange={setView}
                     data-tour="requests-views"
                 />
-                <button
-                    type="button"
-                    onClick={exportToExcel}
-                    disabled={visible.length === 0}
-                    data-tour="requests-export"
-                    className="dash-hoverable ml-auto flex items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-[var(--dash-canvas)] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                    <IoDownloadOutline size={14} aria-hidden="true" /> Export
-                </button>
-                <FreshnessStamp at={fetchedAt} />
-                <TourHelpButton onClick={() => setTourOpen(true)} />
+                <div className="flex items-center gap-2 shrink-0">
+                    <label
+                        data-tour="requests-search"
+                        className="flex items-center gap-2 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-full px-3 py-1.5 w-[160px] sm:w-[220px] focus-within:border-[var(--dash-focus-line)] focus-within:shadow-[var(--dash-focus-ring)]"
+                    >
+                        <IoSearchOutline size={14} className="shrink-0 text-[var(--dash-ink-soft)]" aria-hidden="true" />
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Search model, email, or ID…"
+                            aria-label="Search requests"
+                            className="dash-input-bare w-full min-w-0 bg-transparent outline-none text-[13px]"
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        onClick={exportToExcel}
+                        disabled={visible.length === 0}
+                        data-tour="requests-export"
+                        className="dash-hoverable flex items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-[var(--dash-canvas)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <IoDownloadOutline size={14} aria-hidden="true" /> Export
+                    </button>
+                    <FreshnessStamp at={fetchedAt} className="hidden md:inline" />
+                    <TourHelpButton onClick={() => setTourOpen(true)} />
+                </div>
             </GlassBar>
 
             {tourOffer.offered && !tourOpen && (
@@ -309,7 +318,7 @@ export default function CustomPrintRequests() {
                                                     {material && <span className="dash-data dash-soft">{material}</span>}
                                                     {swatches.length > 0 && (
                                                         <>
-                                                            {material && <span className="dash-soft" aria-hidden="true">·</span>}
+                                                            {material && <span className="h-3 w-px bg-[var(--dash-line)]" aria-hidden="true" />}
                                                             <span className="flex items-center gap-1">
                                                                 {swatches.map((color) => (
                                                                     <span
@@ -324,7 +333,7 @@ export default function CustomPrintRequests() {
                                                     )}
                                                     {Number.isFinite(printHours) && (
                                                         <>
-                                                            <span className="dash-soft" aria-hidden="true">·</span>
+                                                            <span className="h-3 w-px bg-[var(--dash-line)]" aria-hidden="true" />
                                                             <span className="dash-data dash-soft whitespace-nowrap">
                                                                 ≈ {Number(printHours).toFixed(1)} h
                                                             </span>

@@ -17,7 +17,7 @@ const TONES = {
 export default function StatusPill({ tone = 'paper', children, className = '' }) {
     return (
         <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium whitespace-nowrap ${TONES[tone] || TONES.paper} ${className}`}
+            className={`inline-flex h-6 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium leading-none whitespace-nowrap ${TONES[tone] || TONES.paper} ${className}`}
         >
             {children}
         </span>

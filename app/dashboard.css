@@ -33,6 +33,11 @@
   --dash-shadow-float: 0 2px 4px rgb(120 90 20 / 0.05), 0 8px 16px rgb(120 90 20 / 0.07),
     0 24px 48px rgb(120 90 20 / 0.09);
 
+  /* Focus (client polish, 2026-07-05): soft, Apple-esque — a hairline that
+     darkens plus a faint ink halo. Never a hard black outline. */
+  --dash-focus-line: #b6b2a4;
+  --dash-focus-ring: 0 0 0 3px rgb(17 17 17 / 0.06);
+
   background-color: var(--dash-canvas);
   color: var(--dash-ink);
   /* Legibility floor (§9.7): body text weight 400, never font-light. */
@@ -135,11 +140,22 @@
   }
 }
 
-/* Full-viewport palette/sheet scrim: fade in, blur everything behind (§9.1). */
+/* Full-viewport palette/sheet scrim (§9.1): a light canvas wash + blur, so the
+   page behind stays visible but softened. The Tier-2 panel above supplies its
+   own AA-contrast surface (glass-warm + opaque fallbacks); the scrim only
+   recedes the background. Only its opacity is ever animated — the blur is
+   static, never tweened per-frame (§4.10). */
 .dash-scrim {
-  background-color: rgb(250 249 245 / 0.45);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
-  backdrop-filter: blur(8px) saturate(140%);
+  background-color: rgb(250 249 245 / 0.3);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+/* No backdrop-filter: no softening available, so a heavier wash keeps the
+   sheet content legible against a busy page. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dash-scrim {
+    background-color: rgb(250 249 245 / 0.85);
+  }
 }
 @media (prefers-reduced-transparency: reduce) {
   .dash-scrim {
@@ -150,10 +166,28 @@
 }
 
 /* ---- Focus & interaction -------------------------------------------------- */
+/* Soft focus, always keyboard-visible: a 1px darker line hugging the element's
+   own shape plus the faint halo. box-shadow follows border-radius, so pills
+   stay pills (the old hard outline squared them off). */
 .dash :focus-visible {
-  outline: 2px solid var(--dash-ink);
-  outline-offset: 2px;
-  border-radius: 4px;
+  outline: none;
+  box-shadow:
+    0 0 0 1px var(--dash-focus-line),
+    var(--dash-focus-ring);
+}
+/* Form controls carry a real border: shift it darker instead of double-ringing. */
+.dash input:focus-visible,
+.dash select:focus-visible,
+.dash textarea:focus-visible {
+  outline: none;
+  border-color: var(--dash-focus-line);
+  box-shadow: var(--dash-focus-ring);
+}
+/* Bare inputs inside a styled shell (search pills, the palette field): the
+   shell shows the focus treatment via focus-within; the inner input stays quiet. */
+.dash .dash-input-bare:focus-visible {
+  box-shadow: none;
+  border-color: transparent;
 }
 .dash ::placeholder {
   color: var(--dash-ink-faint);
@@ -177,6 +211,20 @@
   .dash .dash-hoverable-lift {
     transition: none;
   }
+}
+
+/* Horizontal pill strips (ViewTabs): scroll inside their own box instead of
+   wrapping or pushing siblings. Scrollbar hidden; the 4px pad/negative-margin
+   pair keeps the focus halo from being clipped by the scroll box. */
+.dash .dash-hscroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: 4px;
+  margin: -4px;
+}
+.dash .dash-hscroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* Native inner scrolling (§9.8) */

@@ -64,6 +64,54 @@ describe('dashboard-ui primitives', () => {
         expect(onChange).toHaveBeenCalledWith('quote')
     })
 
+    it('ViewTabs pills have one fixed height and scroll instead of wrapping', () => {
+        render(
+            <ViewTabs
+                tabs={[
+                    { key: 'all', label: 'All', count: 9 },
+                    { key: 'quote', label: 'Needs quote' },
+                ]}
+                active="all"
+                onChange={() => {}}
+            />,
+        )
+        const strip = screen.getByRole('tablist')
+        // Own scroll box, no wrapping — counts can't push siblings around.
+        expect(strip.className).toContain('dash-hscroll')
+        expect(strip.className).toContain('flex-nowrap')
+        expect(strip.className).not.toContain('flex-wrap')
+        for (const tab of screen.getAllByRole('tab')) {
+            expect(tab.className).toContain('h-8')
+            expect(tab.className).toContain('items-center')
+            expect(tab.className).not.toContain('py-')
+        }
+    })
+
+    it('StatusPill renders at a fixed height regardless of content', () => {
+        render(
+            <>
+                <StatusPill tone="sun">Awaiting Quote</StatusPill>
+                <StatusPill tone="ok">Paid</StatusPill>
+            </>,
+        )
+        for (const label of ['Awaiting Quote', 'Paid']) {
+            const pill = screen.getByText(label)
+            expect(pill.className).toContain('h-6')
+            expect(pill.className).toContain('items-center')
+            expect(pill.className).toContain('whitespace-nowrap')
+            expect(pill.className).not.toContain('py-')
+        }
+    })
+
+    it('overlays use the see-through dash-scrim, not an opaque cover', () => {
+        const { baseElement } = render(
+            <PeekPanel open onClose={vi.fn()} title="Request fbf7">
+                body
+            </PeekPanel>,
+        )
+        expect(baseElement.querySelector('.dash-scrim')).toBeTruthy()
+    })
+
     it('ConfirmDialog confirms and cancels without window.confirm', () => {
         const onConfirm = vi.fn()
         const onClose = vi.fn()

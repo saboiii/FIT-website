@@ -8,9 +8,12 @@ import React from 'react'
  * are banned in dashboard code).
  */
 
+// Focus is soft (client polish, 2026-07-05): no hard outline — the hairline
+// darkens one step and a faint halo ring appears (--dash-focus-ring token).
+// dashboard.css applies the same treatment on :focus-visible for keyboard a11y.
 export const inputCls = (error = false) =>
-    `w-full rounded-[var(--dash-r-inner)] border bg-[var(--dash-card)] px-3 py-2 text-[13px] text-[var(--dash-ink)] ${
-        error ? 'border-[var(--dash-bad)]' : 'border-[var(--dash-line)]'
+    `w-full rounded-[var(--dash-r-inner)] border bg-[var(--dash-card)] px-3 py-2 text-[13px] text-[var(--dash-ink)] outline-none focus:shadow-[var(--dash-focus-ring)] ${
+        error ? 'border-[var(--dash-bad)]' : 'border-[var(--dash-line)] focus:border-[var(--dash-focus-line)]'
     }`
 
 export const labelCls = 'dash-label'

@@ -101,6 +101,28 @@ describe('CustomPrintRequests — job queue', () => {
         expect(screen.queryByText('vase.stl')).toBeNull()
     })
 
+    it('keeps the toolbar layout stable: tabs flex in a scroll box, controls stay shrink-0', async () => {
+        const { container } = render(<CustomPrintRequests />)
+        await screen.findByText('benchy.stl')
+
+        // Tabs own the flexible region and scroll inside it (no wrap, no pushing).
+        const tablist = screen.getByRole('tablist')
+        expect(tablist.className).toContain('flex-1')
+        expect(tablist.className).toContain('min-w-0')
+        expect(tablist.className).toContain('dash-hscroll')
+
+        // Search, export and the tour button live in one shrink-0 group.
+        const search = container.querySelector('[data-tour="requests-search"]')
+        const group = search.parentElement
+        expect(group.className).toContain('shrink-0')
+        expect(group.contains(container.querySelector('[data-tour="requests-export"]'))).toBe(true)
+
+        // Pills sit in an items-center row — nothing stretches them.
+        const pill = screen.getByText('Awaiting Quote')
+        expect(pill.className).toContain('h-6')
+        expect(pill.parentElement.className).toContain('items-center')
+    })
+
     it('opens the peek with the full config sheet, swatches, quote total and timeline', async () => {
         render(<CustomPrintRequests />)
         fireEvent.click(await screen.findByText('benchy.stl'))

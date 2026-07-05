@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import posthog from 'posthog-js'
 
 const OPTION_LABELS = {
   postProcessing: 'Post-processing',
@@ -72,6 +73,13 @@ export default function QuotePanel({ metrics, settings, deliveryTypeName, option
         if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'Quote failed')
         const data = await res.json()
         setQuote(data.quote)
+        posthog.capture('instant_quote_received', {
+          total: data.quote.total,
+          currency: data.quote.currency,
+          confidence: metrics.confidence || 'high',
+          volume_cm3: metrics.volumeCm3,
+          expedite: options.expedite,
+        })
       } catch (e) {
         if (e.name !== 'AbortError') setError(e.message || 'Could not get a quote')
       } finally {

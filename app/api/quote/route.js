@@ -14,6 +14,7 @@ import { s3 } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { limitQuoteRequest } from '@/lib/rateLimit'
 import { checkMachineLimits, machineLimitMessage } from '@/lib/quoting/machineLimits'
+import { getPostHogClient } from '@/lib/posthog-server'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -137,6 +138,19 @@ export async function POST(req) {
                 `${dev.tolerancePct}% for requestId=${requestId} ` +
                 `(client=${body?.volumeCm3} cm³, server=${serverMetrics.volumeCm3} cm³) — rejected`,
             )
+            try {
+              getPostHogClient().capture({
+                distinctId: userId,
+                event: 'quote_rejected_geometry_deviation',
+                properties: {
+                  request_id: requestId,
+                  volume_pct_delta: Number(dev.volumePctDelta.toFixed(1)),
+                  tolerance_pct: dev.tolerancePct,
+                },
+              })
+            } catch (phErr) {
+              console.error('PostHog quote_rejected capture failed:', phErr)
+            }
             return NextResponse.json(
               {
                 error:
@@ -207,6 +221,22 @@ export async function POST(req) {
       reqDoc.statusHistory.push({ status: 'quoted', note: 'Auto-quoted by Instant Quoting Engine' })
     }
     await reqDoc.save()
+
+    try {
+      getPostHogClient().capture({
+        distinctId: userId,
+        event: 'quote_persisted',
+        properties: {
+          request_id: requestId,
+          total: persistQuote.total,
+          currency: persistQuote.currency,
+          confidence: persistQuote.confidence,
+          server_recomputed: persistQuote !== quote,
+        },
+      })
+    } catch (phErr) {
+      console.error('PostHog quote_persisted capture failed:', phErr)
+    }
 
     // Tell the customer their instant quote is ready (email + buyer↔vendor
     // chat). Best-effort — never fail the quote on a notification error.

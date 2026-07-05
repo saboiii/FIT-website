@@ -47,3 +47,4 @@ next-env.d.ts
 # next-sitemap build artifacts
 public/robots.txt
 public/sitemap*.xml
+.env.local

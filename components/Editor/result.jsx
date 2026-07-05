@@ -9,6 +9,7 @@ import { mapGenericToPrintSettings, DEFAULT_PRINT_COLOURS, QUALITY_MAP, STRENGTH
 import { modifiedSettings } from '@/lib/editor/modifiedSettings'
 import { useToast } from '@/components/General/ToastProvider'
 import { useState } from 'react'
+import posthog from 'posthog-js'
 
 const whiteTheme = {
   colors: {
@@ -530,6 +531,12 @@ const Result = () => {
             'success',
           )
         }
+        posthog.capture('print_config_saved', {
+          mode,
+          volume_cm3: geometryMetrics?.volumeCm3 || 0,
+          confidence: geometryMetrics?.confidence || 'unknown',
+          used_generic_mode: mode === 'instant',
+        })
         router.push(returnTo || '/cart')
       }
     } catch (error) {
@@ -562,6 +569,11 @@ const Result = () => {
         body: JSON.stringify({ cartItem }),
       })
       if (!res.ok) throw new Error('Failed to add to cart')
+      posthog.capture('product_added_to_cart', {
+        product_id: productId,
+        source: 'editor_product_print',
+        colour: generic.colour,
+      })
       showToast('Added to cart!', 'success')
       router.push(returnTo || '/cart')
     } catch (error) {

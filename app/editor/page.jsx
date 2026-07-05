@@ -10,6 +10,7 @@ import { is3DModel, isZip } from '@/utils/isExtension'
 import { loadFileAsArrayBuffer } from '@/utils/buffers'
 import { safeInternalPath } from '@/utils/safeReturnPath'
 import { useUser } from '@clerk/nextjs'
+import posthog from 'posthog-js'
 
 const Loading = () => <div className="loader" />
 
@@ -183,6 +184,12 @@ const Editor = () => {
 
         useStore.setState({
             textOriginalFile: buffers.get(filePath) ? arrayBufferToBase64(buffers.get(filePath)) : '',
+        })
+
+        posthog.capture('model_uploaded', {
+            file_extension: (filePath.split('.').pop() || '').toLowerCase(),
+            file_size_bytes: buffers.get(filePath)?.byteLength || 0,
+            from_zip: acceptedFiles.length !== buffers.size,
         })
     }, [])
 

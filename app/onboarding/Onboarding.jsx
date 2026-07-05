@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { completeOnboarding, updateRoleFromStripe } from './_actions'
 import { useEffect, useState } from 'react'
 import Logo from '@/components/Logo'
+import posthog from 'posthog-js'
 
 
 function Onboarding() {
@@ -31,6 +32,7 @@ function Onboarding() {
             if (user.publicMetadata?.stripeSubscriptionId) {
                 await updateRoleFromStripe(user.publicMetadata.stripeSubscriptionId)
             }
+            posthog.capture('onboarding_completed')
             // Use window.location for a hard redirect to ensure middleware gets fresh session
             window.location.href = '/'
         }
@@ -45,7 +47,7 @@ function Onboarding() {
             />
             <h1>Welcome{isLoaded && user.firstName ? ", " + user?.firstName : ""}.</h1>
             <p className='w-1/2 md:w-1/3 text-center text-pretty inline'>
-                <span className='font-medium inline'>FixItTodaySG</span> is a Singapore-based technology solutions provider specializing in additive manufacturing and hardware integration. We're excited to have you on board!
+                <span className='font-medium inline'>FixItTodaySG</span> is a Singapore-based technology solutions provider specializing in additive manufacturing and hardware integration. We&apos;re excited to have you on board!
             </p>
             {/* {onboardingStage === 'complete' && (
                 

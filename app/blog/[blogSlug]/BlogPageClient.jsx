@@ -1,8 +1,10 @@
 "use client"
+import { useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import MarkdownRenderer from '@/components/General/MarkdownRenderer'
 import CTALink from '@/components/General/CTALink'
+import posthog from 'posthog-js'
 
 function imageSrc(path) {
     if (!path) return null
@@ -10,6 +12,21 @@ function imageSrc(path) {
 }
 
 export default function BlogPageClient({ post, contentHtml, related = [], preview = false }) {
+    const slug = post?.slug
+
+    useEffect(() => {
+        if (!slug || preview) return
+        posthog.capture('blog_post_viewed', {
+            slug,
+            title: post.title,
+            reading_time_minutes: post.readingTimeMinutes || 0,
+            has_cta: !!(post.cta && (post.cta.tag || post.cta.text || post.cta.url)),
+            related_count: related.length,
+        })
+        // Capture once per post view, not on unrelated prop changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [slug, preview])
+
     if (!post) return <div className="p-8">Not found</div>
 
     const hasCTA = !!(post.cta && (post.cta.tag || post.cta.text || post.cta.url))
@@ -31,7 +48,9 @@ export default function BlogPageClient({ post, contentHtml, related = [], previe
             )}
             <div className="flex flex-col items-center justify-center px-8 md:px-12">
                 {hasCTA && (
-                    <CTALink tag={post.cta?.tag} text={post.cta?.text} url={post.cta?.url} />
+                    <span onClickCapture={() => posthog.capture('blog_cta_clicked', { slug: post.slug, cta_url: post.cta?.url })}>
+                        <CTALink tag={post.cta?.tag} text={post.cta?.text} url={post.cta?.url} />
+                    </span>
                 )}
                 <h1 className="flex max-w-md text-center items-center justify-center mt-3 mb-4">
                     {post.title}

@@ -1,6 +1,7 @@
 'use client'
 import React, { use, useEffect, useState } from 'react'
 import { useUser } from "@clerk/nextjs"
+import posthog from 'posthog-js'
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { GoChevronLeft } from 'react-icons/go';
@@ -1101,6 +1102,7 @@ function Cart() {
                                     showToast('Please complete your custom print request before checking out.', 'error');
                                     return;
                                 }
+                                posthog.capture('checkout_started', { item_count: cart.length });
                                 await submitOrderNotes();
                                 window.location.href = "/checkout";
                             }}

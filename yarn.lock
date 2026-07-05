@@ -1479,7 +1479,7 @@
   resolved "https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz"
   integrity sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==
 
-"@posthog/core@^1.39.6":
+"@posthog/core@^1.39.5", "@posthog/core@^1.39.6":
   version "1.39.6"
   resolved "https://registry.yarnpkg.com/@posthog/core/-/core-1.39.6.tgz#31110701f2d2cbe33a15967d5d2f57680126e5e8"
   integrity sha512-o6ajIwN5zXoNP0D4H/QPmOyibNTUkSyOR6ya7AG5U2ywXx4awo72L2KnCoiZPQM5x/bXv6jPBdimH8M18Ax0aw==
@@ -7518,6 +7518,13 @@ posthog-js@^1.396.6:
     preact "^10.29.2"
     query-selector-shadow-dom "^1.0.1"
     web-vitals "^5.3.0"
+
+posthog-node@^5.39.4:
+  version "5.39.4"
+  resolved "https://registry.yarnpkg.com/posthog-node/-/posthog-node-5.39.4.tgz#74fc1dcec07e10a53cf0a2296675246da39d81db"
+  integrity sha512-+fCQ7htBFRQQFbIzl1T0TA7bDwYyaB9XP308ZFMCUoB5LzTzOFxBa6TYVrxdH/VQl43WXTp6sf0QsG2Z4XlNBg==
+  dependencies:
+    "@posthog/core" "^1.39.5"
 
 potpack@^1.0.1:
   version "1.0.2"

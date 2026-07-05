@@ -1,21 +1,23 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import { useUser } from '@clerk/nextjs'
 import posthog from 'posthog-js'
 
 const KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY
-const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com'
 const CONSENT_KEY = 'fit_cookie_consent'
 
 function readConsent() {
     try { return localStorage.getItem(CONSENT_KEY) } catch { return null }
 }
 
-// Pageview capture, gated on cookie consent. No-op entirely without a key.
+// Pageview capture and user identification, gated on cookie consent. No-op entirely without a key.
 export default function PostHogProvider({ children }) {
     const pathname = usePathname()
+    const { user, isLoaded } = useUser()
     const [consent, setConsent] = useState(null) // null = undecided
     const [ready, setReady] = useState(false)
+    const prevUserIdRef = useRef(null)
 
     useEffect(() => {
         setConsent(readConsent())
@@ -24,9 +26,13 @@ export default function PostHogProvider({ children }) {
     useEffect(() => {
         if (!KEY || consent !== 'accepted' || ready) return
         posthog.init(KEY, {
-            api_host: HOST,
+            api_host: '/ingest',
+            ui_host: 'https://us.posthog.com',
+            defaults: '2026-01-30',
+            capture_exceptions: true,
             capture_pageview: false, // captured manually on route change below
             persistence: 'localStorage+cookie',
+            debug: process.env.NODE_ENV === 'development',
         })
         setReady(true)
     }, [consent, ready])
@@ -34,6 +40,22 @@ export default function PostHogProvider({ children }) {
     useEffect(() => {
         if (ready && pathname) posthog.capture('$pageview')
     }, [ready, pathname])
+
+    // Identify user when PostHog is ready and Clerk session is loaded
+    useEffect(() => {
+        if (!ready || !isLoaded) return
+        if (user?.id) {
+            if (prevUserIdRef.current !== user.id) {
+                posthog.identify(user.id, {
+                    role: user.publicMetadata?.role,
+                })
+                prevUserIdRef.current = user.id
+            }
+        } else if (prevUserIdRef.current) {
+            posthog.reset()
+            prevUserIdRef.current = null
+        }
+    }, [ready, isLoaded, user?.id, user?.publicMetadata?.role])
 
     const decide = (value) => {
         try { localStorage.setItem(CONSENT_KEY, value) } catch { /* ignore */ }

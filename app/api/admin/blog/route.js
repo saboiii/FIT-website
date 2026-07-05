@@ -7,6 +7,7 @@ import { checkAdminPrivileges } from "@/lib/checkPrivileges";
 import { readingTimeMinutes } from '@/lib/blog/readingTime';
 import { extractTextFromTiptap } from '@/lib/blog/tiptapText';
 import { statusWrite, effectiveStatus } from '@/lib/blog/status';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -72,6 +73,23 @@ export async function POST(req) {
         data.slug = uniqueSlug;
         data.authorId = userId;
         post = await BlogPost.create(data);
+    }
+
+    if (data.status === 'published') {
+        try {
+            getPostHogClient().capture({
+                distinctId: userId,
+                event: 'blog_post_published',
+                properties: {
+                    slug: post.slug,
+                    content_format: post.contentFormat,
+                    reading_time_minutes: post.readingTimeMinutes || 0,
+                    featured: !!post.featured,
+                },
+            });
+        } catch (phErr) {
+            console.error('PostHog blog_post_published capture failed:', phErr);
+        }
     }
 
     return NextResponse.json({ ok: true, post });

@@ -61,9 +61,13 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
 
 11. **add-slicer-accurate-estimation** — cura-wasm slicer behind the engine's
     interface. *(DEFERRED — needs browser/worker env; heuristic suffices)*
-    A lightweight alternative is proposed in
-    `add-lightweight-print-time-estimator` (layer-stack heuristic in a worker;
-    no WASM).
+    The lightweight alternative shipped instead: see
+    `add-lightweight-print-time-estimator` *(✅ archived 2026-07-05 — pure
+    layer-stack estimator + worker, validation harness (CLI + pure fitter),
+    and a self-serve admin calibration panel (Settings → Print Timing +
+    wizard step 4); spec folded into `admin-dashboard`. The client's physical
+    calibration and the pricing flip it gates were spun out to
+    `enable-shape-aware-print-pricing`)*.
 12. **add-otp-contact-verification** — OTP contact channel at checkout.
     *(DROPPED 2026-06-12 — client chose email-only; superseded by
     `add-email-notifications-suite`)*
@@ -224,6 +228,10 @@ Defects found during the 2026-07-04 repo audit, implemented test-first:
     (admin sidebar/wizard, blog editor, newsletter end-to-end) and the
     amount-mismatch admin surfacing; consider merging with "improve the UI
     for creators".
+37. **enable-shape-aware-print-pricing** — *(BACKLOG, gated on the client
+    calibrating via Admin → Settings → Print Timing)* flip priced quotes to
+    the calibrated layer-stack estimator behind the `estimatePrintHours`
+    seam + wire the editor worker; spun out of the archived estimator change.
 
 Also 2026-07-04 (no openspec change needed): `yarn lint` repaired (`eslint .`
 + flat-config `.jsx` matching; 0 errors), missing `IoMdLock` import in

@@ -11,6 +11,10 @@ vi.mock('@/components/General/ToastProvider', () => ({
 vi.mock('@/components/Admin/DeliveryTypeManagement', () => ({
   default: () => <div>delivery-panel</div>,
 }))
+// Same for the calibration step (it fetches its own data).
+vi.mock('@/components/Admin/PrintTimeCalibration', () => ({
+  default: () => <div>calibration-panel</div>,
+}))
 
 const quotingPayload = {
   quotingConfig: { materialRatePerGram: 0.02, printTimeRatePerHour: 3, timeModel: {} },
@@ -52,6 +56,9 @@ describe('OnboardingWizard', () => {
     fireEvent.click(screen.getByText('Next'))
     expect(await screen.findByText(/Print time estimation/)).toBeInTheDocument()
     expect(screen.getByText('Machine limits')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Next'))
+    expect(await screen.findByText('calibration-panel')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Next'))
     expect(await screen.findByText(/Colour \/ material catalogue/)).toBeInTheDocument()

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { WIZARD_STEPS, nextStep, prevStep, isLastStep } from '@/lib/admin/wizardSteps'
 import QuotingPricingManagement from '@/components/Admin/QuotingPricingManagement'
 import DeliveryTypeManagement from '@/components/Admin/DeliveryTypeManagement'
+import PrintTimeCalibration from '@/components/Admin/PrintTimeCalibration'
 
 // Full-screen first-run wizard. Each step is a thin wrapper around the same
 // form sections used in Settings — the config itself is the wizard state, so
@@ -44,6 +45,7 @@ export default function OnboardingWizard({ adminEmailPresent, onClose }) {
                             <ul className="list-disc pl-5 text-xs text-lightColor flex flex-col gap-1">
                                 <li>Pricing — your material and machine-time rates, fees and minimum price.</li>
                                 <li>Your machines — tune print-time estimates and build-size limits.</li>
+                                <li>Print timing — calibrate estimates with a couple of timed test prints.</li>
                                 <li>Colours &amp; materials — the catalogue customers pick from.</li>
                                 <li>Delivery — at least one shipping option for printed orders.</li>
                             </ul>
@@ -65,6 +67,16 @@ export default function OnboardingWizard({ adminEmailPresent, onClose }) {
                     )}
                     {current.key === 'pricing' && <QuotingPricingManagement sections={['pricing']} compact />}
                     {current.key === 'machines' && <QuotingPricingManagement sections={['machines']} compact />}
+                    {current.key === 'calibration' && (
+                        <div className="flex flex-col gap-3">
+                            <p className="text-xs text-lightColor">
+                                This step needs real prints, so it usually finishes after the wizard:
+                                add a model now, print it when convenient, then come back to
+                                Settings → Print Timing to enter the time and apply.
+                            </p>
+                            <PrintTimeCalibration compact />
+                        </div>
+                    )}
                     {current.key === 'colours' && <QuotingPricingManagement sections={['colours']} compact />}
                     {current.key === 'delivery' && <DeliveryTypeManagement />}
                 </div>

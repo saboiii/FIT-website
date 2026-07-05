@@ -128,6 +128,38 @@ const AppSettingsSchema = new mongoose.Schema({
             wallTimeFactorPerLoop: { type: Number, default: null },
             minHours: { type: Number, default: null },
         },
+        // Shape-aware (layer-stack) estimator constants, fitted from the
+        // admin's timed test prints (Print Timing panel). Null = built-in
+        // defaults (lib/quoting/printTime/layerStack.DEFAULT_LAYER_STACK_MODEL).
+        layerStackModel: {
+            flowMm3PerS: { type: Number, default: null },
+            perLayerOverheadS: { type: Number, default: null },
+        },
+    },
+
+    // Timed test prints for calibrating the shape-aware print-time estimator.
+    // Only derived shape components are stored — model bytes are parsed once
+    // at upload and discarded.
+    printTimeCalibration: {
+        samples: {
+            type: [{
+                label: { type: String, default: '' },
+                fileName: { type: String, default: '' },
+                settings: {
+                    layerHeightMm: { type: Number, default: 0.2 },
+                    infillPercent: { type: Number, default: 20 },
+                    wallLoops: { type: Number, default: 2 },
+                    enableSupport: { type: Boolean, default: false },
+                },
+                extrudedMm3: { type: Number, required: true },
+                totalLayers: { type: Number, required: true },
+                supportOn: { type: Boolean, default: false },
+                actualHours: { type: Number, default: null },
+                createdAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+        },
+        fittedAt: { type: Date, default: null },
     },
 
     // Print-farm machine capacity (admin-entered; null = no limit enforced).

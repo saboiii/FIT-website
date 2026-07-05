@@ -12,6 +12,7 @@ import OrderStatusManagement from '@/components/Admin/OrderStatusManagement'
 import CustomPrintProductManagement from '@/components/Admin/CustomPrintProductManagement'
 import CustomPrintRequests from '@/components/Admin/CustomPrintRequests'
 import QuotingPricingManagement from '@/components/Admin/QuotingPricingManagement'
+import PrintTimeCalibration from '@/components/Admin/PrintTimeCalibration'
 import ReviewManagement from '@/components/Admin/ReviewManagement'
 import EventManagement from '@/components/Admin/EventManagement'
 import Overview from '@/components/Admin/Overview'
@@ -51,6 +52,7 @@ const NAV_GROUPS = [
         title: 'Settings',
         items: [
             { key: 'quoting', label: 'Quoting & Pricing' },
+            { key: 'printTiming', label: 'Print Timing' },
             { key: 'delivery', label: 'Delivery' },
         ],
     },
@@ -68,6 +70,7 @@ const PANELS = {
     customPrint: CustomPrintProductManagement,
     customPrintRequests: CustomPrintRequests,
     quoting: QuotingPricingManagement,
+    printTiming: PrintTimeCalibration,
     reviews: ReviewManagement,
 }
 

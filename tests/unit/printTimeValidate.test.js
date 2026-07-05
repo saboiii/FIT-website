@@ -3,6 +3,7 @@ import {
   estimatePrintHoursLayerStack,
   layerStackComponents,
   hoursFromLayerStackComponents,
+  resolveLayerStackModel,
   DEFAULT_LAYER_STACK_MODEL,
 } from '@/lib/quoting/printTime/layerStack'
 import { comparePrintTimes, fitLayerStackConstants } from '@/lib/quoting/printTime/validate'
@@ -77,6 +78,25 @@ describe('fitLayerStackConstants', () => {
     // Same shape twice — proportional components, constants inseparable.
     const twin = [syntheticSample(20, 20, 20), syntheticSample(20, 20, 20)]
     expect(fitLayerStackConstants(twin)).toBeNull()
+  })
+})
+
+describe('resolveLayerStackModel', () => {
+  it('merges admin-fitted constants over the defaults', () => {
+    const m = resolveLayerStackModel({ flowMm3PerS: 7.5, perLayerOverheadS: 2.1 })
+    expect(m.flowMm3PerS).toBe(7.5)
+    expect(m.perLayerOverheadS).toBe(2.1)
+    expect(m.supportTimeFactor).toBe(DEFAULT_LAYER_STACK_MODEL.supportTimeFactor)
+  })
+
+  it('falls back per-field for null/absent/invalid values', () => {
+    expect(resolveLayerStackModel(null)).toEqual(DEFAULT_LAYER_STACK_MODEL)
+    expect(resolveLayerStackModel({ flowMm3PerS: null, perLayerOverheadS: null })).toEqual(
+      DEFAULT_LAYER_STACK_MODEL,
+    )
+    const m = resolveLayerStackModel({ flowMm3PerS: -3, perLayerOverheadS: 2 })
+    expect(m.flowMm3PerS).toBe(DEFAULT_LAYER_STACK_MODEL.flowMm3PerS)
+    expect(m.perLayerOverheadS).toBe(2)
   })
 })
 

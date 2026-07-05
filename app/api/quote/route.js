@@ -120,7 +120,7 @@ export async function POST(req) {
         }
         const bytes = tooLarge ? null : await obj.Body.transformToByteArray()
         const serverMetrics = bytes
-          ? await recomputeMetricsFromModel(bytes, name, body?.settings)
+          ? await recomputeMetricsFromModel(bytes, name, body?.settings, pricingConfig.layerStackModel)
           : null
         if (serverMetrics?.volumeCm3 > 0) {
           // Deviation policy (product decision 2026-06-12): if the client's

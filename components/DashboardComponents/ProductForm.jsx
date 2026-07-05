@@ -986,7 +986,7 @@ function ProductForm({ mode = "Create", product = null }) {
                             </nav>
                             <div className="border-t border-[var(--dash-line)] pt-4 flex flex-col gap-3">
                                 {statusRow}
-                                <p className="text-[11px] text-[var(--dash-ink-soft)]">Status changes take effect on save.</p>
+                                <p className="text-[11px] font-medium text-[var(--dash-ink-soft)]">Status changes take effect on save.</p>
                                 <button type="submit" disabled={isLoading} className={`${quietBtnCls} w-full`}>
                                     {isLoading ? 'Saving…' : ctaLabel}
                                 </button>

@@ -1,7 +1,8 @@
 // RTL smokes for the redesigned admin payments panel (§9.10 accounting views):
 // summary tiles + date-grouped ledger render from a sessions fixture, the
 // By-creator/Statements sub-views aggregate client-side, the processed toggle
-// PATCHes the legacy endpoint, and the export button follows the active view.
+// PATCHes the legacy endpoint, and an enabled export button exists per view
+// (view-specific export CONTENT is exercised manually — xlsx is mocked here).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import CreatorPayments from '@/components/Admin/CreatorPayments'

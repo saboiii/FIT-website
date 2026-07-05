@@ -320,7 +320,7 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
                         type="color"
                         value={/^#[0-9a-fA-F]{6}$/.test(c.hex) ? c.hex : '#cccccc'}
                         onChange={(e) => updateColour(i, { hex: e.target.value })}
-                        className="h-8 w-10 rounded-[8px] border border-[var(--dash-line)] cursor-pointer"
+                        className="h-8 w-10 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] cursor-pointer"
                         title="Colour"
                         aria-label="Colour swatch"
                     />

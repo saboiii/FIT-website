@@ -168,10 +168,13 @@ export default function CoachMarks({ steps = [], open, onClose, panelKey }) {
                 the 60% ink scrim over everything else. */}
             <motion.div
                 data-coachmarks-spotlight
-                className="absolute rounded-[var(--dash-r-inner)] border-2 border-[var(--dash-sun)] pointer-events-none"
-                style={{ boxShadow: '0 0 0 9999px rgb(17 17 17 / 0.6)', top: 0, left: 0 }}
+                className="absolute rounded-[var(--dash-r-inner)] border-4 border-[var(--dash-sun)] pointer-events-none"
+                // Size set instantly (layout props are never animated — §4.5);
+                // only the transformable x/y glide between steps. The thick sun
+                // ring is the sanctioned spotlight marker (§4.1 amendment).
+                style={{ boxShadow: '0 0 0 9999px rgb(17 17 17 / 0.6)', top: 0, left: 0, width: rect.width, height: rect.height }}
                 initial={false}
-                animate={{ x: rect.left, y: rect.top, width: rect.width, height: rect.height }}
+                animate={{ x: rect.left, y: rect.top }}
                 transition={spring}
             />
             <motion.div

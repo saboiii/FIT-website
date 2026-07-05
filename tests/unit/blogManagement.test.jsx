@@ -78,7 +78,7 @@ describe('BlogManagement', () => {
     })
   })
 
-  it('renders no persistent toolbar buttons at rest in focus mode', async () => {
+  it('renders no toolbar chrome of its own — formatting is delegated to the (mocked) TipTap bubble/floating menus', async () => {
     await openWipPost()
     for (const name of ['Bold', 'Italic', 'Bullet list', 'Insert image', 'Quote']) {
       expect(screen.queryByRole('button', { name })).toBeNull()

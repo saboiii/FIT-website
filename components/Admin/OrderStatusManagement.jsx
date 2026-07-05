@@ -291,7 +291,7 @@ export default function OrderStatusManagement() {
                                 required
                                 disabled={Boolean(editingItem)}
                             />
-                            <p className="text-[11px] dash-soft">Unique identifier (snake_case, cannot be changed)</p>
+                            <p className="text-[11px] font-medium dash-soft">Unique identifier (snake_case, cannot be changed)</p>
                         </div>
                         <div className="flex flex-col gap-1.5">
                             <label htmlFor="displayName" className={labelCls}>Display name *</label>
@@ -304,7 +304,7 @@ export default function OrderStatusManagement() {
                                 placeholder="e.g., Awaiting Shipment"
                                 required
                             />
-                            <p className="text-[11px] dash-soft">User-friendly name</p>
+                            <p className="text-[11px] font-medium dash-soft">User-friendly name</p>
                         </div>
                     </div>
 
@@ -346,7 +346,7 @@ export default function OrderStatusManagement() {
                                 min="0"
                                 placeholder="0"
                             />
-                            <p className="text-[11px] dash-soft">Lower numbers appear first. Same numbers have equal priority.</p>
+                            <p className="text-[11px] font-medium dash-soft">Lower numbers appear first. Same numbers have equal priority.</p>
                         </div>
                     </div>
 
@@ -396,7 +396,7 @@ export default function OrderStatusManagement() {
                                 )
                             })}
                         </div>
-                        <p className="text-[11px] dash-soft">
+                        <p className="text-[11px] font-medium dash-soft">
                             Selected: {AVAILABLE_ICONS.find(i => i.name === form.icon)?.label}
                         </p>
                     </div>

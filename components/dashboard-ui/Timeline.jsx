@@ -13,16 +13,18 @@ export default function Timeline({ items, composer, className = '' }) {
             <ol className="relative mt-2 pl-5 before:absolute before:left-[5px] before:top-1 before:bottom-1 before:w-px before:bg-[var(--dash-line)]">
                 {items.map((item, i) => {
                     const tone = item.tone || (i === 0 ? 'sun' : 'ink')
+                    // Solid fills only — yellow borders are banned (§4.1) and
+                    // markers must be ≥12px.
                     const dot = {
-                        sun: 'bg-[var(--dash-sun)] border-[var(--dash-sun-deep)]',
-                        ink: 'bg-[var(--dash-ink)] border-[var(--dash-ink)]',
-                        hatch: 'dash-hatch bg-[var(--dash-card)] border-[var(--dash-line)]',
+                        sun: 'bg-[var(--dash-sun)]',
+                        ink: 'bg-[var(--dash-ink)]',
+                        hatch: 'dash-hatch bg-[var(--dash-card)] border border-[var(--dash-line)]',
                     }[tone]
                     return (
                         <li key={item.id || i} className="relative pb-4 last:pb-0">
                             <span
                                 aria-hidden="true"
-                                className={`absolute -left-5 top-[5px] h-2.5 w-2.5 rounded-full border ${dot}`}
+                                className={`absolute -left-[26px] top-1 h-3 w-3 rounded-full ${dot}`}
                             />
                             <div className="flex items-baseline justify-between gap-3">
                                 <p className={`text-[13px] ${i === 0 ? 'font-medium' : 'dash-soft'}`}>{item.title}</p>

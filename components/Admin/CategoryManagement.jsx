@@ -389,7 +389,7 @@ export default function CategoryManagement() {
                                         placeholder="electronics"
                                         required
                                     />
-                                    <p className="text-[11px] dash-soft">Lowercase, no spaces</p>
+                                    <p className="text-[11px] font-medium dash-soft">Lowercase, no spaces</p>
                                 </div>
                                 <div className="flex flex-col gap-1.5">
                                     <label htmlFor="catDisplayName" className={labelCls}>Display name *</label>
@@ -402,7 +402,7 @@ export default function CategoryManagement() {
                                         placeholder="Electronics"
                                         required
                                     />
-                                    <p className="text-[11px] dash-soft">Shown to users</p>
+                                    <p className="text-[11px] font-medium dash-soft">Shown to users</p>
                                 </div>
                             </div>
                             <DashSelect
@@ -448,7 +448,7 @@ export default function CategoryManagement() {
                                         placeholder="popular"
                                         required
                                     />
-                                    <p className="text-[11px] dash-soft">Lowercase, no spaces</p>
+                                    <p className="text-[11px] font-medium dash-soft">Lowercase, no spaces</p>
                                 </div>
                                 <div className="flex flex-col gap-1.5">
                                     <label htmlFor="subDisplayName" className={labelCls}>Display name *</label>
@@ -461,7 +461,7 @@ export default function CategoryManagement() {
                                         placeholder="Popular"
                                         required
                                     />
-                                    <p className="text-[11px] dash-soft">Shown to users</p>
+                                    <p className="text-[11px] font-medium dash-soft">Shown to users</p>
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2 pt-3 border-t border-[var(--dash-line)]">

@@ -174,7 +174,7 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
                                             <img
                                                 src={`/api/proxy?key=${encodeURIComponent(product.images[0])}`}
                                                 alt={product.name}
-                                                className="w-10 h-10 object-cover rounded-[8px] border border-[var(--dash-line)]"
+                                                className="w-10 h-10 object-cover rounded-[var(--dash-r-inner)] border border-[var(--dash-line)]"
                                             />
                                         )}
                                         <div className="flex-1 min-w-0">
@@ -223,7 +223,7 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
                                     <img
                                         src={`/api/proxy?key=${encodeURIComponent(product.images[0])}`}
                                         alt={product.name}
-                                        className="w-12 h-12 object-cover rounded-[8px] border border-[var(--dash-line)]"
+                                        className="w-12 h-12 object-cover rounded-[var(--dash-r-inner)] border border-[var(--dash-line)]"
                                     />
                                 )}
 

@@ -38,7 +38,11 @@ export default function StatTile({ label, value, delta = null, hint, variant = '
                 <span className={`dash-data ${variant === 'ink' ? labelColor : 'dash-soft'}`}>{hint}</span>
             ) : null}
             {onClick && actionLabel && (
-                <span className={`text-[13px] font-medium mt-1 ${variant === 'ink' ? 'text-[var(--dash-sun)]' : ''}`}>
+                <span
+                    className={`text-[13px] font-medium mt-1 underline underline-offset-2 ${
+                        variant === 'ink' ? 'text-[var(--dash-canvas)]' : ''
+                    }`}
+                >
                     {actionLabel} →
                 </span>
             )}

@@ -33,7 +33,7 @@ export default function ConfirmDialog({
                         disabled={busy}
                         className={`dash-hoverable rounded-full px-4 py-2 text-[13px] font-medium cursor-pointer disabled:opacity-50 active:scale-[0.97] ${
                             tone === 'bad'
-                                ? 'bg-[var(--dash-bad)] text-white'
+                                ? 'bg-[var(--dash-bad)] text-[var(--dash-canvas)]'
                                 : 'bg-[var(--dash-ink)] text-[var(--dash-canvas)]'
                         }`}
                     >

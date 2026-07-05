@@ -188,10 +188,10 @@ function Campaigns({ showToast }) {
                                             <img
                                                 src={src}
                                                 alt=""
-                                                className="w-10 h-10 object-cover rounded-[8px] border border-[var(--dash-line)] shrink-0"
+                                                className="w-10 h-10 object-cover rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] shrink-0"
                                             />
                                         ) : (
-                                            <span aria-hidden="true" className="dash-hatch w-10 h-10 rounded-[8px] border border-[var(--dash-line)] bg-[var(--dash-card)] shrink-0" />
+                                            <span aria-hidden="true" className="dash-hatch w-10 h-10 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)] shrink-0" />
                                         )}
                                         <span className="text-[13px] font-medium text-[var(--dash-ink)] truncate">{p.title}</span>
                                     </label>

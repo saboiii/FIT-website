@@ -280,7 +280,7 @@ export default function EventManagement() {
                             <label htmlFor="eventDescription" className={labelCls}>Description</label>
                             <textarea
                                 id="eventDescription"
-                                className={`${inputCls()} min-h-[70px]`}
+                                className={`${inputCls()} min-h-[72px]`}
                                 value={form.description}
                                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                                 placeholder="Short description for internal reference"
@@ -296,7 +296,7 @@ export default function EventManagement() {
                                 onChange={(e) => setForm((f) => ({ ...f, locations: e.target.value }))}
                                 placeholder="e.g. Online, In-store, SG, MY"
                             />
-                            <p className="text-[11px] dash-soft">
+                            <p className="text-[11px] font-medium dash-soft">
                                 Comma-separated list, for your own targeting/reference.
                             </p>
                         </div>

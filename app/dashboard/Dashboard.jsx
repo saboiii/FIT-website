@@ -192,7 +192,7 @@ function Dashboard() {
         )
     }
 
-    const heroName = displayName && !isRawUserId(displayName) ? displayName : user?.firstName || 'there'
+    const heroName = displayName && !isRawUserId(displayName) ? displayName : user?.fullName || 'there'
 
     return (
         <div className="flex flex-col gap-4">

@@ -21,7 +21,10 @@ export default function Sheet({ open, onClose, side = 'center', label, widthClas
         <AnimatePresence>
             {open && (
                 <motion.div
-                    className={`dash fixed inset-0 z-50 flex ${side === 'right' ? 'justify-end' : 'items-center justify-center p-4'}`}
+                    // No `dash` class here: overlays always mount inside a .dash
+                    // tree (tokens inherit), and .dash paints an OPAQUE canvas
+                    // background that would black out the page behind the scrim.
+                    className={`fixed inset-0 z-50 flex ${side === 'right' ? 'justify-end' : 'items-center justify-center p-4'}`}
                     role="dialog"
                     aria-modal="true"
                     aria-label={label}

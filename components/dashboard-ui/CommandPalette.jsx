@@ -151,7 +151,9 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
     let rowIndex = -1
     return (
         <div
-            className="dash fixed inset-0 z-50 flex items-start justify-center px-4 pt-[15vh]"
+            // No `dash` class: it paints an opaque canvas background over the
+            // page (the shell's .dash scope already supplies the tokens).
+            className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[15vh]"
             role="dialog"
             aria-modal="true"
             aria-label="Command palette"

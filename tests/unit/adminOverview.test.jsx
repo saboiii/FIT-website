@@ -60,14 +60,11 @@ afterEach(() => {
 })
 
 describe('Admin Overview', () => {
-  it('collapses a mostly-complete checklist to its header row', () => {
+  it('removes the setup strip entirely once every step is configured', () => {
     render(<Overview setupData={configuredSetup} requests={[]} onNavigate={vi.fn()} onOpenWizard={vi.fn()} />)
-    expect(screen.getByText(/7\/7 complete/)).toBeInTheDocument()
+    expect(screen.queryByText(/Finish setting up your store/)).toBeNull()
     expect(screen.queryByText('Fix now')).toBeNull()
-    // Expanding a fully complete list still shows no Fix now.
-    fireEvent.click(screen.getByText(/7\/7 complete/))
-    expect(screen.queryByText('Fix now')).toBeNull()
-    expect(screen.getByText('Pricing rates set')).toBeInTheDocument()
+    expect(screen.queryByText('Run setup wizard')).toBeNull()
   })
 
   it('flags incomplete items with a consequence and a Fix now link', () => {
@@ -81,7 +78,7 @@ describe('Admin Overview', () => {
       />,
     )
     // 6/7 done → collapsed; expand to reach the rows.
-    fireEvent.click(screen.getByText(/6\/7 complete/))
+    fireEvent.click(screen.getByText(/Finish setting up your store: 1 step left/))
     expect(screen.getByText(/can’t be shipped/)).toBeInTheDocument()
     fireEvent.click(screen.getByText('Fix now'))
     expect(onNavigate).toHaveBeenCalledWith('delivery')
@@ -96,7 +93,7 @@ describe('Admin Overview', () => {
         onOpenWizard={vi.fn()}
       />,
     )
-    expect(screen.getByText(/0\/7 complete/)).toBeInTheDocument()
+    expect(screen.getByText(/Finish setting up your store: 7 steps left/)).toBeInTheDocument()
     expect(screen.getAllByText('Fix now').length).toBeGreaterThan(3)
   })
 
@@ -132,9 +129,16 @@ describe('Admin Overview', () => {
     expect(onNavigate).toHaveBeenCalledWith('customPrintRequests')
   })
 
-  it('opens the wizard from the checklist header', () => {
+  it('opens the wizard from the setup strip while steps remain', () => {
     const onOpenWizard = vi.fn()
-    render(<Overview setupData={configuredSetup} requests={[]} onNavigate={vi.fn()} onOpenWizard={onOpenWizard} />)
+    render(
+      <Overview
+        setupData={{ ...configuredSetup, deliveryTypes: [] }}
+        requests={[]}
+        onNavigate={vi.fn()}
+        onOpenWizard={onOpenWizard}
+      />,
+    )
     fireEvent.click(screen.getByText('Run setup wizard'))
     expect(onOpenWizard).toHaveBeenCalled()
   })
@@ -149,7 +153,7 @@ describe('Admin Overview', () => {
         onOpenWizard={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByText(/6\/7 complete/))
+    fireEvent.click(screen.getByText(/Finish setting up your store: 1 step left/))
     fireEvent.click(screen.getByText('Fix now'))
     expect(onNavigate).not.toHaveBeenCalled()
     expect(screen.getByText(/ADMIN_EMAIL=/)).toBeInTheDocument()
@@ -208,7 +212,7 @@ describe('Admin Overview', () => {
         onOpenWizard={vi.fn()}
       />,
     )
-    fireEvent.click(screen.getByText(/6\/7 complete/))
+    fireEvent.click(screen.getByText(/Finish setting up your store: 1 step left/))
     expect(document.body.textContent).not.toMatch(/[—·]/)
   })
 })
@@ -216,7 +220,7 @@ describe('Admin Overview', () => {
 describe('Admin shell (page)', () => {
   it('opens the command palette on ⌘K and lists the panels', async () => {
     render(<AdminPage />)
-    await screen.findByText(/7\/7 complete/)
+    await screen.findByText('Open print requests')
 
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
     const dialog = screen.getByRole('dialog', { name: 'Command palette' })
@@ -229,7 +233,7 @@ describe('Admin shell (page)', () => {
 
   it('collapses and expands the rail, flipping aria state', async () => {
     render(<AdminPage />)
-    await screen.findByText(/7\/7 complete/)
+    await screen.findByText('Open print requests')
 
     const toggle = screen.getByLabelText('Collapse navigation')
     expect(toggle).toHaveAttribute('aria-expanded', 'true')

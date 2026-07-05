@@ -9,7 +9,7 @@
 
 .dash {
   /* Colour tokens */
-  --dash-canvas: #faf9f5;
+  --dash-canvas: #fdfcfb;
   --dash-card: #ffffff;
   --dash-ink: #111111;
   --dash-ink-soft: #66645e;
@@ -225,6 +225,54 @@
 }
 .dash .dash-hscroll::-webkit-scrollbar {
   display: none;
+}
+
+/* Edge cue for hidden-scrollbar strips: a small chevron badge floating on the
+   clipped edge, gently nudging toward the hidden content. Opacity/transform
+   only; decorative (aria-hidden); still under reduced motion. */
+.dash .dash-scroll-cue {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background-color: var(--dash-card);
+  border: 1px solid var(--dash-line);
+  box-shadow: var(--dash-shadow-card);
+  color: var(--dash-ink-soft);
+  pointer-events: none;
+  animation: dash-scroll-nudge 1.4s ease-in-out infinite alternate;
+}
+.dash .dash-scroll-cue-left {
+  animation-name: dash-scroll-nudge-left;
+}
+@keyframes dash-scroll-nudge {
+  from {
+    opacity: 0.55;
+    transform: translate(0, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(3px, -50%);
+  }
+}
+@keyframes dash-scroll-nudge-left {
+  from {
+    opacity: 0.55;
+    transform: translate(0, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-3px, -50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash .dash-scroll-cue {
+    animation: none;
+    transform: translate(0, -50%);
+  }
 }
 
 /* Native inner scrolling (§9.8) */

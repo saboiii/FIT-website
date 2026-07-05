@@ -164,43 +164,39 @@ function BarList({ rows, ariaLabel }) {
     )
 }
 
-/** Day-of-week dot matrix (§4.7): sun = had requests, ink = peak, faint = none. */
+/**
+ * Day-of-week dot matrix (§4.7): sun = had requests, ink = peak, faint = none.
+ * Spans the full card width; there is no legend — each day explains itself on
+ * hover ("Tue 2 Jul: 3 requests, the busiest day in this window").
+ */
 function WeekdayDotMatrix({ matrix }) {
+    const busyness = (cell) => {
+        if (cell.count === 0) return 'a quiet day'
+        if (cell.key === matrix.peakKey) return 'the busiest day in this window'
+        return 'had requests'
+    }
     return (
-        <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-7 gap-x-2 gap-y-2.5 max-w-xs" role="img" aria-label="Requests per day over the last four weeks">
-                {WEEKDAYS.map((d) => (
-                    <span key={d} className="dash-label text-center">{d}</span>
-                ))}
-                {matrix.rows.flat().map((cell, i) =>
-                    cell === null ? (
-                        <span key={`future-${i}`} className="h-3 w-3 mx-auto" aria-hidden="true" />
-                    ) : (
-                        <span
-                            key={cell.key}
-                            title={`${cell.label}: ${cell.count} request${cell.count === 1 ? '' : 's'}`}
-                            className={`h-3 w-3 mx-auto rounded-full ${
-                                cell.count === 0
-                                    ? 'border border-[var(--dash-line)] bg-[var(--dash-canvas)]'
-                                    : cell.key === matrix.peakKey
-                                        ? 'bg-[var(--dash-ink)]'
-                                        : 'bg-[var(--dash-sun)]'
-                            }`}
-                        />
-                    ),
-                )}
-            </div>
-            <div className="flex items-center gap-4 flex-wrap">
-                <span className="flex items-center gap-1.5 dash-label">
-                    <span className="h-3 w-3 rounded-full bg-[var(--dash-sun)]" aria-hidden="true" /> Had requests
-                </span>
-                <span className="flex items-center gap-1.5 dash-label">
-                    <span className="h-3 w-3 rounded-full bg-[var(--dash-ink)]" aria-hidden="true" /> Busiest day
-                </span>
-                <span className="flex items-center gap-1.5 dash-label">
-                    <span className="h-3 w-3 rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)]" aria-hidden="true" /> Quiet
-                </span>
-            </div>
+        <div className="grid grid-cols-7 gap-x-2 gap-y-3 w-full" role="img" aria-label="Requests per day over the last four weeks. Hover a dot for that day's count.">
+            {WEEKDAYS.map((d) => (
+                <span key={d} className="dash-label text-center">{d}</span>
+            ))}
+            {matrix.rows.flat().map((cell, i) =>
+                cell === null ? (
+                    <span key={`future-${i}`} className="h-3.5 w-3.5 mx-auto" aria-hidden="true" />
+                ) : (
+                    <span
+                        key={cell.key}
+                        title={`${cell.label}: ${cell.count} request${cell.count === 1 ? '' : 's'}, ${busyness(cell)}`}
+                        className={`h-3.5 w-3.5 mx-auto rounded-full cursor-default ${
+                            cell.count === 0
+                                ? 'border border-[var(--dash-line)] bg-[var(--dash-canvas)]'
+                                : cell.key === matrix.peakKey
+                                    ? 'bg-[var(--dash-ink)]'
+                                    : 'bg-[var(--dash-sun)]'
+                        }`}
+                    />
+                ),
+            )}
         </div>
     )
 }
@@ -249,17 +245,21 @@ function AdminEmailSheet({ open, onClose }) {
 }
 
 /**
- * Store setup as a compact collapsible strip: one summary row (count + thin
- * segmented progress bar) that expands into the full checklist. Collapsed by
- * default once at least half the steps are done; expanded otherwise.
+ * Store setup as an EPHEMERAL strip, not a resident card: dashed border and
+ * hatch texture say "temporary, unfinished" (§4.1), like profile-completeness
+ * steps. It expands into the checklist on demand and disappears entirely once
+ * every step is configured (the wizard stays reachable from the palette).
  */
 function SetupStrip({ items, done, onFix, onOpenWizard }) {
     const [expandedPref, setExpandedPref] = useState(null)
     const remaining = items.length - done
     const expanded = expandedPref ?? (done < items.length / 2)
 
+    // All configured: the setup phase is over, so the strip leaves the room.
+    if (remaining === 0) return null
+
     return (
-        <DashCard>
+        <div className="rounded-[var(--dash-r-card)] border border-dashed border-[var(--dash-focus-line)] px-5 py-3.5">
             <div className="flex items-center gap-3 flex-wrap">
                 <button
                     onClick={() => setExpandedPref(!expanded)}
@@ -267,8 +267,9 @@ function SetupStrip({ items, done, onFix, onOpenWizard }) {
                     aria-controls="setup-checklist-rows"
                     className="dash-hoverable flex flex-1 min-w-0 items-center gap-3 text-left cursor-pointer"
                 >
+                    <span className="dash-hatch inline-block h-3 w-3 shrink-0 rounded-full border border-[var(--dash-line)]" aria-hidden="true" />
                     <span className="dash-section whitespace-nowrap">
-                        Store setup: {done}/{items.length} complete
+                        Finish setting up your store: {remaining} step{remaining === 1 ? '' : 's'} left
                     </span>
                     <span className="flex h-1.5 flex-1 min-w-[64px] max-w-[240px] gap-1" aria-hidden="true">
                         {items.map((item) => (
@@ -278,9 +279,6 @@ function SetupStrip({ items, done, onFix, onOpenWizard }) {
                             />
                         ))}
                     </span>
-                    {remaining > 0 && (
-                        <span className="text-[13px] dash-soft whitespace-nowrap">{remaining} left</span>
-                    )}
                     {expanded ? (
                         <IoChevronDownOutline size={14} className="text-[var(--dash-ink-soft)] shrink-0" aria-hidden />
                     ) : (
@@ -333,7 +331,7 @@ function SetupStrip({ items, done, onFix, onOpenWizard }) {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </DashCard>
+        </div>
     )
 }
 

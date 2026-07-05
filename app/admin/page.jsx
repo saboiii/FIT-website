@@ -462,7 +462,7 @@ function AdminDashboard() {
                     <p className="dash-label mb-2">Admin Dashboard</p>
                     <HeroGreeting
                         salutation={salutation()}
-                        name={user?.firstName || 'there'}
+                        name={user?.fullName || 'there'}
                         context="Manage your store and view daily operations, catalogue, storefront content and settings."
                     />
                 </div>

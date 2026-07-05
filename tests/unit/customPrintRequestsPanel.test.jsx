@@ -105,11 +105,12 @@ describe('CustomPrintRequests — job queue', () => {
         const { container } = render(<CustomPrintRequests />)
         await screen.findByText('benchy.stl')
 
-        // Tabs own the flexible region and scroll inside it (no wrap, no pushing).
+        // Tabs own the flexible region and scroll inside it (no wrap, no
+        // pushing). The wrapper takes the flex sizing; the tablist scrolls.
         const tablist = screen.getByRole('tablist')
-        expect(tablist.className).toContain('flex-1')
-        expect(tablist.className).toContain('min-w-0')
         expect(tablist.className).toContain('dash-hscroll')
+        expect(tablist.parentElement.className).toContain('flex-1')
+        expect(tablist.parentElement.className).toContain('min-w-0')
 
         // Search, export and the tour button live in one shrink-0 group.
         const search = container.querySelector('[data-tour="requests-search"]')

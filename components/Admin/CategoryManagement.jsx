@@ -1,16 +1,34 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { RxCross1 } from 'react-icons/rx'
 import { BsPlus, BsChevronDown, BsChevronRight } from 'react-icons/bs'
+import { IoTrashOutline, IoPricetagsOutline } from 'react-icons/io5'
+import {
+    DashCard,
+    StatusPill,
+    ViewTabs,
+    Sheet,
+    ConfirmDialog,
+    EmptyState,
+    SkeletonRow,
+} from '@/components/dashboard-ui'
+import { inputCls, labelCls, DashSelect, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import { sunBtnCls, inkBtnCls } from './dashPanelUi'
 
+/**
+ * Categories (§5.10): tree rows with type pill + active toggle; built-ins are
+ * hatch-protected. New category / subcategory share ONE Sheet with a type
+ * toggle. API payloads are unchanged.
+ */
 export default function CategoryManagement() {
     const [categories, setCategories] = useState([])
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [expandedCategories, setExpandedCategories] = useState({})
-    const [showCategoryForm, setShowCategoryForm] = useState(false)
-    const [showSubcategoryForm, setShowSubcategoryForm] = useState(false)
+    const [sheetOpen, setSheetOpen] = useState(false)
+    const [sheetKind, setSheetKind] = useState('category') // 'category' | 'subcategory'
+    const [deleteTarget, setDeleteTarget] = useState(null) // { kind, name, parentName?, label }
+    const [deleteBusy, setDeleteBusy] = useState(false)
     const { showToast } = useToast()
 
     const [formData, setFormData] = useState({
@@ -54,6 +72,17 @@ export default function CategoryManagement() {
         }
     }
 
+    const openSheet = (kind) => {
+        setSheetKind(kind)
+        setSheetOpen(true)
+    }
+
+    const closeSheet = () => {
+        setSheetOpen(false)
+        setFormData({ name: '', displayName: '', type: 'shop', isActive: true })
+        setSubForm({ parentName: '', name: '', displayName: '', isActive: true })
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!formData.name || !formData.displayName) {
@@ -76,8 +105,7 @@ export default function CategoryManagement() {
             const result = await response.json()
             if (response.ok) {
                 showToast('Category added!', 'success')
-                setFormData({ name: '', displayName: '', type: 'shop', isActive: true })
-                setShowCategoryForm(false)
+                closeSheet()
                 fetchCategories()
             } else {
                 showToast(result.error || 'Failed to add', 'error')
@@ -86,51 +114,6 @@ export default function CategoryManagement() {
             showToast('Error: ' + error.message, 'error')
         } finally {
             setSaving(false)
-        }
-    }
-
-    const handleDelete = async (name) => {
-        if (!confirm('Delete this category?')) return
-
-        try {
-            const response = await fetch('/api/admin/settings', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'category', name })
-            })
-
-            if (response.ok) {
-                showToast('Deleted!', 'success')
-                fetchCategories()
-            } else {
-                showToast('Failed to delete', 'error')
-            }
-        } catch (error) {
-            showToast('Error: ' + error.message, 'error')
-        }
-    }
-
-    const handleToggleActive = async (name, isActive) => {
-        try {
-            const response = await fetch('/api/admin/settings', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'category',
-                    action: 'toggleActive',
-                    name,
-                    isActive: !isActive
-                })
-            })
-
-            if (response.ok) {
-                showToast('Updated!', 'success')
-                fetchCategories()
-            } else {
-                showToast('Failed to update', 'error')
-            }
-        } catch (error) {
-            showToast('Error: ' + error.message, 'error')
         }
     }
 
@@ -156,8 +139,7 @@ export default function CategoryManagement() {
             const result = await response.json()
             if (response.ok) {
                 showToast('Subcategory added!', 'success')
-                setSubForm({ parentName: '', name: '', displayName: '', isActive: true })
-                setShowSubcategoryForm(false)
+                closeSheet()
                 fetchCategories()
             } else {
                 showToast(result.error || 'Failed to add subcategory', 'error')
@@ -169,21 +151,51 @@ export default function CategoryManagement() {
         }
     }
 
-    const handleDeleteSub = async (parentName, name) => {
-        if (!confirm('Delete this subcategory?')) return
-
+    const confirmDelete = async () => {
+        if (!deleteTarget) return
+        setDeleteBusy(true)
         try {
+            const body = deleteTarget.kind === 'subcategory'
+                ? { type: 'subcategory', parentName: deleteTarget.parentName, name: deleteTarget.name }
+                : { type: 'category', name: deleteTarget.name }
             const response = await fetch('/api/admin/settings', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'subcategory', parentName, name })
+                body: JSON.stringify(body)
             })
 
             if (response.ok) {
-                showToast('Subcategory deleted!', 'success')
+                showToast(deleteTarget.kind === 'subcategory' ? 'Subcategory deleted!' : 'Deleted!', 'success')
+                setDeleteTarget(null)
                 fetchCategories()
             } else {
-                showToast('Failed to delete subcategory', 'error')
+                showToast('Failed to delete', 'error')
+            }
+        } catch (error) {
+            showToast('Error: ' + error.message, 'error')
+        } finally {
+            setDeleteBusy(false)
+        }
+    }
+
+    const handleToggleActive = async (name, isActive) => {
+        try {
+            const response = await fetch('/api/admin/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'category',
+                    action: 'toggleActive',
+                    name,
+                    isActive: !isActive
+                })
+            })
+
+            if (response.ok) {
+                showToast('Updated!', 'success')
+                fetchCategories()
+            } else {
+                showToast('Failed to update', 'error')
             }
         } catch (error) {
             showToast('Error: ' + error.message, 'error')
@@ -215,337 +227,266 @@ export default function CategoryManagement() {
         }
     }
 
-    if (loading) return (
-        <div className="flex items-center justify-center p-12">
-            <div className="loader"></div>
-        </div>
+    const activePill = (isActive) => (
+        isActive ? <StatusPill tone="paper">Active</StatusPill> : <StatusPill tone="bad">Inactive</StatusPill>
     )
 
+    const toggleBtn = (isActive, onClick) => (
+        <button type="button" onClick={onClick} className={`${quietBtnCls} px-3 py-1`}>
+            {isActive ? 'Deactivate' : 'Activate'}
+        </button>
+    )
+
+    const deleteBtn = (target) => (
+        <button
+            type="button"
+            onClick={() => setDeleteTarget(target)}
+            aria-label={target.kind === 'subcategory' ? 'Delete subcategory' : 'Delete category'}
+            title={target.kind === 'subcategory' ? 'Delete subcategory' : 'Delete category'}
+            className="dash-hoverable h-7 w-7 grid place-items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-bad)] cursor-pointer hover:bg-[var(--dash-bad-bg)] shrink-0"
+        >
+            <IoTrashOutline size={14} aria-hidden="true" />
+        </button>
+    )
+
+    if (loading) {
+        return (
+            <div className="p-4 md:p-6 flex flex-col gap-3" aria-label="Loading categories">
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonRow key={i} />
+                ))}
+            </div>
+        )
+    }
+
     return (
-        <div className="flex flex-col gap-4 sm:gap-6 p-6 md:p-12  bg-borderColor/30 min-h-screen">
-            <div className="flex flex-col gap-2">
-                <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Category Management</h1>
-                <p className="text-xs sm:text-sm text-lightColor">Organize your products with categories and subcategories</p>
-            </div>
-
-            <div className="flex gap-2 sm:gap-3 flex-wrap">
-                <button
-                    onClick={() => {
-                        setShowCategoryForm(!showCategoryForm)
-                        setShowSubcategoryForm(false)
-                    }}
-                    className={`${showCategoryForm ? 'formBlackButton' : 'formButton2'} transition-all duration-300 text-xs sm:text-sm`}
-                >
-                    <BsPlus size={18} />
-                    New Category
-                </button>
-                <button
-                    onClick={() => {
-                        setShowSubcategoryForm(!showSubcategoryForm)
-                        setShowCategoryForm(false)
-                    }}
-                    className={`${showSubcategoryForm ? 'formBlackButton' : 'formButton2'} transition-all duration-300 text-xs sm:text-sm`}
-                >
-                    <BsPlus size={18} />
-                    New Subcategory
-                </button>
-            </div>
-
-            {showCategoryForm && (
-                <div className="adminDashboardContainer animate-slideDown">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-medium">Add New Category</h3>
+        <div className="p-4 md:p-6">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                <p className="text-[13px] dash-soft max-w-md">
+                    Organise products with Shop and Print categories and their
+                    subcategories. Built-ins are protected.
+                </p>
+                {categories.length > 0 && (
+                    <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setShowCategoryForm(false)}
-                            className="toggleXbutton"
+                            type="button"
+                            onClick={() => openSheet('subcategory')}
+                            className={`${quietBtnCls} flex items-center gap-1`}
                         >
-                            <RxCross1 size={14} />
+                            <BsPlus size={16} aria-hidden="true" /> New subcategory
                         </button>
-                    </div>
-                    <form onSubmit={handleSubmit} className="gap-4 flex flex-col">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">URL Name*</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-                                    className="formInput"
-                                    placeholder="electronics"
-                                    required
-                                />
-                                <span className="text-xs text-extraLight">Lowercase, no spaces</span>
-                            </div>
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">Display Name*</label>
-                                <input
-                                    type="text"
-                                    value={formData.displayName}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                                    className="formInput"
-                                    placeholder="Electronics"
-                                    required
-                                />
-                                <span className="text-xs text-extraLight">Shown to users</span>
-                            </div>
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">Type*</label>
-                                <select
-                                    value={formData.type}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
-                                    className="formInput"
-                                    required
-                                >
-                                    <option value="shop">Shop</option>
-                                    <option value="print">Print</option>
-                                </select>
-                                <span className="text-xs text-extraLight">Category type</span>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 justify-end pt-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowCategoryForm(false)
-                                    setFormData({ name: '', displayName: '', type: 'shop', isActive: true })
-                                }}
-                                className="formButton2 min-w-24"
-                                disabled={saving}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="formBlackButton min-w-24"
-                            >
-                                {saving ? 'Adding...' : 'Add Category'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            {showSubcategoryForm && (
-                <div className="adminDashboardContainer animate-slideDown">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-medium">Add New Subcategory</h3>
                         <button
-                            onClick={() => setShowSubcategoryForm(false)}
-                            className="toggleXbutton"
+                            type="button"
+                            onClick={() => openSheet('category')}
+                            className={`${sunBtnCls} flex items-center gap-1`}
                         >
-                            <RxCross1 size={14} />
+                            <BsPlus size={16} aria-hidden="true" /> New category
                         </button>
-                    </div>
-                    <form onSubmit={handleSubSubmit} className="gap-4 flex flex-col">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">Parent Category*</label>
-                                <select
-                                    value={subForm.parentName}
-                                    onChange={(e) => setSubForm(prev => ({ ...prev, parentName: e.target.value }))}
-                                    className="formInput"
-                                    required
-                                >
-                                    <option value="">Select parent</option>
-                                    {categories.map(cat => (
-                                        <option key={cat.name} value={cat.name}>{cat.displayName}</option>
-                                    ))}
-                                </select>
-                                <span className="text-xs text-extraLight">Choose a category</span>
-                            </div>
-
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">URL Name*</label>
-                                <input
-                                    type="text"
-                                    value={subForm.name}
-                                    onChange={(e) => setSubForm(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-                                    className="formInput"
-                                    placeholder="popular"
-                                    required
-                                />
-                                <span className="text-xs text-extraLight">Lowercase, no spaces</span>
-                            </div>
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">Display Name*</label>
-                                <input
-                                    type="text"
-                                    value={subForm.displayName}
-                                    onChange={(e) => setSubForm(prev => ({ ...prev, displayName: e.target.value }))}
-                                    className="formInput"
-                                    placeholder="Popular"
-                                    required
-                                />
-                                <span className="text-xs text-extraLight">Shown to users</span>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 justify-end pt-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowSubcategoryForm(false)
-                                    setSubForm({ parentName: '', name: '', displayName: '', isActive: true })
-                                }}
-                                className="formButton2 min-w-24"
-                                disabled={saving}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="formBlackButton min-w-24"
-                            >
-                                {saving ? 'Adding...' : 'Add Subcategory'}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            )}
-
-            <div className="adminDashboardContainer">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 className="text-base font-medium">All Categories</h3>
-                        <p className="text-xs text-extraLight mt-1">{categories.length} total</p>
-                    </div>
-                </div>
-
-                {categories.length === 0 ? (
-                    <div className="text-center py-12 text-extraLight">
-                        <p>No categories yet</p>
-                        <p className="text-xs mt-2">Create your first category to get started</p>
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-2">
-                        {categories.map((cat, idx) => (
-                            <div key={cat.name || idx} className="border border-borderColor rounded-lg overflow-hidden group">
-                                <div className="flex flex-col md:flex-row gap-3 p-4 bg-baseColor hover:bg-borderColor/30 transition-all duration-200">
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        {cat.subcategories && cat.subcategories.length > 0 && (
-                                            <button
-                                                onClick={() => toggleCategory(cat.name)}
-                                                className="toggleXbutton p-1 shrink-0"
-                                                aria-label={expandedCategories[cat.name] ? 'Collapse' : 'Expand'}
-                                            >
-                                                {expandedCategories[cat.name] ? (
-                                                    <BsChevronDown size={14} />
-                                                ) : (
-                                                    <BsChevronRight size={14} />
-                                                )}
-                                            </button>
-                                        )}
-
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-medium text-sm">{cat.displayName}</span>
-                                                <span className="text-xs px-2 py-0.5 bg-borderColor rounded text-lightColor font-mono">{cat.name}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                                <span className="text-xs px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full font-medium">
-                                                    {cat.type}
-                                                </span>
-                                                {cat.isHardcoded && (
-                                                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">
-                                                        Built-in
-                                                    </span>
-                                                )}
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cat.isActive
-                                                    ? 'bg-green-50 text-green-700'
-                                                    : 'bg-red-50 text-red-700'
-                                                    }`}>
-                                                    {cat.isActive ? 'Active' : 'Inactive'}
-                                                </span>
-                                                {cat.subcategories && cat.subcategories.length > 0 && (
-                                                    <span className="text-xs text-extraLight">
-                                                        {cat.subcategories.length} subcategories
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => handleToggleActive(cat.name, cat.isActive)}
-                                            className={`text-xs px-3 py-1.5 rounded transition-all duration-200 font-medium whitespace-nowrap ${cat.isActive
-                                                ? 'border border-borderColor hover:bg-borderColor/30 text-lightColor'
-                                                : 'bg-textColor text-background hover:bg-textColor/90'
-                                                }`}
-                                        >
-                                            {cat.isActive ? 'Deactivate' : 'Activate'}
-                                        </button>
-
-                                        {!cat.isHardcoded && (
-                                            <button
-                                                onClick={() => handleDelete(cat.name)}
-                                                className="p-2 text-extraLight hover:text-red-600 transition-colors duration-200 rounded hover:bg-red-50 shrink-0"
-                                                aria-label="Delete category"
-                                            >
-                                                <RxCross1 size={14} />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                                {cat.subcategories && cat.subcategories.length > 0 && expandedCategories[cat.name] && (
-                                    <div className="border-t border-borderColor bg-background/50">
-                                        <div className="p-4">
-                                            <div className="flex flex-col gap-2">
-                                                {cat.subcategories.map((sub, sidx) => (
-                                                    <div
-                                                        key={sub.name || sidx}
-                                                        className="flex md:flex-row flex-col gap-2 p-3 border border-borderColor rounded-md bg-background hover:bg-borderColor/30 transition-all duration-200"
-                                                    >
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className="font-medium text-sm">{sub.displayName}</span>
-                                                                <span className="text-xs px-2 py-0.5 bg-borderColor rounded text-lightColor font-mono">{sub.name}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 mt-1.5">
-                                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sub.isActive
-                                                                    ? 'bg-green-50 text-green-700'
-                                                                    : 'bg-red-50 text-red-700'
-                                                                    }`}>
-                                                                    {sub.isActive ? 'Active' : 'Inactive'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                onClick={() => handleToggleSubActive(cat.name, sub.name, sub.isActive)}
-                                                                className={`text-xs px-3 py-1.5 rounded transition-all duration-200 font-medium whitespace-nowrap ${sub.isActive
-                                                                    ? 'border border-borderColor hover:bg-borderColor/30 text-lightColor'
-                                                                    : 'bg-textColor text-background hover:bg-textColor/90'
-                                                                    }`}
-                                                            >
-                                                                {sub.isActive ? 'Deactivate' : 'Activate'}
-                                                            </button>
-
-                                                            {!sub.isHardcoded && (
-                                                                <button
-                                                                    onClick={() => handleDeleteSub(cat.name, sub.name)}
-                                                                    className="p-2 text-extraLight hover:text-red-600 transition-colors duration-200 rounded hover:bg-red-50 shrink-0"
-                                                                    aria-label="Delete subcategory"
-                                                                >
-                                                                    <RxCross1 size={14} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
                     </div>
                 )}
             </div>
+
+            {categories.length === 0 ? (
+                <EmptyState
+                    icon={<IoPricetagsOutline />}
+                    title="No Categories Yet"
+                    body="Categories organise the shop and print storefronts — create the first one."
+                    cta="Create Category"
+                    onCta={() => openSheet('category')}
+                />
+            ) : (
+                <DashCard>
+                    <div className="divide-y divide-[var(--dash-line)]">
+                        {categories.map((cat, idx) => {
+                            const hasSubs = cat.subcategories && cat.subcategories.length > 0
+                            const expanded = expandedCategories[cat.name]
+                            return (
+                                <div key={cat.name || idx}>
+                                    <div className="flex items-center gap-3 py-2.5">
+                                        {hasSubs ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleCategory(cat.name)}
+                                                aria-label={expanded ? 'Collapse' : 'Expand'}
+                                                aria-expanded={Boolean(expanded)}
+                                                className="dash-hoverable h-7 w-7 grid place-items-center rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)] cursor-pointer shrink-0"
+                                            >
+                                                {expanded ? <BsChevronDown size={13} aria-hidden="true" /> : <BsChevronRight size={13} aria-hidden="true" />}
+                                            </button>
+                                        ) : (
+                                            <span className="h-7 w-7 shrink-0" aria-hidden="true" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-[13px] font-medium truncate">{cat.displayName}</span>
+                                                <span className="dash-data dash-soft">{cat.name}</span>
+                                            </div>
+                                            {hasSubs && (
+                                                <p className="dash-data dash-soft">
+                                                    {cat.subcategories.length} subcategor{cat.subcategories.length !== 1 ? 'ies' : 'y'}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                            <StatusPill tone="paper">{cat.type}</StatusPill>
+                                            {cat.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
+                                            {activePill(cat.isActive)}
+                                            {toggleBtn(cat.isActive, () => handleToggleActive(cat.name, cat.isActive))}
+                                            {!cat.isHardcoded && deleteBtn({ kind: 'category', name: cat.name, label: cat.displayName })}
+                                        </div>
+                                    </div>
+                                    {hasSubs && expanded && (
+                                        <div className="pb-2.5">
+                                            {cat.subcategories.map((sub, sidx) => (
+                                                <div
+                                                    key={sub.name || sidx}
+                                                    className="flex items-center gap-3 py-2 pl-10 border-t border-[var(--dash-line)]"
+                                                >
+                                                    <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                                                        <span className="text-[13px] truncate">{sub.displayName}</span>
+                                                        <span className="dash-data dash-soft">{sub.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        {activePill(sub.isActive)}
+                                                        {toggleBtn(sub.isActive, () => handleToggleSubActive(cat.name, sub.name, sub.isActive))}
+                                                        {!sub.isHardcoded && deleteBtn({ kind: 'subcategory', parentName: cat.name, name: sub.name, label: sub.displayName })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                </DashCard>
+            )}
+
+            {/* ONE Sheet for both create flows, switched by the type toggle */}
+            <Sheet open={sheetOpen} onClose={closeSheet} label="New category or subcategory" widthClass="max-w-xl">
+                <div className="p-6 flex flex-col gap-4">
+                    <h3 className="dash-section">Add to the catalogue</h3>
+                    <ViewTabs
+                        tabs={[
+                            { key: 'category', label: 'Category' },
+                            { key: 'subcategory', label: 'Subcategory' },
+                        ]}
+                        active={sheetKind}
+                        onChange={setSheetKind}
+                    />
+
+                    {sheetKind === 'category' ? (
+                        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="catUrlName" className={labelCls}>URL name *</label>
+                                    <input
+                                        id="catUrlName"
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
+                                        className={inputCls()}
+                                        placeholder="electronics"
+                                        required
+                                    />
+                                    <p className="text-[11px] dash-soft">Lowercase, no spaces</p>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="catDisplayName" className={labelCls}>Display name *</label>
+                                    <input
+                                        id="catDisplayName"
+                                        type="text"
+                                        value={formData.displayName}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
+                                        className={inputCls()}
+                                        placeholder="Electronics"
+                                        required
+                                    />
+                                    <p className="text-[11px] dash-soft">Shown to users</p>
+                                </div>
+                            </div>
+                            <DashSelect
+                                label="Type"
+                                name="categoryType"
+                                value={formData.type}
+                                onChangeFunction={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
+                                options={[
+                                    { value: 'shop', label: 'Shop' },
+                                    { value: 'print', label: 'Print' },
+                                ]}
+                            />
+                            <div className="flex justify-end gap-2 pt-3 border-t border-[var(--dash-line)]">
+                                <button type="button" onClick={closeSheet} disabled={saving} className={quietBtnCls}>
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={saving} className={inkBtnCls}>
+                                    {saving ? 'Adding…' : 'Add category'}
+                                </button>
+                            </div>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleSubSubmit} className="flex flex-col gap-4">
+                            <DashSelect
+                                label="Parent category"
+                                name="parentName"
+                                value={subForm.parentName}
+                                onChangeFunction={(e) => setSubForm(prev => ({ ...prev, parentName: e.target.value }))}
+                                options={[
+                                    { value: '', label: 'Select parent' },
+                                    ...categories.map(cat => ({ value: cat.name, label: cat.displayName })),
+                                ]}
+                            />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="subUrlName" className={labelCls}>URL name *</label>
+                                    <input
+                                        id="subUrlName"
+                                        type="text"
+                                        value={subForm.name}
+                                        onChange={(e) => setSubForm(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
+                                        className={inputCls()}
+                                        placeholder="popular"
+                                        required
+                                    />
+                                    <p className="text-[11px] dash-soft">Lowercase, no spaces</p>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="subDisplayName" className={labelCls}>Display name *</label>
+                                    <input
+                                        id="subDisplayName"
+                                        type="text"
+                                        value={subForm.displayName}
+                                        onChange={(e) => setSubForm(prev => ({ ...prev, displayName: e.target.value }))}
+                                        className={inputCls()}
+                                        placeholder="Popular"
+                                        required
+                                    />
+                                    <p className="text-[11px] dash-soft">Shown to users</p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end gap-2 pt-3 border-t border-[var(--dash-line)]">
+                                <button type="button" onClick={closeSheet} disabled={saving} className={quietBtnCls}>
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={saving} className={inkBtnCls}>
+                                    {saving ? 'Adding…' : 'Add subcategory'}
+                                </button>
+                            </div>
+                        </form>
+                    )}
+                </div>
+            </Sheet>
+
+            <ConfirmDialog
+                open={Boolean(deleteTarget)}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={confirmDelete}
+                title={deleteTarget?.kind === 'subcategory' ? 'Delete this subcategory?' : 'Delete this category?'}
+                body={deleteTarget ? `"${deleteTarget.label}" will be removed from the catalogue. This action cannot be undone.` : ''}
+                confirmLabel={deleteTarget?.kind === 'subcategory' ? 'Delete subcategory' : 'Delete category'}
+                tone="bad"
+                busy={deleteBusy}
+            />
         </div>
     )
 }

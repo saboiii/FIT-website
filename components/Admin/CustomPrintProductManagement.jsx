@@ -12,6 +12,22 @@ import {
     handleImageDrop as handleImageDropHelper,
     handleRemoveImage as handleRemoveImageHelper,
 } from '@/utils/formHelpers'
+import { GlassBar, DottedRow, SkeletonRow } from '@/components/dashboard-ui'
+import { inputCls, labelCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import { sunBtnCls } from './dashPanelUi'
+
+// Flat document section (§5.10): dash-section heading + hairline rule — the
+// grouping the shared fields' collapsible drawers used to provide.
+function DocSection({ title, description, children, first = false }) {
+    return (
+        <section className={`py-6 ${first ? '' : 'border-t border-[var(--dash-line)]'}`}>
+            <h3 className="dash-section">{title}</h3>
+            {description && <p className="text-[13px] dash-soft mt-0.5 mb-4">{description}</p>}
+            {!description && <div className="mb-4" />}
+            {children}
+        </section>
+    )
+}
 
 export default function CustomPrintProductManagement() {
     const [product, setProduct] = useState(null)
@@ -189,79 +205,96 @@ export default function CustomPrintProductManagement() {
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-textColor border-t-transparent"></div>
+            <div className="p-4 md:p-6 flex flex-col gap-3" aria-label="Loading custom print product">
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonRow key={i} />
+                ))}
             </div>
         )
     }
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-6 p-6 md:p-12  min-h-screen">
-            <div className="mb-6">
-                <h2 className="text-lg font-semibold text-textColor mb-2">Custom 3D Print Product</h2>
-                <p className="text-xs text-lightColor">
-                    Configure pricing, delivery, and discount settings for custom 3D print requests. This product has no variants.
-                </p>
-            </div>
-
-            {product && (
-                <div className="mb-4 bg-baseColor p-4 rounded-md border border-borderColor">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-lightColor">Product ID</span>
-                        <code className="text-xs bg-borderColor/30 px-2 py-1 rounded">{product._id}</code>
-                    </div>
+        <div className="p-4 md:p-6">
+            {/* Save CTA lives in the GlassBar — the document's one primary action */}
+            <GlassBar className="justify-between">
+                <div className="min-w-0">
+                    <p className="text-[13px] font-semibold truncate">Custom print product</p>
+                    <p className="dash-data dash-soft truncate">
+                        The base product behind “Order Print” — no variants.
+                    </p>
                 </div>
-            )}
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving || loading}
+                    className={`${sunBtnCls} shrink-0`}
+                >
+                    {saving ? 'Saving…' : 'Save configuration'}
+                </button>
+            </GlassBar>
 
-            <div className="space-y-4">
-                {/* Product Details Section */}
-                <div className="border border-borderColor rounded-lg overflow-hidden">
-                    <div className="bg-borderColor/40 w-full px-4 py-2 border-b border-borderColor">
-                        <h3 className="text-sm font-medium text-textColor">Product Details</h3>
-                    </div>
-                    <div className="p-4 space-y-4">
-                        <div className="flex flex-col gap-2">
-                            <label htmlFor="name" className="text-xs font-medium text-lightColor">Product Name</label>
+            {/* Mini document (§5.10): flat headed sections at reading width */}
+            <div className="max-w-[720px] mt-2">
+                {product && (
+                    <DottedRow label="Product ID" className="mt-2">
+                        <span className="dash-data">{product._id}</span>
+                    </DottedRow>
+                )}
+
+                <DocSection
+                    title="Details & images"
+                    description="What customers see on the storefront's custom print page."
+                    first
+                >
+                    <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-1.5">
+                            <label htmlFor="name" className={labelCls}>Product name</label>
                             <input
                                 id="name"
                                 name="name"
                                 type="text"
                                 value={form.name}
                                 onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                                className="formInput text-sm"
+                                className={inputCls()}
                                 placeholder="Custom 3D Print"
                             />
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <label htmlFor="description" className="text-xs font-medium text-lightColor">Description</label>
+                        <div className="flex flex-col gap-1.5">
+                            <label htmlFor="description" className={labelCls}>Description</label>
                             <textarea
                                 id="description"
                                 name="description"
                                 value={form.description}
                                 onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
-                                className="formInput text-sm min-h-32"
+                                className={`${inputCls()} min-h-32`}
                                 placeholder="Describe your custom 3D printing service..."
                             />
                         </div>
 
                         <ImagesField
-                            form={form}
+                            images={form.images}
                             imageValidationErrors={imageValidationErrors}
                             imageInputRef={imageInputRef}
                             handleImageChange={handleImageChange}
                             handleImageDrop={handleImageDrop}
                             handleRemoveImage={handleRemoveImage}
                             pendingImages={pendingImages}
+                            setImageValidationErrors={setImageValidationErrors}
                         />
                     </div>
-                </div>
+                </DocSection>
 
-                <PricingFields
-                    form={form}
-                    setForm={setForm}
-                    allCurrencies={allCurrencies}
-                />
+                <DocSection
+                    title="Pricing"
+                    description="Base price and platform credits applied to every custom print request."
+                >
+                    <PricingFields
+                        form={form}
+                        setForm={setForm}
+                        allCurrencies={allCurrencies}
+                    />
+                </DocSection>
 
                 {/* Delivery options for custom prints. The admin curates which
                     delivery types are offered and sets each price here; every
@@ -269,34 +302,27 @@ export default function CustomPrintProductManagement() {
                     (prices are NOT recalculated per model). Representative
                     dimensions can be entered to auto-price tier/formula types;
                     the resulting price can always be overridden per type. */}
-                <div className="border border-borderColor rounded-lg overflow-hidden">
-                    <div className="bg-borderColor/40 w-full px-4 py-2 border-b border-borderColor">
-                        <h3 className="text-sm font-medium text-textColor">Delivery</h3>
-                    </div>
-                    <div className="p-4">
-                        <ShippingFields
-                            form={form}
-                            handleChange={handleChange}
-                            setForm={setForm}
-                        />
-                    </div>
-                </div>
+                <DocSection
+                    title="Delivery"
+                    description="Delivery types offered on custom prints — each request copies these options and prices as-is."
+                >
+                    <ShippingFields
+                        form={form}
+                        handleChange={handleChange}
+                        setForm={setForm}
+                    />
+                </DocSection>
 
-                <DiscountsField
-                    form={form}
-                    setForm={setForm}
-                    events={events}
-                />
-
-                <div className="pt-4">
-                    <button
-                        onClick={handleSave}
-                        disabled={saving || loading}
-                        className="w-full px-4 py-3 bg-textColor text-background rounded-md text-sm font-medium hover:bg-textColor/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {saving ? 'Saving Changes...' : 'Save Custom Print Configuration'}
-                    </button>
-                </div>
+                <DocSection
+                    title="Discounts"
+                    description="Optional discount settings, linkable to promotional events."
+                >
+                    <DiscountsField
+                        form={form}
+                        setForm={setForm}
+                        events={events}
+                    />
+                </DocSection>
             </div>
         </div>
     )

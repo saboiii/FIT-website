@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import AnalyticsPanel from '@/components/Admin/AnalyticsPanel'
 
 afterEach(() => {
@@ -24,7 +24,7 @@ describe('AnalyticsPanel', () => {
   it('shows the connect empty state when unconfigured', async () => {
     global.fetch = vi.fn(() => Promise.resolve({ json: () => Promise.resolve({ configured: false }) }))
     render(<AnalyticsPanel />)
-    expect(await screen.findByText('Analytics not connected')).toBeInTheDocument()
+    expect(await screen.findByText('Analytics Not Connected')).toBeInTheDocument()
     expect(screen.getByText(/POSTHOG_PERSONAL_API_KEY/)).toBeInTheDocument()
   })
 
@@ -37,5 +37,18 @@ describe('AnalyticsPanel', () => {
     expect(screen.getByText('google.com')).toBeInTheDocument()
     expect(screen.getByText('hello-world')).toBeInTheDocument()
     expect(screen.getByText(/~90s read/)).toBeInTheDocument()
+  })
+
+  it('compact mode hides the breakdowns behind a Full analytics disclosure', async () => {
+    global.fetch = vi.fn(() => Promise.resolve({ json: () => Promise.resolve({ configured: true, snapshot }) }))
+    render(<AnalyticsPanel compact />)
+    expect(await screen.findByText('Page views')).toBeInTheDocument()
+    expect(screen.getByText('Views over time')).toBeInTheDocument()
+    expect(screen.queryByText('Traffic sources')).toBeNull()
+    expect(screen.queryByText('Top blog articles')).toBeNull()
+
+    fireEvent.click(screen.getByText('Full analytics'))
+    expect(screen.getByText('Traffic sources')).toBeInTheDocument()
+    expect(screen.getByText('Top blog articles')).toBeInTheDocument()
   })
 })

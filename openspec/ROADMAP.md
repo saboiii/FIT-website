@@ -67,10 +67,10 @@ Follow-up backlog: **add-test-coverage-ci** (coverage thresholds + CI gating).
 12. **add-otp-contact-verification** — OTP contact channel at checkout.
     *(DROPPED 2026-06-12 — client chose email-only; superseded by
     `add-email-notifications-suite`)*
-13. **retire-deprecated-printorder-model** — *(partial 2026-05-29: dead `.bak` +
-    `/api/print-config` routes removed; **active** — `PrintOrder` model is still
-    live in Stripe webhook/checkout/print-order; removal needs migration + data
-    audit)*
+13. **retire-deprecated-printorder-model** — *(✅ COMPLETE 2026-07-05 via
+    `migrate-print-delivery-to-custom-requests` 7.x: webhook/routes stopped
+    writing it earlier; the owner's backfill dry-run found **0 documents**, so
+    the model, proxyAccess check, and backfill script were deleted)*
 
 ## Phase 5 — Client manual-testing batch (2026-06-08)
 
@@ -186,3 +186,48 @@ CLERK_WEBHOOK_SECRET fallback).
 - **Established specs** now in `openspec/specs/`: `testing`, `3d-model-editor`,
   `custom-print-requests`, `instant-quoting-engine`, `generic-print-presets`,
   `admin-custom-print-requests`.
+
+## Phase 7 — Blog/CMS port from eil (approved 2026-07-03)
+
+Client decisions 2026-07-03: PostHog analytics (not built-in counters), full
+newsletter port, NO reader extras (reactions/bookmarks/AI summary/sponsors/ads).
+Feature audit of /Volumes/XtremeLOAD/Projects/eil recorded in
+`changes/upgrade-blog-cms/design.md`.
+
+30. **redesign-admin-dashboard-onboarding** — *(✅ archived 2026-07-05; spec
+    `admin-dashboard` folded; browser QA spun out to
+    `improve-admin-management-ux` at client request)*
+31. **upgrade-blog-cms** — *(✅ archived 2026-07-05; spec `blog-cms` folded;
+    browser QA spun out to `improve-admin-management-ux`)*
+32. **add-blog-analytics-posthog** — *(✅ archived 2026-07-05; spec
+    `blog-analytics` folded; PostHog project + keys live (project 496472),
+    dashboard-fills eyeball spun out)*
+33. **add-newsletter-suite** — *(✅ archived 2026-07-05; spec `newsletter`
+    folded; TZ round-trip fix via `utils/datetimeLocal`; end-to-end send QA
+    spun out to `improve-admin-management-ux`)*
+
+## Phase 8 — Audit hardening batch (2026-07-04)
+
+Defects found during the 2026-07-04 repo audit, implemented test-first:
+
+34. **harden-payment-webhooks** — *(✅ archived 2026-07-05; verified LIVE via
+    `stripe listen` + event resend: idempotency no-op on duplicate,
+    `paymentMethod` populated via `latest_charge`; also moved the customer
+    order-confirmation email into the webhook and deleted the unauthenticated
+    `/api/user/checkout/confirmation` open relay found during QA)*
+35. **reconcile-webhook-charge-amounts** — *(✅ archived 2026-07-05; client
+    chose (b) fulfil-and-flag: `Order.amountMismatch` + NEEDS-REVIEW status
+    note when Stripe's captured amount ≠ recomputed total; admin-UI surfacing
+    deferred to `improve-admin-management-ux`)*
+36. **improve-admin-management-ux** — *(BACKLOG, needs client scoping)* admin
+    management panels UX revamp; absorbs the browser QA deferred 2026-07-05
+    (admin sidebar/wizard, blog editor, newsletter end-to-end) and the
+    amount-mismatch admin surfacing; consider merging with "improve the UI
+    for creators".
+
+Also 2026-07-04 (no openspec change needed): `yarn lint` repaired (`eslint .`
++ flat-config `.jsx` matching; 0 errors), missing `IoMdLock` import in
+SignUpForm (paid sign-up stages crashed), `useAccess` conditional-hooks
+violation restructured, blog schedule-edit TZ shift (shared with newsletter),
+JSX entity escapes, stale docstrings (cron scheduler, geometry formats),
+debug log removed from `utils/store.js`.

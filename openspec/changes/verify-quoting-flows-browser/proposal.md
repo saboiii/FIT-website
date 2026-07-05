@@ -38,6 +38,21 @@ Run `yarn dev` with valid env, signed in, then verify:
    without error. Watch the server log for unexpected
    `[quote] geometry deviation` lines (parser divergence would show up there).
 
+7. **Newsletter end-to-end send** (from `add-newsletter-suite` task 4.4 —
+   needs Gmail creds + `CRON_SECRET` + a real inbox) — subscribe via the blog
+   footer form; receive the welcome drip; compose + send a campaign from
+   Admin → Newsletter; confirm open/click events appear on the campaign's
+   history row; the unsubscribe link works and stops further sends; the
+   preferences page updates interests.
+
+8. **Stripe webhook hardening** (from `harden-payment-webhooks` task 4.2 —
+   piggybacks on the migrate-change 5.4 test-mode purchase) — after the test
+   purchase completes, use the Stripe dashboard/CLI to **resend** the
+   `checkout.session.completed` event and confirm: no duplicate Order, no
+   second stock decrement, no duplicate product-print request (the webhook
+   should log/return a duplicate no-op). Also confirm the recorded Order now
+   has `paymentMethod` populated (brand/last4).
+
 ## Impact
 
 - No code; record findings and open targeted fix changes for any issues found.

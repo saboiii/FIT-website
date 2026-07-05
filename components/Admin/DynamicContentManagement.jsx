@@ -8,7 +8,7 @@ import ProductSearch from './CMSFields/ProductSearch'
 import CategoryInput from './CMSFields/CategoryInput'
 import BooleanField from './CMSFields/BooleanField'
 import RangeField from './CMSFields/RangeField'
-import { DashCard, GlassBar, SkeletonRow } from '@/components/dashboard-ui'
+import { DashCard, GlassBar, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import { labelCls, quietBtnCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 import { IoRefresh } from 'react-icons/io5'
 import { MdOpenInNew } from 'react-icons/md'
@@ -122,6 +122,8 @@ export default function ContentManagement() {
     const [isLoading, setIsLoading] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [previewKey, setPreviewKey] = useState(Date.now())
+    const [tourOpen, setTourOpen] = useState(false)
+    const tourOffer = useTourOffer('content')
 
     useEffect(() => {
         fetchContent()
@@ -476,7 +478,7 @@ export default function ContentManagement() {
             </div>
 
             {/* Save / Reset — pinned in one consistent place (§5.11) */}
-            <GlassBar className="justify-between">
+            <GlassBar className="justify-between" data-tour="cms-savebar">
                 <span className="text-[13px] dash-soft truncate">
                     Editing <span className="font-medium text-[var(--dash-ink)]">{currentSection?.name}</span>
                 </span>
@@ -497,11 +499,19 @@ export default function ContentManagement() {
                     >
                         {isSaving ? 'Saving...' : 'Save Changes'}
                     </button>
+                    <TourHelpButton onClick={() => setTourOpen(true)} />
                 </div>
             </GlassBar>
 
+            {tourOffer.offered && !tourOpen && (
+                <TourOfferStrip
+                    onStart={() => { tourOffer.accept(); setTourOpen(true) }}
+                    onDismiss={tourOffer.dismiss}
+                />
+            )}
+
             {/* Section picker — two-column card grid grouped by page (§9.3) */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4" data-tour="cms-sections">
                 {SECTION_GROUPS.map((group) => {
                     const sections = contentSections.filter((s) =>
                         group.prefixes.some((p) => s.id.startsWith(p))
@@ -545,7 +555,7 @@ export default function ContentManagement() {
                     <SkeletonRow />
                 </div>
             ) : content && currentSection ? (
-                <DashCard title={`Editing "${currentSection.name}"`}>
+                <DashCard title={`Editing "${currentSection.name}"`} data-tour="cms-editor">
                     <div className="flex flex-col gap-6">
                         {currentSection.fields.map((field) => {
                             const value = field === 'content' ? content.content : content.frontmatter[field]
@@ -560,7 +570,7 @@ export default function ContentManagement() {
             )}
 
             {/* Preview */}
-            <DashCard>
+            <DashCard data-tour="cms-preview">
                 <div className="flex flex-col gap-3">
                     <GlassBar className="justify-between">
                         <div className="min-w-0">
@@ -602,6 +612,9 @@ export default function ContentManagement() {
                     </div>
                 </div>
             </DashCard>
+
+            {/* Guided tour (§9.11) */}
+            <CoachMarks steps={TOURS.content} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="content" />
         </div>
     )
 }

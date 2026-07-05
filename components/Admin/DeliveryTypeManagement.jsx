@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
 import { IoAddOutline, IoTrashOutline, IoChevronDownOutline, IoChevronForwardOutline, IoCarOutline } from 'react-icons/io5'
-import { DashCard, Sheet, ConfirmDialog, StatusPill, GlassBar, EmptyState, DottedRow, SkeletonRow } from '@/components/dashboard-ui'
+import { DashCard, Sheet, ConfirmDialog, StatusPill, GlassBar, EmptyState, DottedRow, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import { inputCls, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 const sunBtnCls =
@@ -61,6 +61,8 @@ export default function DeliveryTypeManagement() {
     const [editingDeliveryType, setEditingDeliveryType] = useState(null)
     const [deleteTarget, setDeleteTarget] = useState(null)
     const [deleteBusy, setDeleteBusy] = useState(false)
+    const [tourOpen, setTourOpen] = useState(false)
+    const tourOffer = useTourOffer('delivery')
     const { showToast } = useToast()
 
     const [formData, setFormData] = useState(BLANK_FORM)
@@ -316,16 +318,27 @@ export default function DeliveryTypeManagement() {
                         Configure delivery options with custom pricing tiers for creators.
                     </p>
                 </div>
-                {deliveryTypes.length > 0 && (
-                    <button onClick={openCreate} className={`${sunBtnCls} flex items-center gap-1.5`}>
-                        <IoAddOutline size={16} aria-hidden="true" />
-                        New Delivery Type
-                    </button>
-                )}
+                <div className="flex items-center gap-2">
+                    {deliveryTypes.length > 0 && (
+                        <button onClick={openCreate} data-tour="delivery-new" className={`${sunBtnCls} flex items-center gap-1.5`}>
+                            <IoAddOutline size={16} aria-hidden="true" />
+                            New Delivery Type
+                        </button>
+                    )}
+                    <TourHelpButton onClick={() => setTourOpen(true)} />
+                </div>
             </div>
+
+            {tourOffer.offered && !tourOpen && (
+                <TourOfferStrip
+                    onStart={() => { tourOffer.accept(); setTourOpen(true) }}
+                    onDismiss={tourOffer.dismiss}
+                />
+            )}
 
             {/* Delivery types — list-first (§5.14) */}
             <DashCard
+                data-tour="delivery-list"
                 title="All delivery types"
                 action={<span className="text-[13px] dash-soft dash-data">{deliveryTypes.length} total · Digital delivery is always available</span>}
             >
@@ -381,6 +394,7 @@ export default function DeliveryTypeManagement() {
                                     <div className="flex items-center gap-2 shrink-0">
                                         <button
                                             role="switch"
+                                            data-tour="delivery-toggle"
                                             aria-checked={dt.isActive}
                                             aria-label={`${dt.displayName} active`}
                                             onClick={() => handleToggleActive(dt.name, dt.isActive)}
@@ -612,6 +626,9 @@ export default function DeliveryTypeManagement() {
                 tone="bad"
                 busy={deleteBusy}
             />
+
+            {/* Guided tour (§9.11) */}
+            <CoachMarks steps={TOURS.delivery} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="delivery" />
         </div>
     )
 }

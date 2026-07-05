@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { DashCard, ViewTabs, GlassBar, SkeletonRow } from '@/components/dashboard-ui'
+import { DashCard, ViewTabs, GlassBar, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import { inputCls, quietBtnCls, DashSelect } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 // Rate-card metadata (blueprint §5.14 + §9.3): label + one-line help + unit
@@ -131,6 +131,8 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [tab, setTab] = useState('rates')
+    const [tourOpen, setTourOpen] = useState(false)
+    const tourOffer = useTourOffer('quoting')
 
     const load = async () => {
         setLoading(true)
@@ -401,13 +403,21 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
             )}
 
             <GlassBar className="flex-wrap">
-                <ViewTabs tabs={TABS} active={tab} onChange={setTab} />
-                <button onClick={handleSave} disabled={saving} className={`${sunBtnCls} ml-auto`}>
+                <ViewTabs tabs={TABS} active={tab} onChange={setTab} data-tour="quoting-tabs" />
+                <button onClick={handleSave} disabled={saving} data-tour="quoting-save" className={`${sunBtnCls} ml-auto`}>
                     {saving ? 'Saving…' : 'Save Quoting Config'}
                 </button>
+                <TourHelpButton onClick={() => setTourOpen(true)} />
             </GlassBar>
 
-            {tab === 'rates' && <DashCard title="Rates">{rateRows(RATE_FIELDS)}</DashCard>}
+            {tourOffer.offered && !tourOpen && (
+                <TourOfferStrip
+                    onStart={() => { tourOffer.accept(); setTourOpen(true) }}
+                    onDismiss={tourOffer.dismiss}
+                />
+            )}
+
+            {tab === 'rates' && <DashCard title="Rates" data-tour="quoting-card">{rateRows(RATE_FIELDS)}</DashCard>}
             {tab === 'fees' && (
                 <>
                     <DashCard title="Fees">{rateRows(FEE_FIELDS)}</DashCard>
@@ -421,6 +431,9 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
                     {colourRows()}
                 </DashCard>
             )}
+
+            {/* Guided tour (§9.11) */}
+            <CoachMarks steps={TOURS.quoting} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="quoting" />
         </div>
     )
 }

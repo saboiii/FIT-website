@@ -4,9 +4,9 @@
  * Saved-view pill tabs over tables (§4.8 #4). Active = the only ink pill.
  * Tabs: [{ key, label, count? }]. Keyboard: native buttons, focus-visible.
  */
-export default function ViewTabs({ tabs, active, onChange, className = '' }) {
+export default function ViewTabs({ tabs, active, onChange, className = '', ...rest }) {
     return (
-        <div role="tablist" className={`flex items-center gap-1 flex-wrap ${className}`}>
+        <div role="tablist" className={`flex items-center gap-1 flex-wrap ${className}`} {...rest}>
             {tabs.map((t) => {
                 const isActive = t.key === active
                 return (

@@ -9,6 +9,7 @@ import {
     ConfirmDialog,
     EmptyState,
     SkeletonRow,
+    FreshnessStamp,
 } from '@/components/dashboard-ui';
 import { barSelectCls } from './dashPanelUi';
 
@@ -39,6 +40,7 @@ function ReviewManagement() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterRating, setFilterRating] = useState('all');
     const [loading, setLoading] = useState(true);
+    const [fetchedAt, setFetchedAt] = useState(null);
     const [deleting, setDeleting] = useState(null);
     const [deleteTarget, setDeleteTarget] = useState(null); // { productId, reviewId }
 
@@ -53,6 +55,7 @@ function ReviewManagement() {
                 const data = await response.json();
                 const productsWithReviews = data.products.filter(p => p.reviews && p.reviews.length > 0);
                 setProducts(productsWithReviews);
+                setFetchedAt(Date.now());
             }
         } catch (error) {
             console.error('Error fetching products:', error);
@@ -171,7 +174,10 @@ function ReviewManagement() {
                     <div className="flex flex-col gap-2">
                         <div className="flex items-center justify-between px-1">
                             <span className="dash-label">Products</span>
-                            <span className="dash-data dash-soft">{products.length} with reviews</span>
+                            <span className="flex items-center gap-2">
+                                <span className="dash-data dash-soft">{products.length} with reviews</span>
+                                <FreshnessStamp at={fetchedAt} />
+                            </span>
                         </div>
                         <div className="flex flex-col gap-1.5 max-h-[600px] overflow-y-auto dash-scroll">
                             {products.map(product => {

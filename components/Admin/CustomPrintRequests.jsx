@@ -12,6 +12,12 @@ import {
     GlassBar,
     EmptyState,
     SkeletonRow,
+    FreshnessStamp,
+    CoachMarks,
+    useTourOffer,
+    TourOfferStrip,
+    TourHelpButton,
+    TOURS,
 } from '@/components/dashboard-ui'
 import RequestPeek, {
     STATUS_LABELS,
@@ -43,8 +49,11 @@ export default function CustomPrintRequests() {
     const { settings: adminSettings } = useAdminSettings()
 
     const [requests, setRequests] = useState([])
+    const [fetchedAt, setFetchedAt] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
+    const [tourOpen, setTourOpen] = useState(false)
+    const tourOffer = useTourOffer('customPrintRequests')
     const [search, setSearch] = useState('')
     const [view, setView] = useState('all')
     const [menuFor, setMenuFor] = useState(null) // requestId whose "…" menu is open
@@ -60,6 +69,7 @@ export default function CustomPrintRequests() {
             if (!res.ok) throw new Error('Failed to load requests')
             const data = await res.json()
             setRequests(data.requests || [])
+            setFetchedAt(Date.now())
         } catch (e) {
             setError(e.message || 'Failed to load requests')
         } finally {
@@ -194,7 +204,7 @@ export default function CustomPrintRequests() {
     return (
         <div className="p-4 md:p-6">
             <GlassBar className="flex-wrap">
-                <label className="flex items-center gap-2 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-full px-3 py-1.5 w-full sm:w-auto sm:min-w-[220px]">
+                <label data-tour="requests-search" className="flex items-center gap-2 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-full px-3 py-1.5 w-full sm:w-auto sm:min-w-[220px]">
                     <IoSearchOutline size={14} className="shrink-0 text-[var(--dash-ink-soft)]" aria-hidden="true" />
                     <input
                         type="text"
@@ -209,18 +219,30 @@ export default function CustomPrintRequests() {
                     tabs={VIEWS.map((v) => ({ key: v.key, label: v.label, count: counts[v.key] }))}
                     active={view}
                     onChange={setView}
+                    data-tour="requests-views"
                 />
                 <button
                     type="button"
                     onClick={exportToExcel}
                     disabled={visible.length === 0}
+                    data-tour="requests-export"
                     className="dash-hoverable ml-auto flex items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-[var(--dash-canvas)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <IoDownloadOutline size={14} aria-hidden="true" /> Export
                 </button>
+                <FreshnessStamp at={fetchedAt} />
+                <TourHelpButton onClick={() => setTourOpen(true)} />
             </GlassBar>
 
-            <div className="mt-4">
+            {tourOffer.offered && !tourOpen && (
+                <TourOfferStrip
+                    className="mt-4"
+                    onStart={() => { tourOffer.accept(); setTourOpen(true) }}
+                    onDismiss={tourOffer.dismiss}
+                />
+            )}
+
+            <div className="mt-4" data-tour="requests-list">
                 {loading ? (
                     <div className="flex flex-col gap-3" aria-label="Loading requests">
                         {Array.from({ length: 6 }).map((_, i) => (
@@ -412,6 +434,14 @@ export default function CustomPrintRequests() {
                 cancelLabel="Keep request"
                 tone="bad"
                 busy={cancelBusy}
+            />
+
+            {/* Guided tour (§9.11) */}
+            <CoachMarks
+                steps={TOURS.customPrintRequests}
+                open={tourOpen}
+                onClose={() => setTourOpen(false)}
+                panelKey="customPrintRequests"
             />
         </div>
     )

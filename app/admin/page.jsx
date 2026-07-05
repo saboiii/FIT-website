@@ -24,6 +24,7 @@ import {
     HeroGreeting,
     EmptyState,
     CommandPalette,
+    ShortcutsSheet,
     SkeletonTile,
 } from '@/components/dashboard-ui'
 import {
@@ -207,6 +208,7 @@ function AdminDashboard() {
     const [mobileNavOpen, setMobileNavOpen] = useState(false)
     const [railCollapsed, setRailCollapsed] = useState(false)
     const [paletteOpen, setPaletteOpen] = useState(false)
+    const [shortcutsOpen, setShortcutsOpen] = useState(false)
     const [setupData, setSetupData] = useState(null)
     const [requests, setRequests] = useState([])
     const [fetchedAt, setFetchedAt] = useState(null)
@@ -265,6 +267,20 @@ function AdminDashboard() {
         try { dismissed = Boolean(localStorage.getItem('adminOnboardingDismissed')) } catch { /* ignore */ }
         if (!dismissed && needsOnboarding(buildSetupChecklist(setupData))) setWizardOpen(true)
     }, [setupData, wizardChecked])
+
+    // `?` opens the shortcuts sheet (§9.6) when nothing editable is focused.
+    useEffect(() => {
+        const onKey = (e) => {
+            if (e.key !== '?' || e.metaKey || e.ctrlKey || e.altKey) return
+            const el = document.activeElement
+            const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+            if (typing) return
+            e.preventDefault()
+            setShortcutsOpen(true)
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [])
 
     const closeWizard = () => {
         setWizardOpen(false)
@@ -435,7 +451,7 @@ function AdminDashboard() {
                     <HeroGreeting
                         salutation={salutation()}
                         name={user?.firstName || 'there'}
-                        context="Manage your store — daily operations, catalogue, storefront content and settings."
+                        context="Manage your store and view daily operations, catalogue, storefront content and settings."
                     />
                 </div>
 
@@ -509,6 +525,8 @@ function AdminDashboard() {
                     onClose={() => setPaletteOpen(false)}
                     groups={paletteGroups}
                 />
+
+                <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
                 {wizardOpen && (
                     <OnboardingWizard

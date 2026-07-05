@@ -15,6 +15,7 @@ import useAccess from '@/utils/useAccess'
 import RevenueCard from '@/components/DashboardComponents/RevenueCard'
 import OrdersLedger from '@/components/DashboardComponents/OrdersLedger'
 import ExpressWidget from '@/components/DashboardComponents/ExpressWidget'
+import SetupChecklist from '@/components/DashboardComponents/SetupChecklist'
 import { currencyPrefix, formatMoney } from '@/components/DashboardComponents/format'
 
 dayjs.extend(relativeTime)
@@ -254,7 +255,7 @@ function Dashboard() {
             {/* Rail — on the canvas, no bordered boxes (§5.1). Collapses to a
                 top strip on mobile. */}
             <aside className="shrink-0 lg:w-52 flex flex-col gap-6">
-                <div>
+                <div id="shop-name">
                     <span className="dash-label">Your shop</span>
                     {displayNameAvailable ? (
                         editingName ? (
@@ -380,6 +381,15 @@ function Dashboard() {
                     )}
                 </div>
 
+                {/* Setup checklist (§6) — below needs-attention, above analytics. */}
+                <SetupChecklist
+                    user={user}
+                    isLoaded={isLoaded}
+                    displayName={displayName}
+                    hasProduct={myProducts.length > 0}
+                    hasSale={orders.length > 0}
+                />
+
                 {/* Tile grid — first-mount stagger only (§4.5). */}
                 <motion.div
                     variants={staggerParent}
@@ -431,7 +441,9 @@ function Dashboard() {
                     />
                 </div>
 
-                <ExpressWidget user={user} isLoaded={isLoaded} />
+                <div id="stripe-payouts">
+                    <ExpressWidget user={user} isLoaded={isLoaded} />
+                </div>
             </main>
         </div>
     )

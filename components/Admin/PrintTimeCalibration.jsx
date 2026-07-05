@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { DashCard, SegmentPill, EmptyState, SkeletonRow } from '@/components/dashboard-ui'
+import { DashCard, SegmentPill, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import { inputCls, quietBtnCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 import { IoTimerOutline } from 'react-icons/io5'
 
@@ -66,6 +66,8 @@ export default function PrintTimeCalibration({ compact = false }) {
     const [busy, setBusy] = useState(false)
     const fileRef = useRef(null)
     const [settings, setSettings] = useState({ layerHeightMm: 0.2, infillPercent: 20, wallLoops: 2, enableSupport: false })
+    const [tourOpen, setTourOpen] = useState(false)
+    const tourOffer = useTourOffer('printTiming')
 
     const load = async () => {
         try {
@@ -129,17 +131,27 @@ export default function PrintTimeCalibration({ compact = false }) {
     return (
         <div className={`flex flex-col gap-4 ${compact ? '' : 'p-4 md:p-6'}`}>
             {!compact && (
-                <div>
-                    <h2 className="dash-title">Print timing</h2>
-                    <p className="text-[13px] dash-soft mt-1 max-w-2xl">
-                        Teach the quoting engine how fast your printers really are. You only
-                        need to do this once (and again if you change machines).
-                    </p>
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h2 className="dash-title">Print timing</h2>
+                        <p className="text-[13px] dash-soft mt-1 max-w-2xl">
+                            Teach the quoting engine how fast your printers really are. You only
+                            need to do this once (and again if you change machines).
+                        </p>
+                    </div>
+                    <TourHelpButton onClick={() => setTourOpen(true)} />
                 </div>
             )}
 
+            {!compact && tourOffer.offered && !tourOpen && (
+                <TourOfferStrip
+                    onStart={() => { tourOffer.accept(); setTourOpen(true) }}
+                    onDismiss={tourOffer.dismiss}
+                />
+            )}
+
             {/* How it works — numbered document sections with ink number chips */}
-            <ol className="flex flex-col gap-3">
+            <ol className="flex flex-col gap-3" data-tour="timing-steps">
                 {EXPLAINER_STEPS.map(([title, body], i) => (
                     <li key={title} className="flex items-start gap-3">
                         <span
@@ -163,7 +175,7 @@ export default function PrintTimeCalibration({ compact = false }) {
             </InfoStrip>
 
             {/* Add a test print */}
-            <DashCard title="Add a test print">
+            <DashCard title="Add a test print" data-tour="timing-add">
                 <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1.5">
                         <span className="dash-label">Layer height (mm)</span>
@@ -204,7 +216,7 @@ export default function PrintTimeCalibration({ compact = false }) {
             </DashCard>
 
             {/* Samples as job-card rows */}
-            <DashCard title={`Your test prints (${samples.length})`}>
+            <DashCard title={`Your test prints (${samples.length})`} data-tour="timing-samples">
                 {samples.length === 0 ? (
                     <EmptyState
                         icon={<IoTimerOutline />}
@@ -254,7 +266,7 @@ export default function PrintTimeCalibration({ compact = false }) {
                 </div>
             )}
             {fit ? (
-                <DashCard title="Calibration">
+                <DashCard title="Calibration" data-tour="timing-apply">
                     <div className="flex flex-col gap-4">
                         <p className="text-[13px] text-[var(--dash-ink)]">
                             Based on your {fit.samplesUsed} timed print{fit.samplesUsed === 1 ? '' : 's'}, estimates are
@@ -286,6 +298,11 @@ export default function PrintTimeCalibration({ compact = false }) {
                             : 'These prints are too similar in shape to calibrate from — add one flat/wide and one tall/narrow print.'}
                     </p>
                 )
+            )}
+
+            {/* Guided tour (§9.11) — not offered inside the onboarding wizard */}
+            {!compact && (
+                <CoachMarks steps={TOURS.printTiming} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="printTiming" />
             )}
         </div>
     )

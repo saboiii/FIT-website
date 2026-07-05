@@ -14,6 +14,7 @@ import {
     PeekPanel,
     EmptyState,
     SkeletonRow,
+    FreshnessStamp,
 } from '@/components/dashboard-ui'
 import { barSelectCls, barDateCls, quietPillCls } from './dashPanelUi'
 
@@ -33,6 +34,7 @@ const unitPriceLabel = (unitPrice) =>
 export default function CreatorPayments() {
     const { showToast } = useToast()
     const [sessions, setSessions] = useState([])
+    const [fetchedAt, setFetchedAt] = useState(null)
     const [sessionsLoading, setSessionsLoading] = useState(false)
     const [sessionFilter, setSessionFilter] = useState('pending')
     const [enrichedSessions, setEnrichedSessions] = useState([])
@@ -251,6 +253,7 @@ export default function CreatorPayments() {
             // Enrich sessions with product and user data
             const enriched = await enrichSessionsWithData(data.sessions)
             setEnrichedSessions(enriched)
+            setFetchedAt(Date.now())
         } catch (error) {
             showToast('Failed to load sessions: ' + error.message, 'error')
         } finally {
@@ -696,6 +699,7 @@ export default function CreatorPayments() {
                 >
                     <IoDownloadOutline size={14} aria-hidden="true" /> Export
                 </button>
+                <FreshnessStamp at={fetchedAt} />
             </GlassBar>
 
             {/* Summary strip — volume is the view's ink hero (§5.9) */}

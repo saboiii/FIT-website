@@ -42,7 +42,7 @@ vi.mock('@/utils/useOrderStatuses', () => ({
 const okJson = (data) => Promise.resolve({ ok: true, json: async () => data })
 const failJson = () => Promise.resolve({ ok: false, json: async () => ({}) })
 
-function stubFetch({ products = [], displayName, inbox, orderUsers = [] } = {}) {
+function stubFetch({ products = [], displayName, inbox, orderUsers = [], chatSettings, express } = {}) {
     global.fetch = vi.fn((url) => {
         const u = String(url)
         if (u.startsWith('/api/product')) return okJson({ products })
@@ -50,8 +50,9 @@ function stubFetch({ products = [], displayName, inbox, orderUsers = [] } = {}) 
             return displayName === undefined ? failJson() : okJson({ displayName })
         }
         if (u.startsWith('/api/chat/inbox')) return inbox ? okJson(inbox) : failJson()
+        if (u.startsWith('/api/chat/settings')) return chatSettings ? okJson(chatSettings) : failJson()
         if (u.startsWith('/api/user/orders')) return okJson(orderUsers)
-        if (u.startsWith('/api/user/express')) return okJson({})
+        if (u.startsWith('/api/user/express')) return okJson(express || {})
         return failJson()
     })
 }
@@ -62,6 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup()
+    localStorage.clear()
     vi.restoreAllMocks()
 })
 
@@ -133,5 +135,81 @@ describe('Creator home', () => {
         expect(screen.getByText('Customer note')).toBeInTheDocument()
         expect(screen.getByText('Please gift wrap')).toBeInTheDocument()
         expect(screen.getByText('Tracking ID')).toBeInTheDocument()
+    })
+
+    it('shows the setup checklist with hatch-todo rows deep-linking to each task', async () => {
+        stubFetch({}) // nothing configured → 0/5 done
+        render(<Dashboard />)
+        expect(await screen.findByText('Set up your shop')).toBeInTheDocument()
+        expect(screen.getByText('0/5 done')).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: /Finish Stripe payouts onboarding/ })).toHaveAttribute(
+            'href',
+            '#stripe-payouts',
+        )
+        expect(screen.getByRole('link', { name: /Publish your first product/ })).toHaveAttribute(
+            'href',
+            '/dashboard/products/create',
+        )
+        expect(screen.getByRole('link', { name: /Set a chat welcome message/ })).toHaveAttribute(
+            'href',
+            '/dashboard/messages',
+        )
+    })
+
+    it('collapses the checklist to "Setup 4/5" when only one task remains, expanding on click', async () => {
+        stubFetch({
+            displayName: 'Atelier', // named shop ✓
+            chatSettings: { autoReplyMessage: 'Welcome to my shop!' }, // welcome ✓
+            products: [{ _id: 'p1', name: 'Widget', basePrice: { presentmentCurrency: 'SGD' } }], // product ✓
+            orderUsers: [
+                {
+                    userId: 'buyer_1',
+                    orderHistory: [
+                        {
+                            _id: 'order1',
+                            status: 'successful',
+                            createdAt: new Date().toISOString(),
+                            cartItem: { productId: 'p1', quantity: 1, price: 5 },
+                        },
+                    ],
+                },
+            ], // sale ✓ — Stripe onboarding is the one left
+        })
+        render(<Dashboard />)
+        const summary = await screen.findByText('Setup 4/5')
+        expect(screen.queryByText('Set up your shop')).toBeNull()
+
+        fireEvent.click(summary.closest('button'))
+        expect(await screen.findByText('Set up your shop')).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: /Finish Stripe payouts onboarding/ })).toBeInTheDocument()
+        expect(screen.getByText('Name your shop')).toBeInTheDocument() // done row, no link
+        expect(screen.queryByRole('link', { name: /Name your shop/ })).toBeNull()
+    })
+
+    it('hides the checklist entirely at 5/5', async () => {
+        mockUser = { ...mockUser, publicMetadata: { stripeAccountId: 'acct_1' } }
+        stubFetch({
+            displayName: 'Atelier',
+            chatSettings: { autoReplyMessage: 'Welcome!' },
+            express: { onboarded: true },
+            products: [{ _id: 'p1', name: 'Widget', basePrice: { presentmentCurrency: 'SGD' } }],
+            orderUsers: [
+                {
+                    userId: 'buyer_1',
+                    orderHistory: [
+                        {
+                            _id: 'order1',
+                            status: 'successful',
+                            createdAt: new Date().toISOString(),
+                            cartItem: { productId: 'p1', quantity: 1, price: 5 },
+                        },
+                    ],
+                },
+            ],
+        })
+        render(<Dashboard />)
+        await screen.findByText('Widget') // ledger row → all data settled
+        expect(screen.queryByText('Set up your shop')).toBeNull()
+        expect(screen.queryByText(/^Setup \d\/5$/)).toBeNull()
     })
 })

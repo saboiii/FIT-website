@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
 import { toDatetimeLocal } from '@/utils/datetimeLocal'
-import { DashCard, ViewTabs, GlassBar, StatusPill, ConfirmDialog } from '@/components/dashboard-ui'
+import { DashCard, ViewTabs, GlassBar, StatusPill, ConfirmDialog, FreshnessStamp } from '@/components/dashboard-ui'
 import { inputCls, labelCls, quietBtnCls, badTextBtnCls, DashSelect } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 const EMPTY_CAMPAIGN = { subject: '', intro: '', articleIds: [], audience: { type: 'all', interestIds: [] }, scheduledFor: '' }
@@ -35,6 +35,7 @@ function Campaigns({ showToast }) {
     const [interests, setInterests] = useState([])
     const [form, setForm] = useState(EMPTY_CAMPAIGN)
     const [busy, setBusy] = useState(false)
+    const [fetchedAt, setFetchedAt] = useState(null)
     const [confirmSendId, setConfirmSendId] = useState(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
@@ -47,6 +48,7 @@ function Campaigns({ showToast }) {
         setCampaigns(c.campaigns || [])
         setPosts((p.posts || []).filter((x) => x.published))
         setInterests(i.interests || [])
+        setFetchedAt(Date.now())
     }
     useEffect(() => { load() }, [])
 
@@ -247,7 +249,7 @@ function Campaigns({ showToast }) {
             </DashCard>
 
             {/* History — ledger rows, one StatusPill per row */}
-            <DashCard title="Campaigns">
+            <DashCard title="Campaigns" action={<FreshnessStamp at={fetchedAt} />}>
                 <div className="divide-y divide-[var(--dash-line)]">
                     {campaigns.length === 0 && <p className="text-[13px] dash-soft py-2">No campaigns yet.</p>}
                     {campaigns.map((c) => (

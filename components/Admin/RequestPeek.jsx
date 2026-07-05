@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { IoDownloadOutline } from 'react-icons/io5'
+import { IoDownloadOutline, IoPrintOutline } from 'react-icons/io5'
 import ShippingFields from '@/components/DashboardComponents/ProductFormFields/ShippingFields'
 import { useToast } from '@/components/General/ToastProvider'
 import { PeekPanel, DottedRow, Timeline, StatusPill } from '@/components/dashboard-ui'
@@ -71,8 +71,10 @@ function describeStatus(r) {
     }
 }
 
-// Every print setting the old expandable config view showed.
-function configEntries(settings) {
+// Every print setting the old expandable config view showed. Exported for
+// the printable job sheet (app/admin/job-sheet/[requestId]) — one spec list,
+// two renderers.
+export function configEntries(settings) {
     return [
         ['Layer height', settings.layerHeight != null ? `${settings.layerHeight}mm` : null],
         ['Initial layer', settings.initialLayerHeight != null ? `${settings.initialLayerHeight}mm` : null],
@@ -173,6 +175,16 @@ export default function RequestPeek({
         }
     }
 
+    // Print job sheet (§6): hand the request to the print route via
+    // sessionStorage (window.open copies session storage to the new tab;
+    // the route falls back to fetching by id when the key is absent).
+    const openJobSheet = () => {
+        try {
+            sessionStorage.setItem(`dashJobSheet.${r.requestId}`, JSON.stringify(r))
+        } catch { /* the route's fetch fallback covers this */ }
+        window.open(`/admin/job-sheet/${r.requestId}?print=1`, '_blank')
+    }
+
     const autoCalculate = async () => {
         try {
             const shipping = shippingEdit[r.requestId] || {}
@@ -250,6 +262,9 @@ export default function RequestPeek({
             title={r.modelFile?.originalName || 'Custom print'}
             actions={
                 <>
+                    <button type="button" onClick={openJobSheet} className={quietBtnCls} title="Print job sheet">
+                        <IoPrintOutline size={14} aria-hidden="true" /> Job sheet
+                    </button>
                     {r.modelFile?.s3Key && (
                         <button type="button" onClick={() => onDownloadModel(r)} className={quietBtnCls}>
                             <IoDownloadOutline size={14} aria-hidden="true" /> Model

@@ -1,529 +1,418 @@
 'use client'
-import { useEffect, useState } from 'react';
-import ShippingFields from '@/components/DashboardComponents/ProductFormFields/ShippingFields';
-import { useToast } from '@/components/General/ToastProvider';
-import { useAdminSettings } from '@/utils/AdminSettingsContext';
-import { FaDownload } from 'react-icons/fa6';
-import { FaSearch, FaChevronDown, FaChevronRight } from 'react-icons/fa';
-import * as XLSX from 'xlsx';
+import { useEffect, useMemo, useState } from 'react'
+import { IoSearchOutline, IoDownloadOutline, IoEllipsisHorizontal, IoFileTrayOutline, IoAlertCircleOutline } from 'react-icons/io5'
+import * as XLSX from 'xlsx'
+import { useToast } from '@/components/General/ToastProvider'
+import { useAdminSettings } from '@/utils/AdminSettingsContext'
+import {
+    DashCard,
+    ViewTabs,
+    StatusPill,
+    ConfirmDialog,
+    GlassBar,
+    EmptyState,
+    SkeletonRow,
+} from '@/components/dashboard-ui'
+import RequestPeek, {
+    STATUS_LABELS,
+    NEEDS_QUOTE_STATUSES,
+    statusTone,
+    normalizeMeshColors,
+} from './RequestPeek'
 
+// Saved views over the queue (§5.8) — every lifecycle status maps to a view.
+const VIEWS = [
+    { key: 'all', label: 'All' },
+    { key: 'needs_quote', label: 'Needs quote', statuses: NEEDS_QUOTE_STATUSES },
+    { key: 'quoted', label: 'Quoted', statuses: ['quoted', 'payment_pending'] },
+    { key: 'paid', label: 'Paid', statuses: ['paid'] },
+    { key: 'printing', label: 'Printing', statuses: ['printing', 'printed'] },
+    { key: 'shipped', label: 'Shipped', statuses: ['shipped'] },
+    { key: 'done', label: 'Done', statuses: ['delivered', 'cancelled'] },
+]
+
+const NEEDS_QUOTE_SET = new Set(NEEDS_QUOTE_STATUSES)
+
+/**
+ * Admin print requests — the job queue (§5.8). GlassBar (search + saved views
+ * + export), compact job cards, and a RequestPeek slide-over carrying the
+ * config sheet, timeline, quote editor and cancel flow.
+ */
 export default function CustomPrintRequests() {
-  const { showToast } = useToast();
-  const { settings: adminSettings } = useAdminSettings();
-  const [search, setSearch] = useState('');
-  const [filteredRequests, setFilteredRequests] = useState([]);
+    const { showToast } = useToast()
+    const { settings: adminSettings } = useAdminSettings()
 
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [editing, setEditing] = useState(null)
-  const [expandedConfig, setExpandedConfig] = useState(null) // requestId whose print config is expanded
-  const [quoteAmount, setQuoteAmount] = useState('')
-  const [note, setNote] = useState('')
-  const [selectedDeliveryType, setSelectedDeliveryType] = useState('')
-  const [shippingEdit, setShippingEdit] = useState({}); // { [requestId]: {dimensions, delivery} }
+    const [requests, setRequests] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState('')
+    const [search, setSearch] = useState('')
+    const [view, setView] = useState('all')
+    const [menuFor, setMenuFor] = useState(null) // requestId whose "…" menu is open
+    const [peek, setPeek] = useState(null) // { id, editor }
+    const [cancelTarget, setCancelTarget] = useState(null) // requestId pending confirm
+    const [cancelBusy, setCancelBusy] = useState(false)
 
-  useEffect(() => {
-    if (!search) {
-      setFilteredRequests(requests);
-    } else {
-      setFilteredRequests(requests.filter(r => {
-        return (
-          (r.modelFile?.originalName || '').toLowerCase().includes(search.toLowerCase()) ||
-          (r.userEmail || '').toLowerCase().includes(search.toLowerCase()) ||
-          (r.requestId || '').toLowerCase().includes(search.toLowerCase())
-        );
-      }));
+    const load = async () => {
+        setLoading(true)
+        setError('')
+        try {
+            const res = await fetch('/api/admin/custom-print-requests')
+            if (!res.ok) throw new Error('Failed to load requests')
+            const data = await res.json()
+            setRequests(data.requests || [])
+        } catch (e) {
+            setError(e.message || 'Failed to load requests')
+        } finally {
+            setLoading(false)
+        }
     }
-  }, [search, requests]);
 
-  // Download print config as txt
-  const downloadConfig = (r) => {
-    if (!r.printConfiguration) return;
-    const configStr = JSON.stringify(r.printConfiguration, null, 2);
-    const blob = new Blob([configStr], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `print-config-${r.requestId}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-  };
+    useEffect(() => {
+        load()
+    }, [])
 
-  const downloadModel = (r) => {
-    if (!r.modelFile?.s3Key) return;
-    const originalName = r.modelFile.originalName || r.modelFile.s3Key.split('/').pop() || 'model.stl';
-    // Pass the original filename so the server sets Content-Disposition correctly
-    // (its header takes precedence over the anchor's download attribute).
-    const url = `/api/proxy?key=${encodeURIComponent(r.modelFile.s3Key)}&download=1&filename=${encodeURIComponent(originalName)}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = originalName;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => document.body.removeChild(a), 100);
-  };
+    // Client-side search across model name, customer email and request ID.
+    const searched = useMemo(() => {
+        if (!search) return requests
+        const q = search.toLowerCase()
+        return requests.filter((r) => (
+            (r.modelFile?.originalName || '').toLowerCase().includes(q) ||
+            (r.userEmail || '').toLowerCase().includes(q) ||
+            (r.requestId || '').toLowerCase().includes(q)
+        ))
+    }, [search, requests])
 
-  const exportToExcel = () => {
-    if (!filteredRequests.length) return;
-    const exportData = filteredRequests.map(r => ({
-      RequestID: r.requestId,
-      User: r.userEmail,
-      Status: r.status,
-      ModelName: r.modelFile?.originalName || '',
-      ModelSize: r.modelFile?.fileSize || '',
-      PrintConfig: r.printConfiguration ? JSON.stringify(r.printConfiguration) : '',
-      CreatedAt: r.createdAt ? new Date(r.createdAt).toLocaleString() : '',
-      UpdatedAt: r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '',
-    }));
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    ws['!cols'] = [
-      { wch: 36 }, { wch: 24 }, { wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 60 }, { wch: 24 }, { wch: 24 }
-    ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Print Requests');
-    const filename = `Custom_Print_Requests_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, filename);
-    showToast('Export successful!', 'success');
-  };
+    const counts = useMemo(() => {
+        const byView = {}
+        for (const v of VIEWS) {
+            byView[v.key] = v.statuses
+                ? searched.filter((r) => v.statuses.includes(r.status)).length
+                : searched.length
+        }
+        return byView
+    }, [searched])
 
-  const load = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      // Load requests
-      const res = await fetch('/api/admin/custom-print-requests')
-      if (!res.ok) throw new Error('Failed to load requests')
-      const data = await res.json()
-      setRequests(data.requests || [])
-    } catch (e) {
-      setError(e.message || 'Failed to load requests')
-    } finally {
-      setLoading(false)
+    const activeView = VIEWS.find((v) => v.key === view) || VIEWS[0]
+    const visible = activeView.statuses
+        ? searched.filter((r) => activeView.statuses.includes(r.status))
+        : searched
+
+    // Download print config as txt
+    const downloadConfig = (r) => {
+        if (!r.printConfiguration) return
+        const configStr = JSON.stringify(r.printConfiguration, null, 2)
+        const blob = new Blob([configStr], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `print-config-${r.requestId}.txt`
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => {
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        }, 100)
     }
-  }
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  const startQuote = (r) => {
-    setEditing(r.requestId)
-    setQuoteAmount(typeof r.printFee === 'number' && r.printFee > 0 ? String(r.printFee) : '')
-    setNote(r.adminNote || '')
-    setShippingEdit(edit => ({
-      ...edit,
-      [r.requestId]: {
-        dimensions: {
-          length: r.dimensions?.length ?? '',
-          width: r.dimensions?.width ?? '',
-          height: r.dimensions?.height ?? '',
-          weight: r.dimensions?.weight ?? '',
-        },
-        delivery: r.delivery || { deliveryTypes: [] },
-      }
-    }))
-  }
-
-  const submitQuote = async (requestId) => {
-    try {
-      const shipping = shippingEdit[requestId] || {};
-      // Sanitize dimensions: ensure numbers or null, match Product.js
-      const dims = shipping.dimensions || {};
-      const dimensions = {
-        length: dims.length !== undefined && dims.length !== '' ? Number(dims.length) : null,
-        width: dims.width !== undefined && dims.width !== '' ? Number(dims.width) : null,
-        height: dims.height !== undefined && dims.height !== '' ? Number(dims.height) : null,
-        weight: dims.weight !== undefined && dims.weight !== '' ? Number(dims.weight) : null,
-      };
-      // Sanitize deliveryTypes: match Product.js DeliveryTypeSchema
-      const delivery = { deliveryTypes: [] };
-      if (shipping.delivery && Array.isArray(shipping.delivery.deliveryTypes)) {
-        delivery.deliveryTypes = shipping.delivery.deliveryTypes.map(dt => ({
-          type: dt.type,
-          price: dt.price !== undefined ? Number(dt.price) : 0,
-          customPrice: dt.customPrice !== undefined ? Number(dt.customPrice) : null,
-          customDescription: dt.customDescription || null,
-          pickupLocation: dt.pickupLocation || null,
-          deliveryTypeConfigId: dt.deliveryTypeConfigId || null
-        })).filter(dt => dt.type);
-      }
-      const body = {
-        requestId,
-        action: 'quote',
-        quoteAmount: Number(quoteAmount || 0),
-        note,
-        dimensions,
-        delivery,
-      };
-      const res = await fetch('/api/admin/custom-print-requests', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error('Failed to save quote');
-      setEditing(null);
-      await load();
-    } catch (e) {
-      alert(e.message || 'Failed to save quote');
+    const downloadModel = (r) => {
+        if (!r.modelFile?.s3Key) return
+        const originalName = r.modelFile.originalName || r.modelFile.s3Key.split('/').pop() || 'model.stl'
+        // Pass the original filename so the server sets Content-Disposition correctly
+        // (its header takes precedence over the anchor's download attribute).
+        const url = `/api/proxy?key=${encodeURIComponent(r.modelFile.s3Key)}&download=1&filename=${encodeURIComponent(originalName)}`
+        const a = document.createElement('a')
+        a.href = url
+        a.download = originalName
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => document.body.removeChild(a), 100)
     }
-  }
 
-  const cancelRequest = async (requestId) => {
-    if (!confirm('Cancel this request?')) return
-    try {
-      const res = await fetch('/api/admin/custom-print-requests', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestId, action: 'cancel' }),
-      })
-      if (!res.ok) throw new Error('Failed to cancel request')
-      await load()
-    } catch (e) {
-      alert(e.message || 'Failed to cancel request')
+    // Exports the rows currently in view (search + active tab).
+    const exportToExcel = () => {
+        if (!visible.length) return
+        const exportData = visible.map((r) => ({
+            RequestID: r.requestId,
+            User: r.userEmail,
+            Status: r.status,
+            ModelName: r.modelFile?.originalName || '',
+            ModelSize: r.modelFile?.fileSize || '',
+            PrintConfig: r.printConfiguration ? JSON.stringify(r.printConfiguration) : '',
+            CreatedAt: r.createdAt ? new Date(r.createdAt).toLocaleString() : '',
+            UpdatedAt: r.updatedAt ? new Date(r.updatedAt).toLocaleString() : '',
+        }))
+        const ws = XLSX.utils.json_to_sheet(exportData)
+        ws['!cols'] = [
+            { wch: 36 }, { wch: 24 }, { wch: 16 }, { wch: 24 }, { wch: 12 }, { wch: 60 }, { wch: 24 }, { wch: 24 },
+        ]
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, 'Print Requests')
+        const filename = `Custom_Print_Requests_${new Date().toISOString().split('T')[0]}.xlsx`
+        XLSX.writeFile(wb, filename)
+        showToast('Export successful!', 'success')
     }
-  }
 
-  return (
-    <div className="px-6 md:px-12 py-8">
-      {/* Top controls: search, export */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <FaSearch className="text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by user, model, or request ID..."
-            className="border border-borderColor rounded px-2 py-1 text-xs w-64"
-          />
-        </div>
-        <button
-          onClick={exportToExcel}
-          disabled={filteredRequests.length === 0}
-          className="flex items-center gap-2 px-3 py-2 bg-black text-white rounded hover:bg-gray-800 text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <FaDownload /> Export to Excel
-        </button>
-      </div>
-      <h2 className="font-semibold mb-4 text-sm">Custom Print Requests</h2>
-      {error && <p className="text-red-600 text-xs mb-2">{error}</p>}
-      {loading ? (
-        <div className="loader" />
-      ) : filteredRequests.length === 0 ? (
-        <p className="text-xs text-gray-500">No custom print requests yet.</p>
-      ) : (
-        <div className="space-y-3 text-xs">
-          {filteredRequests.map((r) => (
-            <div key={r.requestId} className="border border-borderColor rounded p-3 flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{r.modelFile?.originalName || 'Custom print'}</div>
-                  <div className="text-[10px] text-gray-500">{r.userEmail}</div>
-                  <div className="text-[10px] text-gray-500">Request ID: {r.requestId}</div>
-                </div>
-                <span className="px-2 py-0.5 rounded bg-gray-100 text-[10px] uppercase tracking-wide">
-                  {(() => {
-                    // Human readable status
-                    switch (r.status) {
-                      case 'pending_upload': return 'Awaiting Model Upload';
-                      case 'pending_config': return 'Awaiting Print Config';
-                      case 'configured': return 'Awaiting Quote';
-                      case 'quoted': return 'Quoted';
-                      case 'payment_pending': return 'Awaiting Payment';
-                      case 'paid': return 'Paid';
-                      case 'printing': return 'Printing';
-                      case 'printed': return 'Printed';
-                      case 'shipped': return 'Shipped';
-                      case 'delivered': return 'Delivered';
-                      case 'cancelled': return 'Cancelled';
-                      default: return r.status;
-                    }
-                  })()}
-                </span>
-              </div>
-              {/* Download buttons */}
-              <div className="flex flex-wrap gap-2 mt-2">
-                {r.printConfiguration && (
-                  <button
-                    onClick={() => downloadConfig(r)}
-                    className="flex items-center gap-1 px-2 py-1 border rounded text-xs hover:bg-gray-50"
-                  >
-                    <FaDownload /> Print Config
-                  </button>
-                )}
-                {r.modelFile?.s3Key && (
-                  <button
-                    onClick={() => downloadModel(r)}
-                    className="flex items-center gap-1 px-2 py-1 border rounded text-xs hover:bg-gray-50"
-                  >
-                    <FaDownload /> Model File
-                  </button>
-                )}
-              </div>
-              {/* Inline Print Config Display — explicit expand/collapse so the
-                  print-farm operator can read the full config without entering
-                  edit mode. Available regardless of edit mode. */}
-              {r.printConfiguration?.printSettings && (
+    const copyRequestId = async (id) => {
+        try {
+            await navigator.clipboard.writeText(id)
+            showToast('Request ID copied.', 'success')
+        } catch {
+            showToast('Copy failed — select the ID manually.', 'error')
+        }
+    }
+
+    const openPeek = (r, editor = false) => {
+        setMenuFor(null)
+        setPeek({ id: r.requestId, editor })
+    }
+
+    const confirmCancel = async () => {
+        const requestId = cancelTarget
+        setCancelBusy(true)
+        try {
+            const res = await fetch('/api/admin/custom-print-requests', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ requestId, action: 'cancel' }),
+            })
+            if (!res.ok) throw new Error('Failed to cancel request')
+            setCancelTarget(null)
+            showToast('Request cancelled.', 'success')
+            await load()
+        } catch (e) {
+            showToast(e.message || 'Failed to cancel request', 'error')
+        } finally {
+            setCancelBusy(false)
+        }
+    }
+
+    const peekRequest = peek ? requests.find((r) => r.requestId === peek.id) : null
+
+    const menuItemCls =
+        'w-full text-left px-3 py-1.5 text-[13px] hover:bg-[var(--dash-canvas)] cursor-pointer'
+
+    return (
+        <div className="p-4 md:p-6">
+            <GlassBar className="flex-wrap">
+                <label className="flex items-center gap-2 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-full px-3 py-1.5 w-full sm:w-auto sm:min-w-[220px]">
+                    <IoSearchOutline size={14} className="shrink-0 text-[var(--dash-ink-soft)]" aria-hidden="true" />
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search model, email, or ID…"
+                        aria-label="Search requests"
+                        className="w-full min-w-0 bg-transparent outline-none text-[13px]"
+                    />
+                </label>
+                <ViewTabs
+                    tabs={VIEWS.map((v) => ({ key: v.key, label: v.label, count: counts[v.key] }))}
+                    active={view}
+                    onChange={setView}
+                />
                 <button
-                  onClick={() => setExpandedConfig(expandedConfig === r.requestId ? null : r.requestId)}
-                  className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-gray-600 hover:text-gray-900"
-                  aria-expanded={expandedConfig === r.requestId}
+                    type="button"
+                    onClick={exportToExcel}
+                    disabled={visible.length === 0}
+                    className="dash-hoverable ml-auto flex items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-[var(--dash-canvas)] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {expandedConfig === r.requestId ? <FaChevronDown /> : <FaChevronRight />}
-                  Print Configuration
+                    <IoDownloadOutline size={14} aria-hidden="true" /> Export
                 </button>
-              )}
-              {r.printConfiguration?.printSettings && expandedConfig === r.requestId && (
-                <div className="mt-2 p-3 bg-gray-50 border border-borderColor rounded text-xs">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
-                    {Object.entries({
-                      'Layer Height': `${r.printConfiguration.printSettings.layerHeight}mm`,
-                      'Initial Layer': `${r.printConfiguration.printSettings.initialLayerHeight}mm`,
-                      'Material': r.printConfiguration.printSettings.materialType,
-                      'Wall Loops': r.printConfiguration.printSettings.wallLoops,
-                      'Infill Density': `${r.printConfiguration.printSettings.sparseInfillDensity}%`,
-                      'Infill Pattern': r.printConfiguration.printSettings.sparseInfillPattern,
-                      'Internal Pattern': r.printConfiguration.printSettings.internalSolidInfillPattern,
-                      'Nozzle': `${r.printConfiguration.printSettings.nozzleDiameter}mm`,
-                      'Support': r.printConfiguration.printSettings.enableSupport ? r.printConfiguration.printSettings.supportType : 'None',
-                      'Print Plate': r.printConfiguration.printSettings.printPlate,
-                    }).map(([label, val]) => (
-                      <div key={label} className="flex flex-col">
-                        <span className="text-[10px] text-gray-500">{label}</span>
-                        <span className="font-medium text-gray-800">{val ?? 'N/A'}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {(r.dimensions?.weight || r.quote?.total != null) && (
-                    <div className="mt-2 pt-2 border-t border-borderColor grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
-                      {r.dimensions?.length != null && (
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-gray-500">Dimensions (cm)</span>
-                          <span className="font-medium text-gray-800">
-                            {r.dimensions.length}×{r.dimensions.width}×{r.dimensions.height}
-                          </span>
-                        </div>
-                      )}
-                      {r.dimensions?.weight != null && (
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-gray-500">Weight (kg)</span>
-                          <span className="font-medium text-gray-800">{r.dimensions.weight}</span>
-                        </div>
-                      )}
-                      {r.quote?.total != null && (
-                        <div className="flex flex-col">
-                          <span className="text-[10px] text-gray-500">Quote</span>
-                          <span className="font-medium text-gray-800">
-                            {String(r.quote.currency || 'sgd').toUpperCase()} {Number(r.quote.total).toFixed(2)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {r.printConfiguration.meshColors && Object.keys(
-                    r.printConfiguration.meshColors instanceof Map
-                      ? Object.fromEntries(r.printConfiguration.meshColors)
-                      : (typeof r.printConfiguration.meshColors === 'object' ? r.printConfiguration.meshColors : {})
-                  ).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-borderColor">
-                      <span className="text-[10px] text-gray-500">Mesh Colors:</span>
-                      <div className="flex gap-2 mt-1 flex-wrap">
-                        {Object.entries(
-                          r.printConfiguration.meshColors instanceof Map
-                            ? Object.fromEntries(r.printConfiguration.meshColors)
-                            : (typeof r.printConfiguration.meshColors === 'object' ? r.printConfiguration.meshColors : {})
-                        ).map(([mesh, color]) => (
-                          <div key={mesh} className="flex items-center gap-1">
-                            <div className="w-3 h-3 rounded-full border border-borderColor" style={{ backgroundColor: color }} />
-                            <span className="text-[10px]">{mesh}</span>
-                          </div>
+            </GlassBar>
+
+            <div className="mt-4">
+                {loading ? (
+                    <div className="flex flex-col gap-3" aria-label="Loading requests">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <SkeletonRow key={i} />
                         ))}
-                      </div>
                     </div>
-                  )}
-                </div>
-              )}
-              {editing === r.requestId ? (
-                <div className="mt-2 flex flex-col gap-4">
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="block text-[10px] mb-1">Print price</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={quoteAmount}
-                        onChange={(e) => setQuoteAmount(e.target.value)}
-                        className="w-full border rounded px-2 py-1 text-[11px]"
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            const shipping = shippingEdit[r.requestId] || {};
-                            const res = await fetch('/api/admin/calculate-print-cost', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                printSettings: r.printConfiguration?.printSettings,
-                                dimensions: shipping.dimensions || r.dimensions,
-                              }),
-                            });
-                            if (res.ok) {
-                              const { suggestedPrice } = await res.json();
-                              setQuoteAmount(String(suggestedPrice));
-                              showToast(`Suggested price: ${suggestedPrice}`, 'info');
-                            }
-                          } catch (e) {
-                            console.error('Auto-calculate failed:', e);
-                          }
-                        }}
-                        className="px-3 py-1 border rounded text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 whitespace-nowrap"
-                      >
-                        Auto-Calculate
-                      </button>
-                    </div>
-                  </div>
-                  {/* ShippingFields for dimensions and delivery types */}
-                  <div className="border rounded-lg p-2 bg-baseColor">
-                    <ShippingFields
-                      form={{
-                        productType: 'print',
-                        dimensions: (shippingEdit[r.requestId]?.dimensions) || r.dimensions || { length: '', width: '', height: '', weight: '' },
-                        delivery: (shippingEdit[r.requestId]?.delivery) || r.delivery || { deliveryTypes: [] },
-                      }}
-                      handleChange={e => {
-                        const { name, value } = e.target;
-                        setShippingEdit(edit => ({
-                          ...edit,
-                          [r.requestId]: {
-                            ...edit[r.requestId],
-                            dimensions: {
-                              ...((edit[r.requestId] && edit[r.requestId].dimensions) || r.dimensions || {}),
-                              [name]: ["length", "width", "height", "weight"].includes(name)
-                                ? (value === '' ? '' : Number(value))
-                                : value
-                            },
-                            delivery: (edit[r.requestId] && edit[r.requestId].delivery) || r.delivery || { deliveryTypes: [] }
-                          }
-                        }))
-                      }}
-                      setForm={updater => {
-                        setShippingEdit(edit => {
-                          const current = {
-                            productType: 'print',
-                            dimensions: edit[r.requestId]?.dimensions || r.dimensions || { length: '', width: '', height: '', weight: '' },
-                            delivery: edit[r.requestId]?.delivery || r.delivery || { deliveryTypes: [] },
-                          }
-
-                          const next = typeof updater === 'function' ? updater(current) : updater
-
-                          return {
-                            ...edit,
-                            [r.requestId]: {
-                              ...edit[r.requestId],
-                              dimensions: next?.dimensions ?? current.dimensions,
-                              delivery: next?.delivery ?? current.delivery,
-                            }
-                          }
-                        })
-                      }}
-                      availableDeliveryTypes={adminSettings?.deliveryTypes || []}
-                      hidePriceEditor={false}
-                      hideDimensions={false}
+                ) : error ? (
+                    <EmptyState
+                        icon={<IoAlertCircleOutline />}
+                        title="Couldn't Load Requests"
+                        body={error}
+                        cta="Retry"
+                        onCta={load}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] mb-1">Admin note (optional)</label>
-                    <textarea
-                      rows={2}
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      className="w-full border rounded px-2 py-1 text-[11px]"
+                ) : requests.length === 0 ? (
+                    <EmptyState
+                        icon={<IoFileTrayOutline />}
+                        title="No Print Requests Yet"
+                        body="Customer print requests will appear here as soon as they come in."
                     />
-                  </div>
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      type="button"
-                      onClick={() => setEditing(null)}
-                      className="px-3 py-1 border rounded text-[11px]"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => submitQuote(r.requestId)}
-                      className="px-3 py-1 bg-black text-white rounded text-[11px]"
-                    >
-                      Save quote
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-1 flex items-center justify-between">
-                  <div className="text-[11px] text-gray-600">
-                    {(() => {
-                      switch (r.status) {
-                        case 'pending_upload':
-                          return <span>No model uploaded</span>;
-                        case 'pending_config':
-                          return <span>Model uploaded, awaiting print config</span>;
-                        case 'configured':
-                          return <span>Model & config done, awaiting quote</span>;
-                        case 'quoted': {
-                          const base = typeof r.basePrice === 'number' ? r.basePrice : 0;
-                          const fee = typeof r.printFee === 'number' ? r.printFee : 0;
-                          const total = base + fee;
-                          return <span>Quote: {total.toFixed(2)} {r.currency?.toUpperCase() || 'SGD'}</span>;
-                        }
-                        case 'payment_pending':
-                          return <span>Quote sent, awaiting payment</span>;
-                        case 'paid':
-                          return <span>Paid, in queue for printing</span>;
-                        case 'printing':
-                          return <span>Printing in progress</span>;
-                        case 'printed':
-                          return <span>Printed, ready for shipping</span>;
-                        case 'shipped':
-                          return <span>Shipped</span>;
-                        case 'delivered':
-                          return <span>Delivered</span>;
-                        case 'cancelled':
-                          return <span>Request cancelled</span>;
-                        default:
-                          return <span>{r.status}</span>;
-                      }
-                    })()}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => startQuote(r)}
-                      className="px-3 py-1 border rounded text-[11px]"
-                    >
-                      {typeof r.printFee === 'number' && r.printFee > 0 ? 'Edit quote' : 'Create quote'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => cancelRequest(r.requestId)}
-                      className="px-3 py-1 border rounded text-[11px] text-red-600 border-red-300"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+                ) : visible.length === 0 ? (
+                    <EmptyState
+                        icon={<IoSearchOutline />}
+                        title="No Matching Requests"
+                        body="Nothing matches the current search or view."
+                        secondary="Clear filters"
+                        onSecondary={() => { setSearch(''); setView('all') }}
+                    />
+                ) : (
+                    <div className="flex flex-col gap-3">
+                        {visible.map((r) => {
+                            const needsQuote = NEEDS_QUOTE_SET.has(r.status)
+                            const material = r.printConfiguration?.printSettings?.materialType
+                            const swatches = [...new Set(Object.values(normalizeMeshColors(r.printConfiguration?.meshColors)))].slice(0, 5)
+                            const printHours = r.quote?.inputs?.printHours
+                            return (
+                                <div
+                                    key={r.requestId}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => openPeek(r)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') openPeek(r) }}
+                                    className="text-left"
+                                >
+                                    <DashCard interactive className="cursor-pointer">
+                                        <div className="flex items-center justify-between gap-4 flex-wrap sm:flex-nowrap">
+                                            <div className="min-w-0">
+                                                <p className="text-[13px] font-semibold truncate">
+                                                    {r.modelFile?.originalName || 'Custom print'}
+                                                </p>
+                                                <p className="text-[13px] dash-soft truncate">{r.userEmail}</p>
+                                                <button
+                                                    type="button"
+                                                    title="Copy request ID"
+                                                    onClick={(e) => { e.stopPropagation(); copyRequestId(r.requestId) }}
+                                                    className="dash-data dash-soft hover:text-[var(--dash-ink)] cursor-pointer"
+                                                >
+                                                    {r.requestId}
+                                                </button>
+                                            </div>
+                                            {(material || swatches.length > 0 || Number.isFinite(printHours)) && (
+                                                <div className="hidden md:flex items-center gap-2 min-w-0">
+                                                    {material && <span className="dash-data dash-soft">{material}</span>}
+                                                    {swatches.length > 0 && (
+                                                        <>
+                                                            {material && <span className="dash-soft" aria-hidden="true">·</span>}
+                                                            <span className="flex items-center gap-1">
+                                                                {swatches.map((color) => (
+                                                                    <span
+                                                                        key={color}
+                                                                        className="h-3 w-3 rounded-full border border-[var(--dash-line)]"
+                                                                        style={{ backgroundColor: color }}
+                                                                        aria-hidden="true"
+                                                                    />
+                                                                ))}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                    {Number.isFinite(printHours) && (
+                                                        <>
+                                                            <span className="dash-soft" aria-hidden="true">·</span>
+                                                            <span className="dash-data dash-soft whitespace-nowrap">
+                                                                ≈ {Number(printHours).toFixed(1)} h
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <StatusPill tone={statusTone(r.status)}>
+                                                    {STATUS_LABELS[r.status] || r.status}
+                                                </StatusPill>
+                                                {needsQuote && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => { e.stopPropagation(); openPeek(r, true) }}
+                                                        className="dash-hoverable rounded-full px-3.5 py-1.5 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] cursor-pointer hover:bg-[var(--dash-sun-deep)] active:scale-[0.97]"
+                                                    >
+                                                        Quote
+                                                    </button>
+                                                )}
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        aria-label="More actions"
+                                                        aria-haspopup="menu"
+                                                        aria-expanded={menuFor === r.requestId}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setMenuFor((m) => (m === r.requestId ? null : r.requestId))
+                                                        }}
+                                                        className="dash-hoverable h-7 w-7 grid place-items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer"
+                                                    >
+                                                        <IoEllipsisHorizontal size={14} aria-hidden="true" />
+                                                    </button>
+                                                    {menuFor === r.requestId && (
+                                                        <>
+                                                            <div
+                                                                className="fixed inset-0 z-20"
+                                                                onClick={(e) => { e.stopPropagation(); setMenuFor(null) }}
+                                                            />
+                                                            <div
+                                                                role="menu"
+                                                                className="absolute right-0 top-full mt-1 z-30 min-w-[180px] py-1 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] shadow-[var(--dash-shadow-float)]"
+                                                            >
+                                                                {r.modelFile?.s3Key && (
+                                                                    <button
+                                                                        type="button"
+                                                                        role="menuitem"
+                                                                        onClick={(e) => { e.stopPropagation(); setMenuFor(null); downloadModel(r) }}
+                                                                        className={menuItemCls}
+                                                                    >
+                                                                        Download model
+                                                                    </button>
+                                                                )}
+                                                                {r.printConfiguration && (
+                                                                    <button
+                                                                        type="button"
+                                                                        role="menuitem"
+                                                                        onClick={(e) => { e.stopPropagation(); setMenuFor(null); downloadConfig(r) }}
+                                                                        className={menuItemCls}
+                                                                    >
+                                                                        Download config
+                                                                    </button>
+                                                                )}
+                                                                {r.status !== 'cancelled' && (
+                                                                    <button
+                                                                        type="button"
+                                                                        role="menuitem"
+                                                                        onClick={(e) => { e.stopPropagation(); setMenuFor(null); setCancelTarget(r.requestId) }}
+                                                                        className={`${menuItemCls} text-[var(--dash-bad)]`}
+                                                                    >
+                                                                        Cancel request
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </DashCard>
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </div>
-          ))}
+
+            <RequestPeek
+                request={peekRequest}
+                open={Boolean(peekRequest)}
+                initialEditor={Boolean(peek?.editor)}
+                adminSettings={adminSettings}
+                onClose={() => setPeek(null)}
+                onChanged={load}
+                onCancelRequest={(id) => setCancelTarget(id)}
+                onDownloadModel={downloadModel}
+                onDownloadConfig={downloadConfig}
+            />
+
+            <ConfirmDialog
+                open={Boolean(cancelTarget)}
+                onClose={() => setCancelTarget(null)}
+                onConfirm={confirmCancel}
+                title="Cancel this request?"
+                body="The customer will see this request as cancelled. This can't be undone."
+                confirmLabel="Cancel request"
+                cancelLabel="Keep request"
+                tone="bad"
+                busy={cancelBusy}
+            />
         </div>
-      )}
-    </div>
-  )
+    )
 }

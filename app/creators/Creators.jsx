@@ -59,6 +59,7 @@ const VARIANTS = {
         feature: "text-lightColor",
         check: "text-textColor",
         button: "formBlackButton",
+        currentButton: "border border-textColor text-textColor",
     },
     sun: {
         card: "bg-amber-300 border-amber-300",
@@ -71,6 +72,7 @@ const VARIANTS = {
         feature: "text-textColor/80",
         check: "text-textColor",
         button: "formBlackButton",
+        currentButton: "border border-textColor text-textColor",
     },
     ink: {
         card: "bg-textColor border-textColor",
@@ -83,6 +85,7 @@ const VARIANTS = {
         feature: "text-white/75",
         check: "text-white",
         button: "formBlackButton !bg-white !text-textColor hover:!bg-white/90",
+        currentButton: "border border-white/60 text-white",
     },
 };
 
@@ -109,13 +112,15 @@ function PlanCard({ icon: Icon, name, description, price, per, features, href, c
                 </div>
             </div>
 
-            <Link
-                href={href}
-                aria-disabled={current}
-                className={`${v.button} w-full justify-center ${current ? "!bg-green-600 hover:!bg-green-700 !text-white pointer-events-none" : ""}`}
-            >
-                {loading ? "Loading…" : current ? "Current plan" : "Choose plan"}
-            </Link>
+            {current ? (
+                <div className={`flex px-3 py-2 items-center justify-center rounded-md font-medium text-sm ${v.currentButton}`}>
+                    Current plan
+                </div>
+            ) : (
+                <Link href={href} className={`${v.button} w-full justify-center`}>
+                    {loading ? "Loading…" : "Choose plan"}
+                </Link>
+            )}
 
             <div className="flex flex-col gap-3 pt-2">
                 {features.map((feature) => (

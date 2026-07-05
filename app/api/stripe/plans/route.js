@@ -11,22 +11,26 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const CACHE_TTL_MS = 5 * 60 * 1000
 let cache = null // { at, plans }
 
-function featureList(product) {
-    const marketing = (product?.marketing_features || [])
-        .map((f) => f?.name)
-        .filter(Boolean)
-    if (marketing.length > 0) return marketing
-    const meta = product?.metadata?.features
-    if (typeof meta === 'string' && meta.trim()) {
-        // Metadata may hold a JSON array string ('["A","B"]') or a
-        // pipe/comma-separated list — accept both.
+// One feature entry may itself be a JSON array string ('["A","B"]') or a
+// pipe-separated list — however it was pasted into Stripe (marketing feature
+// OR metadata), expand it into individual bullets.
+function expandFeature(entry) {
+    const s = String(entry ?? '').trim()
+    if (!s) return []
+    if (s.startsWith('[')) {
         try {
-            const parsed = JSON.parse(meta)
-            if (Array.isArray(parsed)) return parsed.map((s) => String(s).trim()).filter(Boolean)
-        } catch { /* not JSON — fall through to delimiter split */ }
-        return meta.split(/[|,]/).map((s) => s.trim()).filter(Boolean)
+            const parsed = JSON.parse(s)
+            if (Array.isArray(parsed)) return parsed.flatMap(expandFeature)
+        } catch { /* not JSON, treat as text */ }
     }
-    return []
+    if (s.includes('|')) return s.split('|').map((x) => x.trim()).filter(Boolean)
+    return [s]
+}
+
+function featureList(price, product) {
+    const marketing = (product?.marketing_features || []).flatMap((f) => expandFeature(f?.name))
+    if (marketing.length > 0) return marketing
+    return expandFeature(product?.metadata?.features ?? price?.metadata?.features)
 }
 
 export async function GET() {
@@ -53,7 +57,7 @@ export async function GET() {
                             currency: (price.currency || 'sgd').toUpperCase(),
                             interval: price.recurring?.interval || null,
                             popular: price.product?.metadata?.popular === 'true',
-                            features: featureList(price.product),
+                            features: featureList(price, price.product),
                         }
                     } catch (err) {
                         console.error(`[stripe/plans] failed to load ${tier} (${id}):`, err?.message)

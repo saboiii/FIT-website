@@ -28,7 +28,9 @@ describe('GET /api/stripe/plans', () => {
             }))
             .mockResolvedValueOnce(price('p2', { metadata: { features: 'A | B | C' } }))
             .mockResolvedValueOnce(price('p3', {
-                marketing_features: [{ name: 'From marketing' }],
+                // A JSON array pasted into a single Stripe marketing feature
+                // must ALSO expand into bullets (the reported bug).
+                marketing_features: [{ name: 'From marketing' }, { name: '["MF A","MF B"]' }],
                 metadata: { features: '["ignored"]' },
             }))
         const { GET } = await import('@/app/api/stripe/plans/route')
@@ -36,7 +38,7 @@ describe('GET /api/stripe/plans', () => {
         const { plans } = await res.json()
         expect(plans[0].features).toEqual(['Professional Feature 1', 'Professional Feature 2'])
         expect(plans[1].features).toEqual(['A', 'B', 'C'])
-        expect(plans[2].features).toEqual(['From marketing'])
+        expect(plans[2].features).toEqual(['From marketing', 'MF A', 'MF B'])
     })
 
     it('skips inactive prices and unconfigured tiers', async () => {

@@ -4,6 +4,12 @@ const nextConfig = {
     // without a Turbopack config. We don't need any special
     // Turbopack settings right now, so an empty object is fine.
     turbopack: {},
+    // Clerk middleware makes every request body buffer through the proxy,
+    // whose default cap is 10MB. Print-time calibration uploads whole models
+    // (route enforces its own 40MB Content-Length guard), so match that here.
+    experimental: {
+        middlewareClientMaxBodySize: '40mb',
+    },
     images: {
         remotePatterns: [
             {

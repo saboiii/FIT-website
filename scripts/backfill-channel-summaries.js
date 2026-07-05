@@ -27,7 +27,6 @@ async function run() {
     // Page through all messaging channels and upsert ChannelSummary docs
     // This is intended as a one-off helper after enabling the webhook.
     // You can re-run it safely; it uses upserts.
-    // eslint-disable-next-line no-constant-condition
     while (true) {
         console.log(`Querying channels with offset=${offset}, limit=${limit}...`);
         const channels = await client.queryChannels(

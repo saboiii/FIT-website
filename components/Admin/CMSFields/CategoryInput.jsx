@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { FiCheck, FiAlertCircle } from 'react-icons/fi'
+import { inputCls, labelCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 export default function CategoryInput({
     label,
@@ -151,11 +152,11 @@ export default function CategoryInput({
     )
 
     return (
-        <div className="space-y-2">
-            <label className="formLabel">{label}</label>
+        <div className="flex flex-col gap-1.5">
+            <label className={labelCls}>{label}</label>
 
             {helpText && (
-                <p className="text-xs text-lightColor">{helpText}</p>
+                <p className="text-[13px] dash-soft">{helpText}</p>
             )}
 
             <div className="relative" ref={dropdownRef}>
@@ -166,8 +167,8 @@ export default function CategoryInput({
                         onChange={handleInputChange}
                         onFocus={handleFocus}
                         placeholder={placeholder}
-                        className={`formInput pr-10 ${isValid === true ? 'border-green-500 focus:border-green-500' :
-                            isValid === false ? 'border-red-500 focus:border-red-500' : ''
+                        className={`${inputCls()} pr-10 ${isValid === true ? 'border-[var(--dash-ok)]' :
+                            isValid === false ? 'border-[var(--dash-bad)]' : ''
                             }`}
                     />
 
@@ -176,23 +177,23 @@ export default function CategoryInput({
                         {isValidating ? (
                             <div className="loader" style={{ width: '16px', height: '16px' }} />
                         ) : isValid === true ? (
-                            <FiCheck className="text-green-600" size={18} />
+                            <FiCheck className="text-[var(--dash-ok)]" size={18} />
                         ) : isValid === false ? (
-                            <FiAlertCircle className="text-red-600" size={18} />
+                            <FiAlertCircle className="text-[var(--dash-bad)]" size={18} />
                         ) : null}
                     </div>
                 </div>
 
                 {/* Validation message */}
                 {isValid === false && inputValue.trim() && (
-                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                    <p className="text-[13px] text-[var(--dash-bad)] mt-1 flex items-center gap-1">
                         <FiAlertCircle size={12} />
                         No products found with this {type}. Check spelling or create products with this {type} first.
                     </p>
                 )}
 
                 {isValid === true && (
-                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <p className="text-[13px] text-[var(--dash-ok)] mt-1 flex items-center gap-1">
                         <FiCheck size={12} />
                         Valid {type} - products found
                     </p>
@@ -200,14 +201,14 @@ export default function CategoryInput({
 
                 {/* Suggestions Dropdown */}
                 {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-borderColor rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] shadow-[var(--dash-shadow-float)] max-h-48 overflow-y-auto">
                         <div className="py-1">
                             {filteredSuggestions.map((suggestion, index) => (
                                 <button
                                     key={index}
                                     type="button"
                                     onClick={() => selectSuggestion(suggestion)}
-                                    className="w-full px-4 py-2 text-left text-sm hover:bg-baseColor transition-colors text-textColor"
+                                    className="dash-hoverable w-full px-4 py-2 text-left text-[13px] hover:bg-[var(--dash-canvas)] text-[var(--dash-ink)] cursor-pointer"
                                 >
                                     {suggestion}
                                 </button>

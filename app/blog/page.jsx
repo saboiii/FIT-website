@@ -1,3 +1,4 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import Blog from "./Blog";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://fixitoday.com";
@@ -41,7 +42,7 @@ function BlogLayout() {
         <>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(BLOG_INDEX_JSON_LD) }}
+                dangerouslySetInnerHTML={{ __html: jsonLdString(BLOG_INDEX_JSON_LD) }}
             />
             <Blog />
         </>

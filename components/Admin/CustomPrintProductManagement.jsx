@@ -4,6 +4,7 @@ import { useToast } from '@/components/General/ToastProvider'
 import PricingFields from '@/components/DashboardComponents/ProductFormFields/PricingFields'
 import ShippingFields from '@/components/DashboardComponents/ProductFormFields/ShippingFields'
 import DiscountsField from '@/components/DashboardComponents/ProductFormFields/DiscountsField'
+const DIMENSION_FIELDS = new Set(['length', 'width', 'height', 'weight'])
 import ImagesField from '@/components/DashboardComponents/ProductFormFields/ImagesField'
 import { uploadImages } from '@/utils/uploadHelpers'
 import {
@@ -11,6 +12,61 @@ import {
     handleImageDrop as handleImageDropHelper,
     handleRemoveImage as handleRemoveImageHelper,
 } from '@/utils/formHelpers'
+import { GlassBar, SkeletonRow } from '@/components/dashboard-ui'
+import { inputCls, labelCls, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import { sunBtnCls } from './dashPanelUi'
+
+/**
+ * Custom print product (§5.10 + §9.5 document chassis): one long form split
+ * into numbered chapters, each a small chunk with plain-language helper copy
+ * (Hick's law / chunking). A mini table-of-contents rail carries jump links
+ * and per-chapter done/todo dots; the sticky GlassBar shows a completeness
+ * summary beside the one save action. Rare settings (discounts) sit behind a
+ * disclosure. Every field and payload is unchanged, only relocated.
+ */
+const CHAPTERS = [
+    { id: 'basics', num: 1, title: 'Basics', blurb: 'The name and description customers see when they order a custom print.' },
+    { id: 'photos', num: 2, title: 'Photos', blurb: 'Example photos that show customers what your custom prints look like.' },
+    { id: 'pricing', num: 3, title: 'Pricing', blurb: 'The starting price every custom print request begins from.' },
+    { id: 'delivery', num: 4, title: 'Delivery', blurb: 'How finished prints reach the customer. Each request copies these options and prices as they are.' },
+    { id: 'discounts', num: 5, title: 'Discounts', blurb: 'Optional. Money off the base price, on its own or tied to a promotional event.', optional: true },
+]
+
+// Chapter completeness dot: ink = done, hatch = still to do (§4.8 #14).
+function ChapterDot({ done }) {
+    return (
+        <span
+            aria-hidden="true"
+            className={`h-3 w-3 shrink-0 rounded-full ${done
+                ? 'bg-[var(--dash-ink)]'
+                : 'dash-hatch border border-[var(--dash-line)] bg-[var(--dash-card)]'
+                }`}
+        />
+    )
+}
+
+// One numbered chapter of the document: node + title + one-line helper copy.
+function Chapter({ id, num, title, blurb, done, optional, first = false, children }) {
+    return (
+        <section id={`cpp-${id}`} className={`scroll-mt-24 py-6 ${first ? '' : 'border-t border-[var(--dash-line)]'}`}>
+            <div className="flex items-center gap-2.5">
+                <span
+                    aria-hidden="true"
+                    className={`h-6 w-6 shrink-0 grid place-items-center rounded-full dash-data ${done
+                        ? 'bg-[var(--dash-ink)] text-[var(--dash-canvas)]'
+                        : 'dash-hatch border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-ink)]'
+                        }`}
+                >
+                    {num}
+                </span>
+                <h3 className="dash-section">{title}</h3>
+                {optional && <span className="dash-label">Optional</span>}
+            </div>
+            <p className="text-[13px] dash-soft mt-1.5 mb-4">{blurb}</p>
+            {children}
+        </section>
+    )
+}
 
 export default function CustomPrintProductManagement() {
     const [product, setProduct] = useState(null)
@@ -18,6 +74,9 @@ export default function CustomPrintProductManagement() {
     const [saving, setSaving] = useState(false)
     const [events, setEvents] = useState([])
     const [allCurrencies] = useState(['SGD', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'CNY', 'HKD', 'MYR', 'THB', 'INR'])
+    // Discounts are the rare chapter: fields stay collapsed until asked for,
+    // unless a discount is already configured (progressive disclosure).
+    const [discountsRevealed, setDiscountsRevealed] = useState(false)
     const { showToast } = useToast()
 
     // Image upload state
@@ -37,6 +96,7 @@ export default function CustomPrintProductManagement() {
         delivery: {
             deliveryTypes: []
         },
+        dimensions: { length: '', width: '', height: '', weight: '' },
         discount: {
             eventId: '',
             percentage: '',
@@ -81,6 +141,7 @@ export default function CustomPrintProductManagement() {
                         basePrice: data.product.basePrice || { presentmentCurrency: 'SGD', presentmentAmount: 0 },
                         priceCredits: data.product.priceCredits || 0,
                         delivery: data.product.delivery || { deliveryTypes: [] },
+                        dimensions: data.product.dimensions || { length: '', width: '', height: '', weight: '' },
                         discount: data.product.discount || { eventId: '', percentage: '', minimumPrice: '', startDate: '', endDate: '' },
                         showDiscount: !!data.product.discount?.percentage || !!data.product.discount?.eventId,
                         productType: 'print'
@@ -96,6 +157,18 @@ export default function CustomPrintProductManagement() {
 
     const handleChange = (e) => {
         const { name, value } = e.target
+
+        // Dimension inputs (used by ShippingFields) live under form.dimensions.
+        if (DIMENSION_FIELDS.has(name)) {
+            setForm(prev => ({
+                ...prev,
+                dimensions: {
+                    ...prev.dimensions,
+                    [name]: value === '' ? '' : Number(value),
+                },
+            }))
+            return
+        }
 
         setForm(prev => ({
             ...prev,
@@ -132,6 +205,7 @@ export default function CustomPrintProductManagement() {
                     basePrice: normalizedBasePrice,
                     priceCredits: normalizedPriceCredits,
                     delivery: form.delivery,
+                    dimensions: form.dimensions,
                     discount: form.showDiscount ? form.discount : {}
                 })
             })
@@ -171,99 +245,192 @@ export default function CustomPrintProductManagement() {
     const handleImageDrop = (fileList) => handleImageDropHelper(fileList, setPendingImages, setImageValidationErrors)
     const handleRemoveImage = (idx) => handleRemoveImageHelper(idx, form, setForm, pendingImages, setPendingImages, imageInputRef, setImageValidationErrors)
 
+    // Per-chapter completeness for the rail dots and the save-bar summary.
+    const done = {
+        basics: (form.name || '').trim().length > 0 && (form.description || '').trim().length > 0,
+        photos: (form.images?.length || 0) + pendingImages.length > 0,
+        pricing: form.basePrice?.presentmentAmount !== '' && Number(form.basePrice?.presentmentAmount) > 0,
+        delivery: (form.delivery?.deliveryTypes?.length || 0) > 0,
+        discounts: !!form.showDiscount,
+    }
+    const requiredChapters = CHAPTERS.filter((c) => !c.optional)
+    const readyCount = requiredChapters.filter((c) => done[c.id]).length
+
+    // Jump links never animate (keyboard-initiated navigation, §4.5 rules).
+    const jumpTo = (id) => {
+        if (typeof document !== 'undefined') {
+            document.getElementById(`cpp-${id}`)?.scrollIntoView({ block: 'start' })
+        }
+    }
+
+    const discountsOpen = discountsRevealed || form.showDiscount
+
+    const railLink = (c) => (
+        <button
+            key={c.id}
+            type="button"
+            onClick={() => jumpTo(c.id)}
+            className="dash-hoverable flex items-center gap-2 rounded-full px-3 py-1.5 text-[13px] font-medium text-[var(--dash-ink-soft)] hover:bg-[var(--dash-sun-soft)] hover:text-[var(--dash-ink)] cursor-pointer text-left"
+        >
+            <ChapterDot done={done[c.id]} />
+            <span>{c.num}. {c.title}</span>
+        </button>
+    )
+
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-textColor border-t-transparent"></div>
+            <div className="p-4 md:p-6 flex flex-col gap-3" aria-label="Loading custom print product">
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <SkeletonRow key={i} />
+                ))}
             </div>
         )
     }
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-6 p-6 md:p-12  min-h-screen">
-            <div className="mb-6">
-                <h2 className="text-lg font-semibold text-textColor mb-2">Custom 3D Print Product</h2>
-                <p className="text-xs text-lightColor">
-                    Configure pricing, delivery, and discount settings for custom 3D print requests. This product has no variants.
-                </p>
-            </div>
-
-            {product && (
-                <div className="mb-4 bg-baseColor p-4 rounded-md border border-borderColor">
-                    <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-lightColor">Product ID</span>
-                        <code className="text-xs bg-borderColor/30 px-2 py-1 rounded">{product._id}</code>
-                    </div>
+        <div className="p-4 md:p-6">
+            {/* Sticky save bar: the one primary action + completeness summary */}
+            <GlassBar className="justify-between">
+                <div className="min-w-0">
+                    <p className="text-[13px] font-semibold truncate">Custom print product</p>
+                    <p className="dash-data dash-soft truncate">
+                        {readyCount} of {requiredChapters.length} sections ready
+                    </p>
                 </div>
-            )}
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving || loading}
+                    className={`${sunBtnCls} shrink-0`}
+                >
+                    {saving ? 'Saving…' : 'Save configuration'}
+                </button>
+            </GlassBar>
 
-            <div className="space-y-4">
-                {/* Product Details Section */}
-                <div className="border border-borderColor rounded-lg overflow-hidden">
-                    <div className="bg-borderColor/40 w-full px-4 py-2 border-b border-borderColor">
-                        <h3 className="text-sm font-medium text-textColor">Product Details</h3>
-                    </div>
-                    <div className="p-4 space-y-4">
-                        <div className="flex flex-col gap-2">
-                            <label htmlFor="name" className="text-xs font-medium text-lightColor">Product Name</label>
-                            <input
-                                id="name"
-                                name="name"
-                                type="text"
-                                value={form.name}
-                                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                                className="formInput text-sm"
-                                placeholder="Custom 3D Print"
-                            />
+            {/* Compact jump pills where the rail does not fit (§4.8 #14) */}
+            <nav aria-label="Form sections" className="xl:hidden flex items-center gap-1.5 flex-wrap mt-3">
+                {CHAPTERS.map((c) => (
+                    <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => jumpTo(c.id)}
+                        className={`${quietBtnCls} flex items-center gap-1.5 px-3 py-1`}
+                    >
+                        <ChapterDot done={done[c.id]} />
+                        {c.num}. {c.title}
+                    </button>
+                ))}
+            </nav>
+
+            <div className="flex items-start gap-8 mt-2">
+                {/* The document: numbered chapters at reading width */}
+                <div className="flex-1 min-w-0 max-w-[720px]">
+                    <p className="text-[13px] dash-soft mt-2">
+                        The single storefront product behind “Order Print”. Every custom
+                        print request starts from what you set here.
+                    </p>
+
+                    <Chapter {...CHAPTERS[0]} done={done.basics} first>
+                        <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label htmlFor="name" className={labelCls}>Product name</label>
+                                <input
+                                    id="name"
+                                    name="name"
+                                    type="text"
+                                    value={form.name}
+                                    onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                                    className={inputCls()}
+                                    placeholder="Custom 3D Print"
+                                />
+                            </div>
+
+                            <div className="flex flex-col gap-1.5">
+                                <label htmlFor="description" className={labelCls}>Description</label>
+                                <textarea
+                                    id="description"
+                                    name="description"
+                                    value={form.description}
+                                    onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                                    className={`${inputCls()} min-h-32`}
+                                    placeholder="Describe your custom 3D printing service..."
+                                />
+                                <p className="text-[11px] font-medium dash-soft">
+                                    Plain language works best: what customers can order and what happens after they do.
+                                </p>
+                            </div>
                         </div>
+                    </Chapter>
 
-                        <div className="flex flex-col gap-2">
-                            <label htmlFor="description" className="text-xs font-medium text-lightColor">Description</label>
-                            <textarea
-                                id="description"
-                                name="description"
-                                value={form.description}
-                                onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
-                                className="formInput text-sm min-h-32"
-                                placeholder="Describe your custom 3D printing service..."
-                            />
-                        </div>
-
+                    <Chapter {...CHAPTERS[1]} done={done.photos}>
                         <ImagesField
-                            form={form}
+                            images={form.images}
                             imageValidationErrors={imageValidationErrors}
                             imageInputRef={imageInputRef}
                             handleImageChange={handleImageChange}
                             handleImageDrop={handleImageDrop}
                             handleRemoveImage={handleRemoveImage}
                             pendingImages={pendingImages}
+                            setImageValidationErrors={setImageValidationErrors}
                         />
+                    </Chapter>
+
+                    <Chapter {...CHAPTERS[2]} done={done.pricing}>
+                        <PricingFields
+                            form={form}
+                            setForm={setForm}
+                            allCurrencies={allCurrencies}
+                        />
+                    </Chapter>
+
+                    {/* Delivery options for custom prints. The admin curates which
+                        delivery types are offered and sets each price here; every
+                        custom-print request copies these options + prices verbatim
+                        (prices are NOT recalculated per model). Representative
+                        dimensions can be entered to auto-price tier/formula types;
+                        the resulting price can always be overridden per type. */}
+                    <Chapter {...CHAPTERS[3]} done={done.delivery}>
+                        <ShippingFields
+                            form={form}
+                            handleChange={handleChange}
+                            setForm={setForm}
+                        />
+                    </Chapter>
+
+                    <Chapter {...CHAPTERS[4]} done={done.discounts} optional>
+                        {discountsOpen ? (
+                            <DiscountsField
+                                form={form}
+                                setForm={setForm}
+                                events={events}
+                            />
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setDiscountsRevealed(true)}
+                                className={quietBtnCls}
+                            >
+                                Set up a discount
+                            </button>
+                        )}
+                    </Chapter>
+                </div>
+
+                {/* Mini table-of-contents rail: jump links + done/todo dots and
+                    the quiet product meta (§4.8 #14 chassis, composed inline) */}
+                <nav aria-label="Form contents" className="hidden xl:flex flex-col gap-1 sticky top-20 w-52 shrink-0">
+                    <p className="dash-label px-3 mb-1">Contents</p>
+                    {CHAPTERS.map(railLink)}
+                    <div className="mt-3 pt-3 px-3 border-t border-[var(--dash-line)]">
+                        <p className="dash-label">Ready to save</p>
+                        <p className="dash-data mt-1">{readyCount} of {requiredChapters.length} sections</p>
+                        {product && (
+                            <p className="font-mono text-[11px] font-medium dash-soft mt-2 truncate" title={`Product ID ${product._id}`}>
+                                ID {product._id}
+                            </p>
+                        )}
                     </div>
-                </div>
-
-                <PricingFields
-                    form={form}
-                    setForm={setForm}
-                    allCurrencies={allCurrencies}
-                />
-
-                {/* Delivery types removed for custom print product config. Only set in print requests. */}
-
-                <DiscountsField
-                    form={form}
-                    setForm={setForm}
-                    events={events}
-                />
-
-                <div className="pt-4">
-                    <button
-                        onClick={handleSave}
-                        disabled={saving || loading}
-                        className="w-full px-4 py-3 bg-textColor text-background rounded-md text-sm font-medium hover:bg-textColor/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {saving ? 'Saving Changes...' : 'Save Custom Print Configuration'}
-                    </button>
-                </div>
+                </nav>
             </div>
         </div>
     )

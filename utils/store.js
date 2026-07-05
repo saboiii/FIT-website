@@ -7,6 +7,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js'
+import { computeMetricsFromObject } from '@/lib/quoting/threeGeometryAdapter'
 
 // Code generation removed - not needed for 3D model viewer
 
@@ -16,15 +17,25 @@ const useStore = create((set, get) => ({
   textOriginalFile: '',
   animations: false,
   scene: null,
+  geometryMetrics: null, // { volumeCm3, dimensionsCm, watertight, confidence } from the loaded model
   orderId: null,
   productId: null,
   variantId: null,
   requestId: null,
   isCustomPrint: false,
+  returnTo: null, // validated same-origin path to return to after saving
+  // Product-print editor mode (productType:"print" bought via "Order Print"):
+  // the vendor's fixed config + offered colours, so the editor locks settings
+  // and constrains the colour picker. See openspec change
+  // `migrate-print-delivery-to-custom-requests`.
+  productPrintConfig: null, // product.printConfig (fixed settings) or null
+  productColours: null, // [{name,hex}] offered colours, or null
+  colourVariantName: null, // the colour-type variant's name (for selectedVariants)
 
-  setFileName: (fileName) => set({ fileName, scene: null }),
-  setBuffers: (buffers) => set({ buffers, scene: null }),
+  setFileName: (fileName) => set({ fileName, scene: null, geometryMetrics: null }),
+  setBuffers: (buffers) => set({ buffers, scene: null, geometryMetrics: null }),
   setScene: (scene) => set({ scene }),
+  setReturnTo: (returnTo) => set({ returnTo }),
   setOrderId: (orderId) => set({ orderId }),
   setProductId: (productId) => set({ productId }),
   setVariantId: (variantId) => set({ variantId }),
@@ -74,7 +85,6 @@ const useStore = create((set, get) => ({
 
                   child.castShadow = true
                   child.receiveShadow = true
-                  console.log('OBJ Mesh found:', child.name, 'Material type:', child.material.type) // Debug log
                 }
               })
               scene.add(objGroup)
@@ -204,6 +214,16 @@ const useStore = create((set, get) => ({
 
     // Always replace the scene when regenerating from new buffers.
     set({ scene: result.scene })
+
+    // Compute pricing-ready geometry metrics for the Instant Quoting Engine.
+    // Best-effort: never let a measurement error break model loading.
+    try {
+      const geometryMetrics = computeMetricsFromObject(result.scene, get().fileName)
+      set({ geometryMetrics })
+    } catch (err) {
+      console.error('Failed to compute geometry metrics:', err)
+      set({ geometryMetrics: null })
+    }
   },
 }))
 

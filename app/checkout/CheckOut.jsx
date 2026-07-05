@@ -6,6 +6,7 @@ import { loadStripe } from '@stripe/stripe-js';
 import { useUser } from "@clerk/nextjs";
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/General/ToastProvider';
+import posthog from 'posthog-js';
 
 if (process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY === undefined) {
     throw new Error('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not defined');
@@ -29,6 +30,7 @@ const CheckoutForm = () => {
         if (confirmResult.type === 'error') {
             setMessage(confirmResult.error.message);
         } else if (confirmResult.type === 'success' && confirmResult.sessionId) {
+            posthog.capture('checkout_payment_submitted', { session_id: confirmResult.sessionId });
             // Redirect to return page with session_id
             router.push(`/checkout/return?session_id=${confirmResult.sessionId}`);
         }

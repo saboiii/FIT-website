@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -27,6 +28,15 @@ export async function POST(req) {
           cancel_at_period_end: true,
         }
       );
+      try {
+        getPostHogClient().capture({
+          distinctId: userId,
+          event: "subscription_cancelled",
+          properties: { cancel_at_period_end: true },
+        });
+      } catch (phErr) {
+        console.error("PostHog subscription_cancelled capture failed:", phErr);
+      }
       return NextResponse.json(
         { message: "Subscription cancellation scheduled successfully" },
         { status: 200 }

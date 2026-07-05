@@ -158,7 +158,10 @@ log "Waiting for localtunnel public URL... (no timeout)"
 PUBLIC_URL=""
 while true; do
   if [ -f /tmp/localtunnel.log ]; then
-    PUBLIC_URL=$(grep "your url is:" /tmp/localtunnel.log | sed 's/your url is: //' | tr -d '\n' | xargs)
+    # `|| true`: under `set -euo pipefail`, grep finding no match yet would make
+    # this pipeline non-zero and abort the whole script (firing the EXIT trap),
+    # which is why the tunnel got torn down before printing its URL.
+    PUBLIC_URL=$(grep "your url is:" /tmp/localtunnel.log | sed 's/your url is: //' | tr -d '\n' | xargs || true)
     if [ -n "${PUBLIC_URL}" ] && [ "${PUBLIC_URL}" != "null" ]; then
       break
     fi

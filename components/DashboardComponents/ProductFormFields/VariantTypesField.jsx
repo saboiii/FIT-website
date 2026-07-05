@@ -1,343 +1,338 @@
 import React, { useState } from 'react'
 import { RxCross1 } from 'react-icons/rx'
-import { MdExpandMore, MdExpandLess, MdOutlineLightbulb, MdAdd } from 'react-icons/md'
-import { BiPalette } from 'react-icons/bi'
-import { IoMdPricetag } from 'react-icons/io'
+import { MdAdd } from 'react-icons/md'
+import { InfoStrip, inputCls, labelCls, quietBtnCls } from './dashFormUi'
 
-export default function VariantTypesField({ form, setForm, isDigitalDelivery, onVariantImageUpload }) {
+/**
+ * Variant types & options, document-styled (blueprint §5.5). Options are
+ * editable chip-cards; the add-option row is controlled React state (the old
+ * imperative document.getElementById reads were a bug class). Payload shape
+ * is unchanged: variantTypes[{ name, options[{ name, additionalFee, stock,
+ * image, hex }] }].
+ */
+
+const emptyDraft = { name: '', fee: '', stock: '', hex: undefined, file: null, fileKey: 0 }
+
+export default function VariantTypesField({ form, setForm, isDigitalDelivery, onVariantImageUpload, productType, printColours = [] }) {
     // Check if digital delivery is selected
     const isDigitalProduct = !!isDigitalDelivery
-    const [expandedVariants, setExpandedVariants] = useState(false)
-    const [expandedVariantTypes, setExpandedVariantTypes] = useState({})
+    const [newTypeName, setNewTypeName] = useState('')
+    // Per-variant-type add-option drafts, keyed by type index.
+    const [drafts, setDrafts] = useState({})
 
-    const toggleVariantType = (index) => {
-        setExpandedVariantTypes(prev => ({
+    // Colour-type variants (e.g. "Colour", "Color") get a colour palette: the
+    // admin print-filament catalogue for print products (exclusive to prints),
+    // a free-form picker for shop products.
+    const isColourType = (name) => /colou?r/i.test(name || '')
+
+    const draftFor = (idx) => ({ ...emptyDraft, ...(drafts[idx] || {}) })
+    const setDraft = (idx, patch) =>
+        setDrafts(prev => ({ ...prev, [idx]: { ...emptyDraft, ...(prev[idx] || {}), ...patch } }))
+
+    const typeLimitReached = (isDigitalProduct && form.variantTypes?.length >= 1) || form.variantTypes?.length >= 5
+
+    const addVariantType = () => {
+        const name = newTypeName.trim()
+        if (name && !(isDigitalProduct && form.variantTypes?.length >= 1)) {
+            setForm(f => ({
+                ...f,
+                variantTypes: [...(f.variantTypes || []), { name, options: [] }]
+            }));
+            setNewTypeName('')
+        }
+    }
+
+    const removeVariantType = (typeIdx) => {
+        setForm(f => ({
+            ...f,
+            variantTypes: f.variantTypes.filter((_, i) => i !== typeIdx)
+        }));
+        // Drafts are keyed by index; indices shift on removal, so reset them.
+        setDrafts({})
+    }
+
+    const addOption = async (typeIdx, variantType) => {
+        if (isDigitalProduct && variantType.options?.length >= 1) return
+        const draft = draftFor(typeIdx)
+        const name = (draft.name || '').trim()
+        if (!name) return
+
+        const additionalFee = parseFloat(draft.fee) || 0
+        const stock = draft.stock !== '' && draft.stock !== undefined ? parseInt(draft.stock) : undefined
+
+        let imageKey = null;
+        if (onVariantImageUpload && draft.file) {
+            try {
+                imageKey = await onVariantImageUpload(draft.file);
+            } catch (e) {
+                console.error('Failed to upload variant image:', e);
+            }
+        }
+        const hex = isColourType(variantType.name) ? (draft.hex ?? null) : null;
+        setForm(f => ({
+            ...f,
+            variantTypes: f.variantTypes.map((vt, i) =>
+                i === typeIdx
+                    ? { ...vt, options: [...(vt.options || []), { name, additionalFee, stock, image: imageKey, hex }] }
+                    : vt
+            )
+        }));
+        setDrafts(prev => ({
             ...prev,
-            [index]: !prev[index]
+            [typeIdx]: { ...emptyDraft, fileKey: ((prev[typeIdx]?.fileKey) || 0) + 1 },
         }))
     }
 
+    const removeOption = (typeIdx, optionIdx) => {
+        setForm(f => ({
+            ...f,
+            variantTypes: f.variantTypes.map((vt, i) =>
+                i === typeIdx
+                    ? { ...vt, options: vt.options.filter((_, j) => j !== optionIdx) }
+                    : vt
+            )
+        }));
+    }
+
     return (
-        <div className="border border-borderColor rounded-lg overflow-hidden transition-all duration-200 hover:border-extraLight w-full">
-            <button
-                type="button"
-                onClick={() => setExpandedVariants(!expandedVariants)}
-                className="w-full p-4 flex items-center justify-between bg-background hover:bg-extraLight/5 transition-colors"
-            >
-                <div className="flex items-center gap-3">
-                    <BiPalette className="text-textColor text-xl" />
-                    <div className="text-left">
-                        <h3 className="font-medium text-sm text-textColor">Variant Types</h3>
-                        <p className="text-xs text-extraLight mt-0.5">
-                            {isDigitalProduct
-                                ? 'Digital products are sold as a single configuration.'
-                                : form.variantTypes?.length > 0
-                                    ? `${form.variantTypes.length} variant ${form.variantTypes.length === 1 ? 'type' : 'types'} (${form.variantTypes.reduce((sum, vt) => sum + (vt.options?.length || 0), 0)} total options)`
-                                    : 'Add customization options (max 5 types)'}
-                        </p>
-                    </div>
+        <div className="w-full space-y-4">
+            {isDigitalProduct ? (
+                <InfoStrip tone="info" title="Only one variant configuration allowed">
+                    <p>For digital products, customers receive a single downloadable item. To avoid confusion and file access issues, only one variant type with one option is permitted. All variant controls are disabled while digital delivery is active.</p>
+                </InfoStrip>
+            ) : (
+                <InfoStrip tone="info">
+                    Create variant types like Color, Size, or Material. Customers select one option from each type, and fees are added to the base price.
+                </InfoStrip>
+            )}
+
+            {/* Add new variant type */}
+            <div className="space-y-2">
+                <label htmlFor="variantTypeName" className={labelCls}>
+                    Add Variant Type ({form.variantTypes?.length || 0}/5)
+                </label>
+                <div className="flex gap-2">
+                    <input
+                        type="text"
+                        className={inputCls()}
+                        placeholder="e.g., Color, Size, Material"
+                        maxLength={50}
+                        id="variantTypeName"
+                        value={newTypeName}
+                        onChange={(e) => setNewTypeName(e.target.value)}
+                        disabled={typeLimitReached}
+                    />
+                    <button
+                        type="button"
+                        className={`${quietBtnCls} whitespace-nowrap`}
+                        disabled={typeLimitReached || !newTypeName.trim()}
+                        onClick={addVariantType}
+                    >
+                        <MdAdd className="inline mr-1" aria-hidden="true" />
+                        Add Type
+                    </button>
                 </div>
-                {expandedVariants ? (
-                    <MdExpandLess className="text-xl text-lightColor transition-transform" />
-                ) : (
-                    <MdExpandMore className="text-xl text-lightColor transition-transform" />
-                )}
-            </button>
+                <p className="text-[13px] text-[var(--dash-ink-soft)]">
+                    Example: &quot;Color&quot; for options like Red, Blue, Green
+                </p>
+            </div>
 
-            {expandedVariants && (
-                <div className="p-4 border-t border-borderColor bg-baseColor animate-slideDown space-y-4 max-h-[60vh] overflow-y-auto">
-                    {isDigitalProduct ? (
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded flex gap-2 items-start text-xs text-blue-950">
-                            <MdOutlineLightbulb className="flex-shrink-0 mt-0.5" />
-                            <div className="flex flex-col gap-1">
-                                <p className="font-semibold">Only one variant configuration allowed</p>
-                                <p>For digital products, customers receive a single downloadable item. To avoid confusion and file access issues, only one variant type with one option is permitted. All variant controls are disabled while digital delivery is active.</p>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="p-2 bg-blue-50 border border-blue-200 rounded flex gap-2 items-start text-xs font-medium text-blue-950">
-                            <MdOutlineLightbulb className="flex-shrink-0 mt-0.5" />
-                            <span>Create variant types like Color, Size, or Material. Customers select one option from each type, and fees are added to the base price.</span>
-                        </div>
-                    )}
-
-                    {/* Add new variant type form */}
-                    <div className={`border-2 border-dashed rounded-lg p-4 transition-all ${(isDigitalProduct && form.variantTypes?.length >= 1) || form.variantTypes?.length >= 5
-                        ? 'border-borderColor bg-borderColor/10 opacity-50'
-                        : 'border-purple-200 bg-purple-50/30 hover:bg-purple-50/50'
-                        }`}>
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-2">
-                                <MdAdd className="text-textColor text-lg" />
-                                <h4 className="text-xs font-semibold text-textColor uppercase tracking-wide">
-                                    Add New Variant Type ({form.variantTypes?.length || 0}/5)
-                                </h4>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs font-medium text-lightColor">Variant Type Name</label>
-                                <input
-                                    type="text"
-                                    className="formInput text-sm"
-                                    placeholder="e.g., Color, Size, Material"
-                                    maxLength={50}
-                                    id="variantTypeName"
-                                    disabled={(isDigitalProduct && form.variantTypes?.length >= 1) || form.variantTypes?.length >= 5}
-                                />
-                                <p className="text-xs text-extraLight">
-                                    Example: "Color" for options like Red, Blue, Green
+            {/* Existing variant types */}
+            {form.variantTypes?.length > 0 && form.variantTypes.map((variantType, typeIdx) => {
+                const draft = draftFor(typeIdx)
+                const optionLocked = isDigitalProduct && variantType.options?.length >= 1
+                return (
+                    <div key={typeIdx} className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] bg-[var(--dash-card)]">
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--dash-line)]">
+                            <div>
+                                <h5 className="text-[13px] font-medium">{variantType.name}</h5>
+                                <p className="text-[13px] text-[var(--dash-ink-soft)]">
+                                    {variantType.options?.length || 0} {variantType.options?.length === 1 ? 'option' : 'options'}
                                 </p>
                             </div>
-
                             <button
                                 type="button"
-                                className="formBlackButton w-full"
-                                disabled={(isDigitalProduct && form.variantTypes?.length >= 1) || form.variantTypes?.length >= 5}
-                                onClick={() => {
-                                    const input = document.getElementById('variantTypeName');
-                                    const name = input.value.trim();
-                                    if (name && !(isDigitalProduct && form.variantTypes?.length >= 1)) {
-                                        setForm(f => ({
-                                            ...f,
-                                            variantTypes: [...(f.variantTypes || []), { name, options: [] }]
-                                        }));
-                                        input.value = '';
-                                    }
-                                }}
+                                aria-label={`Remove variant type ${variantType.name}`}
+                                onClick={() => removeVariantType(typeIdx)}
+                                className="p-1.5 rounded-full cursor-pointer text-[var(--dash-ink-soft)] hover:text-[var(--dash-bad)] hover:bg-[var(--dash-bad-bg)]"
                             >
-                                <MdAdd className="inline mr-1" />
-                                Add Variant Type
+                                <RxCross1 size={14} />
                             </button>
                         </div>
-                    </div>
 
-                    {/* Display existing variant types */}
-                    {form.variantTypes?.length > 0 && (
-                        <div className="space-y-3">
-                            <h4 className="text-xs font-semibold text-textColor uppercase tracking-wide">
-                                Your Variant Types
-                            </h4>
+                        <div className="p-4 space-y-4">
+                            {/* Add option (controlled) */}
+                            <div className="space-y-3">
+                                <span className={labelCls}>Add Option</span>
 
-                            {form.variantTypes.map((variantType, typeIdx) => (
-                                <div key={typeIdx} className="border border-borderColor rounded-lg overflow-hidden bg-white shadow-sm">
-                                    {/* Variant Type Header */}
-                                    <div className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 border-b border-borderColor">
-                                        <div className="flex items-center justify-between">
-                                            <button
-                                                type="button"
-                                                onClick={() => toggleVariantType(typeIdx)}
-                                                className="flex items-center gap-2 flex-1 text-left"
-                                            >
-                                                <BiPalette className="text-purple-600" />
-                                                <div className="flex-1">
-                                                    <h5 className="font-semibold text-sm text-textColor">{variantType.name}</h5>
-                                                    <p className="text-xs text-extraLight">
-                                                        {variantType.options?.length || 0} {variantType.options?.length === 1 ? 'option' : 'options'}
-                                                    </p>
-                                                </div>
-                                                {expandedVariantTypes[typeIdx] ? (
-                                                    <MdExpandLess className="text-lightColor" />
-                                                ) : (
-                                                    <MdExpandMore className="text-lightColor" />
-                                                )}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setForm(f => ({
-                                                        ...f,
-                                                        variantTypes: f.variantTypes.filter((_, i) => i !== typeIdx)
-                                                    }));
-                                                }}
-                                                className="ml-2 p-1.5 hover:bg-red-50 rounded transition-colors group"
-                                            >
-                                                <RxCross1 className="text-lightColor group-hover:text-red-600 transition-colors" size={16} />
-                                            </button>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label htmlFor={`optionName-${typeIdx}`} className={labelCls}>Option Name</label>
+                                        <input
+                                            type="text"
+                                            className={inputCls()}
+                                            placeholder="e.g., Red, Large, Plastic"
+                                            id={`optionName-${typeIdx}`}
+                                            value={draft.name}
+                                            onChange={(e) => setDraft(typeIdx, { name: e.target.value })}
+                                            disabled={optionLocked}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor={`optionFee-${typeIdx}`} className={labelCls}>Additional Fee</label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[var(--dash-ink-soft)] text-[13px]">$</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                step="0.01"
+                                                className={`${inputCls()} dash-data flex-1`}
+                                                placeholder="0.00"
+                                                id={`optionFee-${typeIdx}`}
+                                                value={draft.fee}
+                                                onChange={(e) => setDraft(typeIdx, { fee: e.target.value })}
+                                                disabled={optionLocked}
+                                            />
                                         </div>
                                     </div>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor={`optionStock-${typeIdx}`} className={labelCls}>Stock</label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            className={`${inputCls()} dash-data`}
+                                            placeholder="10"
+                                            id={`optionStock-${typeIdx}`}
+                                            value={draft.stock}
+                                            onChange={(e) => setDraft(typeIdx, { stock: e.target.value })}
+                                            disabled={optionLocked}
+                                        />
+                                    </div>
+                                </div>
 
-                                    {/* Variant Type Content */}
-                                    {expandedVariantTypes[typeIdx] !== false && (
-                                        <div className="p-4 space-y-4 animate-slideDown">
-                                            {/* Add option form */}
-                                                            <div className="space-y-3 p-3 bg-extraLight/10 rounded-lg border border-borderColor">
-                                                <div className="flex items-center gap-2">
-                                                    <IoMdPricetag className="text-textColor text-sm" />
-                                                    <span className="text-xs font-semibold text-textColor uppercase tracking-wide">
-                                                        Add Option
-                                                    </span>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                                    <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-lightColor">Option Name</label>
-                                                        <input
-                                                            type="text"
-                                                            className="formInput text-sm"
-                                                            placeholder="e.g., Red, Large, Plastic"
-                                                            id={`optionName-${typeIdx}`}
-                                                            disabled={isDigitalProduct && variantType.options?.length >= 1}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-lightColor">Additional Fee</label>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-lightColor text-sm font-medium">$</span>
-                                                            <input
-                                                                type="number"
-                                                                min={0}
-                                                                step="0.01"
-                                                                className="formInput text-sm flex-1"
-                                                                placeholder="0.00"
-                                                                id={`optionFee-${typeIdx}`}
-                                                                disabled={isDigitalProduct && variantType.options?.length >= 1}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-lightColor">Stock</label>
-                                                        <input
-                                                            type="number"
-                                                            min={0}
-                                                            className="formInput text-sm"
-                                                            placeholder="10"
-                                                            id={`optionStock-${typeIdx}`}
-                                                            disabled={isDigitalProduct && variantType.options?.length >= 1}
-                                                        />
+                                {isColourType(variantType.name) && (
+                                    <div className="space-y-2">
+                                        <span className={labelCls}>Colour</span>
+                                        {productType === 'print' ? (
+                                            printColours.length > 0 ? (
+                                                <div className="space-y-1.5">
+                                                    <p className="text-[13px] text-[var(--dash-ink-soft)]">Printing colours must match available filament stock.</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {printColours.map((c) => {
+                                                            const selected = draft.hex === c.hex
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    key={c.name}
+                                                                    title={c.hex}
+                                                                    onClick={() => setDraft(typeIdx, { name: c.name, hex: c.hex })}
+                                                                    className={`dash-hoverable flex items-center gap-2 rounded-full border px-3 py-1 text-[13px] cursor-pointer ${selected ? 'border-[var(--dash-ink)] bg-[var(--dash-sun-soft)]' : 'border-[var(--dash-line)] hover:bg-[var(--dash-canvas)]'}`}
+                                                                >
+                                                                    <span className="inline-block h-3 w-3 rounded-full border border-[var(--dash-line)]" style={{ backgroundColor: c.hex }} />
+                                                                    {c.name}
+                                                                </button>
+                                                            )
+                                                        })}
                                                     </div>
                                                 </div>
-                                                {onVariantImageUpload && (
-                                                    <div className="space-y-2">
-                                                        <label className="text-xs font-medium text-lightColor">Variant Image (optional)</label>
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            id={`optionImage-${typeIdx}`}
-                                                            className="formInput text-xs"
-                                                            disabled={isDigitalProduct && variantType.options?.length >= 1}
-                                                        />
-                                                    </div>
+                                            ) : (
+                                                <InfoStrip tone="warn">
+                                                    No printing colours configured yet. Add them in your admin colour catalogue.
+                                                </InfoStrip>
+                                            )
+                                        ) : (
+                                            <div className="space-y-1.5">
+                                                <p className="text-[13px] text-[var(--dash-ink-soft)]">Pick any colour. Print filament colours are reserved for print products.</p>
+                                                <input
+                                                    type="color"
+                                                    value={draft.hex || '#000000'}
+                                                    onChange={(e) => setDraft(typeIdx, { hex: e.target.value })}
+                                                    className="h-8 w-16 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] cursor-pointer"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {onVariantImageUpload && (
+                                    <div className="space-y-1.5">
+                                        <label htmlFor={`optionImage-${typeIdx}`} className={labelCls}>Variant Image (optional)</label>
+                                        <input
+                                            key={draft.fileKey}
+                                            type="file"
+                                            accept="image/*"
+                                            id={`optionImage-${typeIdx}`}
+                                            className={`${inputCls()} cursor-pointer`}
+                                            onChange={(e) => setDraft(typeIdx, { file: e.target.files?.[0] || null })}
+                                            disabled={optionLocked}
+                                        />
+                                    </div>
+                                )}
+
+                                <button
+                                    type="button"
+                                    className={`${quietBtnCls} w-full`}
+                                    disabled={optionLocked || !draft.name.trim()}
+                                    onClick={() => addOption(typeIdx, variantType)}
+                                >
+                                    <MdAdd className="inline mr-1" aria-hidden="true" />
+                                    Add Option
+                                </button>
+                            </div>
+
+                            {/* Options as chip-cards */}
+                            {variantType.options?.length > 0 && (
+                                <div className="space-y-2">
+                                    <span className={labelCls}>Available Options</span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {variantType.options.map((option, optionIdx) => (
+                                            <div key={optionIdx} className="flex items-center gap-2.5 border border-[var(--dash-line)] bg-[var(--dash-card)] pl-3 pr-2 py-1.5 rounded-full">
+                                                {option.image && (
+                                                    <img
+                                                        src={`/api/proxy?key=${encodeURIComponent(option.image)}`}
+                                                        alt={option.name}
+                                                        className="w-6 h-6 rounded-full object-cover border border-[var(--dash-line)]"
+                                                    />
                                                 )}
-
+                                                {option.hex && (
+                                                    <span className="w-3.5 h-3.5 rounded-full border border-[var(--dash-line)]" style={{ backgroundColor: option.hex }} title={option.hex}></span>
+                                                )}
+                                                <span className="text-[13px] font-medium">{option.name}</span>
+                                                {option.additionalFee > 0 && (
+                                                    <span className="dash-data text-[var(--dash-ok)]">
+                                                        +${option.additionalFee.toFixed(2)}
+                                                    </span>
+                                                )}
+                                                {option.stock !== undefined && option.stock !== null && (
+                                                    <span className="dash-data text-[var(--dash-ink-soft)]">
+                                                        Stock: {option.stock}
+                                                    </span>
+                                                )}
                                                 <button
                                                     type="button"
-                                                    className="formButton text-sm w-full"
-                                                    disabled={isDigitalProduct && variantType.options?.length >= 1}
-                                                    onClick={async () => {
-                                                        if (!(isDigitalProduct && variantType.options?.length >= 1)) {
-                                                            const nameInput = document.getElementById(`optionName-${typeIdx}`);
-                                                            const feeInput = document.getElementById(`optionFee-${typeIdx}`);
-                                                            const stockInput = document.getElementById(`optionStock-${typeIdx}`);
-                                                            const imageInput = document.getElementById(`optionImage-${typeIdx}`);
-                                                            const name = nameInput.value.trim();
-                                                            const additionalFee = parseFloat(feeInput.value) || 0;
-                                                            const stock = stockInput?.value !== '' ? parseInt(stockInput.value) : undefined;
-
-                                                            if (name) {
-                                                                let imageKey = null;
-                                                                if (onVariantImageUpload && imageInput?.files?.[0]) {
-                                                                    try {
-                                                                        imageKey = await onVariantImageUpload(imageInput.files[0]);
-                                                                    } catch (e) {
-                                                                        console.error('Failed to upload variant image:', e);
-                                                                    }
-                                                                }
-                                                                setForm(f => ({
-                                                                    ...f,
-                                                                    variantTypes: f.variantTypes.map((vt, i) =>
-                                                                        i === typeIdx
-                                                                            ? { ...vt, options: [...(vt.options || []), { name, additionalFee, stock, image: imageKey }] }
-                                                                            : vt
-                                                                    )
-                                                                }));
-                                                                nameInput.value = '';
-                                                                feeInput.value = '';
-                                                                if (stockInput) stockInput.value = '';
-                                                                if (imageInput) imageInput.value = '';
-                                                            }
-                                                        }
-                                                    }}
+                                                    aria-label={`Remove option ${option.name}`}
+                                                    onClick={() => removeOption(typeIdx, optionIdx)}
+                                                    className="p-1 rounded-full cursor-pointer text-[var(--dash-ink-soft)] hover:text-[var(--dash-bad)] hover:bg-[var(--dash-bad-bg)]"
                                                 >
-                                                    <MdAdd className="inline mr-1" />
-                                                    Add Option
+                                                    <RxCross1 size={12} />
                                                 </button>
                                             </div>
-
-                                            {/* Display options */}
-                                            {variantType.options?.length > 0 && (
-                                                <div className="space-y-2">
-                                                    <h6 className="text-xs font-semibold text-textColor uppercase tracking-wide">
-                                                        Available Options
-                                                    </h6>
-                                                    {variantType.options.map((option, optionIdx) => (
-                                                        <div key={optionIdx} className="flex items-center justify-between bg-white border border-borderColor p-3 rounded-lg hover:shadow-sm transition-shadow group">
-                                                            <div className="flex items-center gap-3">
-                                                                {option.image && (
-                                                                    <img
-                                                                        src={`/api/proxy?key=${encodeURIComponent(option.image)}`}
-                                                                        alt={option.name}
-                                                                        className="w-8 h-8 rounded object-cover border border-borderColor"
-                                                                    />
-                                                                )}
-                                                                <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                                                                <div>
-                                                                    <span className="text-sm font-medium text-textColor">{option.name}</span>
-                                                                    {option.additionalFee > 0 && (
-                                                                        <span className="ml-2 text-xs px-2 py-0.5 bg-green-50 text-green-700 rounded-full font-semibold">
-                                                                            +${option.additionalFee.toFixed(2)}
-                                                                        </span>
-                                                                    )}
-                                                                    {option.stock !== undefined && option.stock !== null && (
-                                                                        <span className="ml-2 text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full">
-                                                                            Stock: {option.stock}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    setForm(f => ({
-                                                                        ...f,
-                                                                        variantTypes: f.variantTypes.map((vt, i) =>
-                                                                            i === typeIdx
-                                                                                ? { ...vt, options: vt.options.filter((_, j) => j !== optionIdx) }
-                                                                                : vt
-                                                                        )
-                                                                    }));
-                                                                }}
-                                                                className="p-1.5 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                                                            >
-                                                                <RxCross1 className="text-lightColor hover:text-red-600 transition-colors" size={14} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {variantType.options?.length === 0 && (
-                                                <div className="text-center py-6 border-2 border-dashed border-borderColor rounded-lg bg-extraLight/5">
-                                                    <IoMdPricetag className="text-3xl text-extraLight mx-auto mb-2" />
-                                                    <p className="text-xs text-extraLight">No options yet</p>
-                                                    <p className="text-xs text-extraLight">Add your first option above</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                            )}
 
-                    {/* Empty state */}
-                    {form.variantTypes?.length === 0 && !isDigitalProduct && (
-                        <div className="text-center py-8 border-2 border-dashed border-borderColor rounded-lg bg-extraLight/5">
-                            <BiPalette className="text-4xl text-extraLight mx-auto mb-3" />
-                            <p className="text-sm text-lightColor font-medium">No variant types yet</p>
-                            <p className="text-xs text-extraLight mt-1">Add your first variant type above</p>
+                            {variantType.options?.length === 0 && (
+                                <p className="text-[13px] text-[var(--dash-ink-soft)]">No options yet. Add your first option above.</p>
+                            )}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )
+            })}
+
+            {/* Empty state */}
+            {form.variantTypes?.length === 0 && !isDigitalProduct && (
+                <p className="text-[13px] text-[var(--dash-ink-soft)]">No variant types yet, so customers will buy the base configuration.</p>
             )}
         </div>
     )

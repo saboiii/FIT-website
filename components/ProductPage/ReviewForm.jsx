@@ -4,6 +4,7 @@ import { GoStar, GoStarFill, GoX } from 'react-icons/go';
 import { HiOutlineCamera } from 'react-icons/hi';
 import Image from 'next/image';
 import { useToast } from '../General/ToastProvider';
+import posthog from 'posthog-js';
 
 function ReviewForm({ product, order, existingReview = null, onSubmit, onCancel }) {
     const { showToast } = useToast();
@@ -105,6 +106,12 @@ function ReviewForm({ product, order, existingReview = null, onSubmit, onCancel 
 
             if (response.ok) {
                 const data = await response.json();
+                posthog.capture('review_submitted', {
+                    product_id: product._id,
+                    rating,
+                    has_media: mediaFiles.length + existingMedia.length > 0,
+                    is_edit: !!existingReview,
+                });
                 onSubmit(data.review);
 
                 // Reset form

@@ -129,6 +129,7 @@ export function buildProductPayload(form, user, uploadedImages, uploadedModels, 
                 additionalFee: opt.additionalFee || 0,
                 stock: opt.stock,
                 image: opt.image || null,
+                hex: opt.hex || null,
             }))
         })),
         category: Number(form.category),
@@ -144,6 +145,9 @@ export function buildProductPayload(form, user, uploadedImages, uploadedModels, 
             weight: Number(form.dimensions.weight),
         },
         hidden: !!form.hidden,
+        // Fixed print config for print-delivery products. Only meaningful when
+        // productType === 'print'; harmless otherwise. Colours live in variants.
+        ...(form.printConfig ? { printConfig: form.printConfig } : {}),
         // Keep legacy single-discount field for existing consumers
         discount: legacyDiscount,
         // New stacked discounts array for advanced scenarios / stacking

@@ -9,6 +9,7 @@ import { RxCross2 } from 'react-icons/rx';
 import { useRouter } from 'next/navigation';
 import PasswordField from './PasswordField';
 import EmailField from './EmailField';
+import posthog from 'posthog-js';
 
 function SignInForm() {
     const { isLoaded, signIn } = useSignIn();
@@ -45,6 +46,7 @@ function SignInForm() {
                     password: password,
                 });
                 if (result.status === 'complete') {
+                    posthog.capture('sign_in_completed', { method: 'email' });
                     router.push('/');
                 }
             }
@@ -65,7 +67,7 @@ function SignInForm() {
             onSubmit={handleSubmit}
         >
             <h1> Sign In </h1>
-            <h3 className="text-xs uppercase mb-3 mt-2">Don't have an account? <span className="underline hover:text-textColor transition-colors ease-in-out duration-300">
+            <h3 className="text-xs uppercase mb-3 mt-2">Don&apos;t have an account? <span className="underline hover:text-textColor transition-colors ease-in-out duration-300">
                 <Link href='/sign-up'>
                     Sign up
                 </Link>

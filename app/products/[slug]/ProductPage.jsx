@@ -1,6 +1,7 @@
 'use client'
 import { useUser } from '@clerk/nextjs';
 import { useParams, useRouter } from 'next/navigation';
+import posthog from 'posthog-js';
 import { useEffect, useRef, useState } from 'react';
 import { GoChevronLeft, GoChevronRight, GoDownload, GoPlus, GoStar, GoStarFill } from 'react-icons/go';
 import Image from 'next/image';
@@ -235,6 +236,10 @@ function ProductPage() {
                     if (!cartRes.ok) {
                         throw new Error('Failed to add custom print to cart');
                     }
+                    posthog.capture('product_added_to_cart', {
+                        product_id: product._id,
+                        source: 'custom_print_request',
+                    });
                     setShowAdded(true);
                     setTimeout(() => setShowAdded(false), 3000);
                     router.push('/cart');
@@ -260,6 +265,12 @@ function ProductPage() {
                 body: JSON.stringify({ cartItem }),
             });
 
+            posthog.capture('product_added_to_cart', {
+                product_id: product._id,
+                product_type: product.productType,
+                price: product.basePrice?.presentmentAmount || 0,
+                source: 'product_page',
+            });
             setIsAdding(false);
             setShowAdded(true);
             setTimeout(() => setShowAdded(false), 3000);
@@ -275,7 +286,7 @@ function ProductPage() {
         }
     };
 
-    const handleAddToPrintCart = async (product) => {
+    const handleAddToPrintCart = (product) => {
         if (isOwnProduct) {
             return;
         }
@@ -285,35 +296,10 @@ function ProductPage() {
             return;
         }
 
-        // Validate variant selection for new variant types system
-        if (product.variantTypes && product.variantTypes.length > 0 && !areAllVariantsSelected()) {
-            alert("Please select all variant options before adding to print cart.");
-            return;
-        }
-
-        setIsPrintAdding(true);
-        try {
-            const cartItem = {
-                productId: product._id,
-                quantity: 1,
-                selectedVariants: selectedVariantOptions,
-                chosenDeliveryType: "printDelivery",
-            };
-
-            const res = await fetch("/api/user/cart", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cartItem }),
-            });
-
-            setIsPrintAdding(false);
-            setShowPrintAdded(true);
-            setTimeout(() => setShowPrintAdded(false), 3000);
-        } catch (error) {
-            alert(error || "Failed to add print item to cart.");
-        } finally {
-            setIsPrintAdding(false);
-        }
+        // For print products the colour is chosen and print settings are shown
+        // (locked) in the editor, which then adds the item to the cart. See
+        // openspec change `migrate-print-delivery-to-custom-requests`.
+        router.push(`/editor?productId=${product._id}`);
     };
 
     // Handle variant option selection for new variant types system
@@ -723,6 +709,17 @@ function ProductPage() {
                                             </>
                                         </button>
                                     ) : (
+                                        // For print-on-demand products the "Order Print" button below is the
+                                        // purchase path; only show the generic "Add to Cart" when the product
+                                        // also sells a digital download. See openspec change
+                                        // `migrate-print-delivery-to-custom-requests`.
+                                        // Exception: the custom-print-request base product — its "Add to
+                                        // Cart" starts the upload-a-model request flow, which needs no
+                                        // vendor-supplied viewable model.
+                                        product.productType !== 'print' ||
+                                        product.slug === 'custom-print-request' ||
+                                        (product.delivery?.deliveryTypes || []).some(dt => (dt?.type || dt) === 'digital')
+                                    ) ? (
                                         <button
                                             className='formBlackButton gap-2'
                                             onClick={() => handleAddToCart(product)}
@@ -752,6 +749,13 @@ function ProductPage() {
                                                     Select all options
                                                     <GoPlus size={16} className='inline opacity-50' />
                                                 </>
+                                            ) : product.slug === 'custom-print-request' ? (
+                                                // Same handler (creates the request + cart upload flow),
+                                                // but customers are ordering a print, not buying stock.
+                                                <>
+                                                    Order Print
+                                                    <BiPrinter size={16} className='inline' />
+                                                </>
                                             ) : (
                                                 <>
                                                     Add to Cart
@@ -759,7 +763,7 @@ function ProductPage() {
                                                 </>
                                             )}
                                         </button>
-                                    )}                                    {/* Print Button - only show if product has a 3D model */}
+                                    ) : null}                                    {/* Print Button - only show if product has a 3D model */}
                                     {/* Only show print order button if NOT digital-only product */}
                                     {product.viewableModel && !(
                                         Array.isArray(product.delivery?.deliveryTypes) &&
@@ -767,32 +771,26 @@ function ProductPage() {
                                         product.delivery.deliveryTypes[0]?.type === 'digital'
                                     ) && (
                                         <button
-                                            className='flex items-center justify-center gap-2 px-4 py-2 border border-borderColor text-sm font-medium rounded hover:bg-borderColor/10 transition-colors'
+                                            className='formBlackButton gap-2'
                                             onClick={() => handleAddToPrintCart(product)}
-                                            disabled={isPrintAdding || showPrintAdded || !areAllVariantsSelected()}
+                                            disabled={checkingOwnership || isOutOfStock()}
                                         >
-                                            {isPrintAdding ? (
-                                                <>
-                                                    Creating print order
-                                                    <div className='animate-spin border border-t-transparent border-current h-3 w-3 rounded-full' />
-                                                </>
-                                            ) : showPrintAdded ? (
-                                                <>
-                                                    Print order created
-                                                    <IoMdCheckmark size={16} className='transition-opacity duration-300' />
-                                                </>
-                                            ) : !areAllVariantsSelected() ? (
-                                                <>
-                                                    Select all options
-                                                    <BiPrinter size={16} className='inline opacity-50' />
-                                                </>
-                                            ) : (
-                                                <>
-                                                    Order Print
-                                                    <BiPrinter size={16} className='inline' />
-                                                </>
-                                            )}
+                                            <>
+                                                Order Print
+                                                <BiPrinter size={16} className='inline' />
+                                            </>
                                         </button>
+                                    )}
+                                    {/* A print product with no viewable model can't be ordered through
+                                        either path — say so instead of rendering nothing. */}
+                                    {product.productType === 'print' &&
+                                        !product.viewableModel &&
+                                        product.slug !== 'custom-print-request' &&
+                                        !(product.delivery?.deliveryTypes || []).some(dt => (dt?.type || dt) === 'digital') && (
+                                        <p className="text-xs text-lightColor border border-borderColor rounded-md px-4 py-3 bg-baseColor">
+                                            Print ordering isn&apos;t available for this product yet — the
+                                            seller hasn&apos;t uploaded a printable model.
+                                        </p>
                                     )}
                                 </div>
                             )}

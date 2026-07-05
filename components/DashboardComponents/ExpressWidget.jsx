@@ -1,81 +1,101 @@
 'use client'
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { FaStripe } from "react-icons/fa";
-import { GoChevronRight } from "react-icons/go";
+// Stripe Express payouts row (blueprint §5.2): a quiet DashCard row. The sun
+// CTA appears ONLY while onboarding is incomplete — a state change claiming
+// attention; once onboarded this is a quiet link row. The link-minting flow
+// (onboarding vs login link) is unchanged from the original widget.
+import { useEffect, useState } from 'react'
+import { DashCard } from '@/components/dashboard-ui'
 
 function ExpressWidget({ user, isLoaded }) {
-    const [accountLink, setAccountLink] = useState(null);
-    const [isOnboarded, setIsOnboarded] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [accountLink, setAccountLink] = useState(null)
+    const [isOnboarded, setIsOnboarded] = useState(null)
+    const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         const checkOnboardingAndCreateLink = async () => {
             if (user?.publicMetadata?.stripeAccountId) {
-                setLoading(true);
+                setLoading(true)
                 try {
                     // Check onboarding status
-                    const res = await fetch(`/api/user/express?stripeAccountId=${user.publicMetadata.stripeAccountId}`);
-                    const data = await res.json();
-                    const onboarded = data.onboarded === true;
-                    setIsOnboarded(onboarded);
+                    const res = await fetch(`/api/user/express?stripeAccountId=${user.publicMetadata.stripeAccountId}`)
+                    const data = await res.json()
+                    const onboarded = data.onboarded === true
+                    setIsOnboarded(onboarded)
 
                     // Create appropriate link based on onboarding status
-                    const res2 = await fetch("/api/user/express", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
+                    const res2 = await fetch('/api/user/express', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             stripeAccountId: user.publicMetadata.stripeAccountId,
-                            linkType: onboarded ? 'login' : 'onboarding'
+                            linkType: onboarded ? 'login' : 'onboarding',
                         }),
-                    });
-                    const data2 = await res2.json();
+                    })
+                    const data2 = await res2.json()
                     if (data2.url) {
-                        setAccountLink(data2.url);
+                        setAccountLink(data2.url)
                     }
                 } catch (error) {
-                    console.error('Error creating account link:', error);
+                    console.error('Error creating account link:', error)
                 }
-                setLoading(false);
+                setLoading(false)
             }
-        };
-        if (user && isLoaded) checkOnboardingAndCreateLink();
-    }, [user, isLoaded]);
+        }
+        if (user && isLoaded) checkOnboardingAndCreateLink()
+    }, [user, isLoaded])
 
-    if (isOnboarded === null) return null;
+    if (isOnboarded === null) return null
 
-    // Loading state (preparing account link)
     if (loading || !accountLink) {
         return (
-            <div className="col-span-4 lg:col-span-1 row-span-1 bg-gradient-to-br from-teal-400 to-purple-400 flex flex-col rounded-md h-fit items-start justify-center p-4 font-medium text-xs text-pretty text-white shadow-lg transition">
-                <div className="flex flex-row items-center w-full justify-between gap-4">
-                    <FaStripe className="text-5xl" />
-                    <div className='animate-spin border-1 border-t-transparent mr-1 h-4 w-4 rounded-full' />
+            <DashCard>
+                <div className="flex items-center justify-between gap-4">
+                    <span className="text-[13px] font-medium">Stripe payouts</span>
+                    <span className="dash-data dash-soft">Preparing account link…</span>
                 </div>
-                <div className="mt-3">Preparing account link...</div>
-            </div>
-        );
+            </DashCard>
+        )
     }
 
-    // Show appropriate link based on onboarding status
+    if (isOnboarded) {
+        return (
+            <DashCard>
+                <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-medium">Stripe payouts</p>
+                        <p className="dash-data dash-soft mt-0.5">Sales, payouts and account settings live in your Express dashboard.</p>
+                    </div>
+                    <a
+                        href={accountLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-[13px] font-medium hover:underline"
+                    >
+                        Open dashboard →
+                    </a>
+                </div>
+            </DashCard>
+        )
+    }
+
     return (
-        <Link
-            href={accountLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="col-span-4 lg:col-span-1 row-span-1 bg-gradient-to-br from-teal-400 to-purple-400 flex flex-col rounded-md h-fit items-start justify-center p-4 font-medium text-xs text-pretty text-white shadow-lg transition hover:scale-[1.02]"
-        >
-            <FaStripe className="text-6xl mb-2" />
-            {isOnboarded ? (
-                "Click to access your Express dashboard to view sales, manage payouts and account settings."
-            ) : (
-                "Click to complete onboarding with Stripe Express to start selling products."
-            )}
-            <div className="flex items-center justify-end w-full mt-4">
-                <GoChevronRight size={16} />
+        <DashCard>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="min-w-0">
+                    <p className="text-[13px] font-medium">Stripe payouts</p>
+                    <p className="dash-data dash-soft mt-0.5">Finish Stripe Express onboarding to start receiving payouts.</p>
+                </div>
+                <a
+                    href={accountLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="dash-hoverable shrink-0 rounded-full bg-[var(--dash-sun)] px-4 py-2 text-[13px] font-medium text-[var(--dash-ink)] hover:bg-[var(--dash-sun-deep)] active:scale-[0.97]"
+                >
+                    Finish Stripe Setup
+                </a>
             </div>
-        </Link>
-    );
+        </DashCard>
+    )
 }
 
 export default ExpressWidget

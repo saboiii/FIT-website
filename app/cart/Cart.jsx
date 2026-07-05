@@ -1,6 +1,7 @@
 'use client'
 import React, { use, useEffect, useState } from 'react'
 import { useUser } from "@clerk/nextjs"
+import posthog from 'posthog-js'
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { GoChevronLeft } from 'react-icons/go';
@@ -11,6 +12,8 @@ import CartItemSkeleton from './components/CartItemSkeleton';
 import { IoCartOutline } from 'react-icons/io5';
 import { convertToGlobalCurrency } from '@/utils/convertCurrency';
 import { getDiscountedPrice } from '@/utils/discount';
+import { customPrintStage, isCustomPrintBlockingCheckout } from '@/utils/customPrintStatus';
+import { customPrintDisplayPrice } from '@/lib/customPrintDisplayPrice';
 import { useCurrency } from '@/components/General/CurrencyContext';
 import CustomPrintUpload from '@/components/Cart/CustomPrintUpload';
 import { HiCheck, HiExclamationCircle } from 'react-icons/hi';
@@ -414,16 +417,10 @@ function Cart() {
         }
     };
 
-    // Helper: Use only status field for pending logic
+    // A custom print blocks checkout until it has a quote (see customPrintStatus).
     function isCustomPrintPending(cartItem, customPrintRequest) {
         if (!customPrintRequest) return false; // Assume not pending if request not loaded
-        // Pending if status is not quoted, payment_pending, paid, printing, printed, shipped, delivered
-        const status = customPrintRequest.status;
-        return [
-            'pending_upload',
-            'pending_config',
-            'configured'
-        ].includes(status);
+        return isCustomPrintBlockingCheckout(customPrintRequest.status);
     }
 
     // Track custom print requests for all custom print cart items
@@ -614,20 +611,28 @@ function Cart() {
 
                                                 <div className='flex flex-col justify-center items-end font-medium md:text-sm text-base'>
                                                     {customPrintRequest?.status === 'quoted' ? (
-                                                        <div className="text-right">
-                                                            <span className=' text-green-600'>
-                                                                SGD {Number((customPrintRequest?.basePrice || 0) + (customPrintRequest?.printFee || 0)).toFixed(2)}
-                                                            </span>
-                                                            <div className="text-xs text-green-600 font-medium">
-                                                                Quoted
-                                                            </div>
-                                                        </div>
+                                                        (() => {
+                                                            const priced = customPrintDisplayPrice(customPrintRequest);
+                                                            return (
+                                                                <div className="text-right">
+                                                                    <span className=' text-green-600'>
+                                                                        SGD {priced.amount.toFixed(2)}
+                                                                    </span>
+                                                                    <div className="text-xs text-green-600 font-medium">
+                                                                        {priced.label}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()
                                                     ) : (
                                                         <span className=' flex items-center gap-1'>
-                                                            SGD {Number(breakdownItem?.price ?? cartItem.price).toFixed(2)}
+                                                            {/* Live breakdown is the source of truth. When the request
+                                                                isn't quoted yet (or the model was deleted) the breakdown
+                                                                returns 0 — never fall back to the stale cart snapshot. */}
+                                                            SGD {Number(breakdownItem?.price ?? 0).toFixed(2)}
                                                             <span className="relative group">
                                                                 <HiExclamationCircle className="text-yellow-500 text-base cursor-pointer" />
-                                                                <span className="absolute left-1/2 font-normal -translate-x-1/2 mt-2 w-64 text-xs rounded p-4 items-center justify-center text-center opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-200 whitespace-normal bg-background border border-borderColor shadow-lg">
+                                                                <span className="absolute right-0 font-normal mt-2 w-64 text-xs rounded p-4 items-center justify-center text-center opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-200 whitespace-normal bg-background border border-borderColor shadow-lg">
                                                                     This may not be the final price and will be affected by the final quote.<br />For help, please contact <a href="mailto:fixitoday.contact@gmail.com" className="underline">fixitoday.contact@gmail.com</a>
                                                                 </span>
                                                             </span>
@@ -682,6 +687,12 @@ function Cart() {
                                                                     await refreshCartBreakdown();
                                                                     await refreshCustomPrintRequests();
                                                                 }}
+                                                                onDeleteComplete={async () => {
+                                                                    // Full refetch: rebuild cart + request map + breakdown
+                                                                    // from server truth so the price snapshot resets to $0.
+                                                                    await fetchCartData();
+                                                                    await refreshCustomPrintRequests();
+                                                                }}
                                                             />
                                                         </div>
                                                     ) : (
@@ -692,6 +703,10 @@ function Cart() {
                                                                 customPrintRequestId: cartItem.customPrintRequestId
                                                             }}
                                                             onUploadComplete={async () => {
+                                                                await refreshCartBreakdown();
+                                                                await refreshCustomPrintRequests();
+                                                            }}
+                                                            onDeleteComplete={async () => {
                                                                 await refreshCartBreakdown();
                                                                 await refreshCustomPrintRequests();
                                                             }}
@@ -802,16 +817,10 @@ function Cart() {
 
                                                     return (
                                                         <div className='flex flex-col md:col-span-5 mt-4 gap-2'>
-                                                            <Link
-                                                                href={`/editor?productId=${cartItem.productId}&variantId=${cartItem.variantId || ''}`}
-                                                                className='flex items-center justify-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded hover:bg-gray-800 transition-colors'
-                                                            >
-                                                                {hasConfiguration ? 'Modify Print Settings' : 'Configure Print Settings'}
-                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                </svg>
-                                                            </Link>
+                                                            {/* Colour + (locked) print settings are chosen in the editor
+                                                                via "Order Print" before the item is added to the cart, so
+                                                                no in-cart configure step is needed. See openspec change
+                                                                migrate-print-delivery-to-custom-requests. */}
                                                             {hasConfiguration && (() => {
                                                                 try {
                                                                     const config = JSON.parse(localStorage.getItem(configKey))
@@ -980,32 +989,29 @@ function Cart() {
                 <div className='flex w-full justify-end mt-8'>
                     <div className='flex flex-col border border-borderColor rounded p-4 w-full md:w-fit min-w-1/2'>
                         <h2 className="font-semibold text-lg mb-4">Cart Summary</h2>
-                        {/* Block checkout if any custom print is pending */}
+                        {/* Block checkout if any custom print is pending. A request the
+                            customer has finished (configured, awaiting a quote) is shown
+                            reassuringly — never as "Incomplete". */}
                         {hasPendingCustomPrint && (() => {
-                            const allConfigured = cart.every(cartItem => {
-                                if (!String(cartItem.productId || '').startsWith('custom-print:')) return true;
+                            // Worst stage among blocking custom-print items decides the message:
+                            // any item still needing the customer's action -> "finish"; otherwise
+                            // everything is configured and we're just awaiting a quote.
+                            const anyActionNeeded = cart.some(cartItem => {
+                                if (!String(cartItem.productId || '').startsWith('custom-print:')) return false;
                                 const requestId = cartItem.customPrintRequestId || cartItem.requestId || (cartItem.productId || '').split(':')[1];
                                 const req = customPrintRequests[requestId];
-                                return req?.status === 'configured';
+                                return req ? customPrintStage(req.status).actionNeeded : false;
                             });
-                            return allConfigured ? (
-                                <div className="mb-4 rounded-lg border border-blue-400 bg-blue-50 p-4 flex items-center gap-3">
-                                    <HiExclamationCircle className="text-blue-600 text-xl" />
+                            const stage = customPrintStage(anyActionNeeded ? 'pending_config' : 'configured');
+                            const tone = anyActionNeeded
+                                ? { border: 'border-yellow-400', bg: 'bg-yellow-50', icon: 'text-yellow-600', title: 'text-yellow-800', body: 'text-yellow-700' }
+                                : { border: 'border-blue-400', bg: 'bg-blue-50', icon: 'text-blue-600', title: 'text-blue-800', body: 'text-blue-700' };
+                            return (
+                                <div className={`mb-4 rounded-lg border ${tone.border} ${tone.bg} p-4 flex items-center gap-3`}>
+                                    <HiExclamationCircle className={`${tone.icon} text-xl`} />
                                     <div>
-                                        <div className="font-semibold text-blue-800 text-sm">Awaiting Quote</div>
-                                        <div className="text-xs text-blue-700">
-                                            Your print configuration has been submitted. Please wait for a quote before proceeding to checkout.
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="mb-4 rounded-lg border border-yellow-400 bg-yellow-50 p-4 flex items-center gap-3">
-                                    <HiExclamationCircle className="text-yellow-600 text-xl" />
-                                    <div>
-                                        <div className="font-semibold text-yellow-800 text-sm">Custom Print Request Incomplete</div>
-                                        <div className="text-xs text-yellow-700">
-                                            Please upload your 3D model and configure your print request before proceeding to checkout.
-                                        </div>
+                                        <div className={`font-semibold ${tone.title} text-sm`}>{stage.title}</div>
+                                        <div className={`text-xs ${tone.body}`}>{stage.message}</div>
                                     </div>
                                 </div>
                             );
@@ -1096,6 +1102,7 @@ function Cart() {
                                     showToast('Please complete your custom print request before checking out.', 'error');
                                     return;
                                 }
+                                posthog.capture('checkout_started', { item_count: cart.length });
                                 await submitOrderNotes();
                                 window.location.href = "/checkout";
                             }}

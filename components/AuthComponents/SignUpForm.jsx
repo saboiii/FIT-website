@@ -7,11 +7,13 @@ import { useToast } from '../General/ToastProvider'
 import Link from 'next/link'
 import Tier from './Tier'
 import { GoChevronRight, GoChevronLeft } from 'react-icons/go'
+import { IoMdLock } from 'react-icons/io'
 import { FaGoogle } from 'react-icons/fa'
 import AuthDivider from './AuthDivider'
 import EmailField from './EmailField'
 import PasswordField from './PasswordField'
 import Error from './Error'
+import posthog from 'posthog-js'
 
 function SignUpForm() {
     const { stripePriceIds, loading: priceIdsLoading, error: priceIdsError } = useStripePriceIds();
@@ -123,6 +125,7 @@ function SignUpForm() {
                 unsafeMetadata,
             })
 
+            posthog.capture('sign_up_completed', { method: signUpMethod, has_paid_tier: priceId !== '' })
             await signUp.prepareEmailAddressVerification()
             setVerifying(true)
         } catch (err) {
@@ -133,6 +136,7 @@ function SignUpForm() {
     }
 
     const determineStageForward = () => {
+        posthog.capture('sign_up_tier_selected', { has_paid_tier: priceId !== '' })
         if (priceId === '') {
             setSignUpStage('first_factor')
         } else {

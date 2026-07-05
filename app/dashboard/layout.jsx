@@ -1,0 +1,12 @@
+// Shared creator shell for every /dashboard/* route (blueprint §5.1): one
+// rail + canvas layout provider instead of a per-page copy. This layout is a
+// server component; CreatorShell is the client boundary. Auth stays where it
+// was — each page keeps its own Clerk/subscription gating client-side (home
+// via DashboardPage, product create/edit via useAccess, messages via
+// entitlements), so the shell renders for any signed-in state and the gated
+// pages swap their own content for Fallback inside the rail.
+import CreatorShell from "@/components/DashboardComponents/CreatorShell";
+
+export default function DashboardLayout({ children }) {
+    return <CreatorShell>{children}</CreatorShell>;
+}

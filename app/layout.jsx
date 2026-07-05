@@ -1,6 +1,8 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import "./dashboard.css";
 import Navbar from "@/components/General/Navbar";
 import Footer from "@/components/General/Footer";
 import Smooth from "@/components/General/Smooth";
@@ -9,6 +11,7 @@ import ChatLauncher from "@/components/Chat/ChatLauncher";
 import { Suspense } from "react";
 import { CurrencyProvider } from "@/components/General/CurrencyContext";
 import ClientProviders from "@/components/General/ClientProviders";
+import PostHogProvider from "@/components/General/PostHogProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -74,7 +77,7 @@ export default function RootLayout({ children }) {
           <script
             type="application/ld+json"
             suppressHydrationWarning
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(GEO_JSON_LD) }}
+            dangerouslySetInnerHTML={{ __html: jsonLdString(GEO_JSON_LD) }}
           />
         </head>
         <body className={`${inter.variable} antialiased`}>
@@ -82,6 +85,7 @@ export default function RootLayout({ children }) {
             <Smooth>
               <Suspense>
                 <ToastProvider>
+                  <PostHogProvider>
                   <ClientProviders>
                     <div className="flex flex-row items-center justify-center bg-baseColor">
                       <div className="flex flex-col md:w-[90vw] lg:w-[85vw] max-w-[1350px] w-screen border-l border-r border-borderColor transition-all duration-300 ease-in-out overflow-hidden bg-background">
@@ -93,6 +97,7 @@ export default function RootLayout({ children }) {
                       <ChatLauncher />
                     </div>
                   </ClientProviders>
+                  </PostHogProvider>
                 </ToastProvider>
               </Suspense>
             </Smooth>

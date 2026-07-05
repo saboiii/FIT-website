@@ -1,5 +1,6 @@
 import React from 'react'
 import FieldErrorBanner from './FieldErrorBanner'
+import { inputCls, labelCls } from './dashFormUi'
 
 export default function BasicInfo({ form, handleChange, missingFields = [] }) {
     const nameMissing = missingFields.includes('name')
@@ -19,8 +20,8 @@ export default function BasicInfo({ form, handleChange, missingFields = [] }) {
                 </div>
             )}
             {/* product name */}
-            <div className="flex flex-col gap-2 w-full">
-                <label htmlFor="name" className="formLabel">Product Name</label>
+            <div className="flex flex-col gap-1.5 w-full">
+                <label htmlFor="name" className={labelCls}>Product Name</label>
                 <input
                     id="name"
                     name="name"
@@ -28,14 +29,14 @@ export default function BasicInfo({ form, handleChange, missingFields = [] }) {
                     required
                     value={form.name}
                     onChange={handleChange}
-                    className={`formInput ${nameMissing ? 'border-2 border-red-500 focus:border-red-500' : ''}`}
+                    className={inputCls(nameMissing)}
                     placeholder="Enter product name"
                 />
             </div>
 
             {/* product desc */}
-            <div className="flex flex-col gap-2  w-full">
-                <label className="formLabel">Product Description</label>
+            <div className="flex flex-col gap-1.5 w-full">
+                <label htmlFor="description" className={labelCls}>Product Description</label>
                 <textarea
                     id="description"
                     name="description"
@@ -44,7 +45,7 @@ export default function BasicInfo({ form, handleChange, missingFields = [] }) {
                     required
                     value={form.description}
                     onChange={handleChange}
-                    className={`formInput ${descriptionMissing ? 'border-2 border-red-500 focus:border-red-500' : ''}`}
+                    className={inputCls(descriptionMissing)}
                     placeholder="Enter product description"
                     wrap="hard"
                 />

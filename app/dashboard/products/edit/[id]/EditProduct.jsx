@@ -5,14 +5,16 @@ import { useRouter, useParams } from "next/navigation"
 import { useEffect, useState } from "react";
 
 function EditProduct() {
-    const { user, isLoading } = useUser();
+    // `isLoaded` (not `isLoading`) is Clerk's readiness flag — the old guard
+    // destructured a property that doesn't exist, so it never fired.
+    const { user, isLoaded } = useUser();
     const params = useParams();
     const productId = params.id;
     const [productToEdit, setProductToEdit] = useState(null);
     const router = useRouter();
 
     useEffect(() => {
-        if (!user || isLoading) return;
+        if (!user || !isLoaded) return;
 
         if (!productId) {
             router.push('/dashboard/products');
@@ -30,15 +32,14 @@ function EditProduct() {
         };
 
         fetchProduct();
-    }, [productId, user, isLoading, router]);
+    }, [productId, user, isLoaded, router]);
 
+    // The rail/DashProvider come from CreatorShell via app/dashboard/layout.jsx.
     return (
-        <div className='flex w-full flex-col py-20 border-b border-borderColor px-8 md:px-16'>
-            <ProductForm
-                mode="Edit"
-                product={productToEdit}
-            />
-        </div>
+        <ProductForm
+            mode="Edit"
+            product={productToEdit}
+        />
     )
 }
 

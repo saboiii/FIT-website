@@ -1,3 +1,4 @@
+import { jsonLdString } from '@/lib/jsonLd'
 import PrintPage from "./PrintPage";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "https://fixitoday.com";
@@ -40,7 +41,7 @@ function PrintLayout() {
         <>
             <script
                 type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(PRINTS_JSON_LD) }}
+                dangerouslySetInnerHTML={{ __html: jsonLdString(PRINTS_JSON_LD) }}
             />
             <PrintPage />
         </>

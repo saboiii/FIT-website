@@ -1,21 +1,24 @@
 'use client'
-
+// Product create wrapper — access gate only; the rail/DashProvider come from
+// CreatorShell via app/dashboard/layout.jsx.
 import ProductForm from "@/components/DashboardComponents/ProductForm"
 import useAccess from "@/utils/useAccess";
+import { SkeletonRow } from '@/components/dashboard-ui';
 import Fallback from "../../Fallback";
 
 function CreateProduct() {
     const { loading, canAccess } = useAccess();
 
-    if (loading) return <div className='flex items-center justify-center h-[92vh] w-full border-b border-borderColor'>
-        <div className='loader' />
-    </div>;
+    if (loading) return (
+        <div className='max-w-[720px] flex flex-col gap-3'>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+        </div>
+    );
 
     if (!canAccess) return <Fallback />;
-    return <div className='flex w-full flex-col py-20 border-b border-borderColor px-8 md:px-16'>
-        <ProductForm mode="Create" />
-    </div>
-
+    return <ProductForm mode="Create" />
 }
 
 export default CreateProduct

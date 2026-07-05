@@ -3,6 +3,8 @@ import { s3 } from "@/lib/s3";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { auth } from "@clerk/nextjs/server";
 import { sanitizeString } from "@/utils/validate";
+import { resolveDownloadFilename } from "@/lib/download/filename";
+import { isPrivateModelKey, canAccessModelKey } from "@/lib/proxyAccess";
 import { Readable } from "stream";
 
 export const runtime = 'nodejs'
@@ -28,7 +30,14 @@ export async function GET(req) {
         return new NextResponse("Missing or invalid key", { status: 400 });
     }
 
-    if (download) {
+    // Customer-uploaded models are private: owner / digital buyer / admin only.
+    // Same 404 as a missing object so the endpoint is not an existence oracle.
+    if (isPrivateModelKey(key)) {
+        const { userId } = await auth();
+        if (!(await canAccessModelKey(key, userId))) {
+            return new NextResponse("Not found", { status: 404 });
+        }
+    } else if (download) {
         const { userId } = await auth();
         if (!userId) return new NextResponse("Unauthorized", { status: 401 });
     }
@@ -45,14 +54,20 @@ export async function GET(req) {
             return new NextResponse("Not found", { status: 404 });
         }
 
-        const filename = key.split('/').pop();
         const headers = {
             "Content-Type": s3Response.ContentType || "application/octet-stream",
             "Content-Length": s3Response.ContentLength?.toString() || undefined,
             "Cache-Control": "public, max-age=3600",
         };
-        // Only force download when explicitly requested.
+        // Only force download when explicitly requested. Always serve a real,
+        // extension-bearing filename (never "proxy") using the caller's original
+        // name when provided; sanitised against header injection.
         if (download) {
+            const requestedName = searchParams.get("filename");
+            const filename = resolveDownloadFilename({
+                requested: requestedName ? decodeURIComponent(requestedName) : undefined,
+                s3Key: key,
+            });
             headers["Content-Disposition"] = `attachment; filename="${filename}"`;
         }
 
@@ -63,7 +78,6 @@ export async function GET(req) {
         });
     } catch (err) {
         // Only log essential error info
-        // eslint-disable-next-line no-console
         console.error('Proxy fetch error:', {
             key,
             bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,
@@ -85,7 +99,13 @@ export async function HEAD(req) {
         return new NextResponse(null, { status: 400 });
     }
 
-    if (download) {
+    // Mirror GET's privacy rule for private model keys (no existence oracle).
+    if (isPrivateModelKey(key)) {
+        const { userId } = await auth();
+        if (!(await canAccessModelKey(key, userId))) {
+            return new NextResponse(null, { status: 404 });
+        }
+    } else if (download) {
         const { userId } = await auth();
         if (!userId) return new NextResponse(null, { status: 401 });
     }
@@ -97,13 +117,17 @@ export async function HEAD(req) {
         });
         const s3Response = await s3.send(command);
 
-        const filename = key.split('/').pop();
         const headers = {
             "Content-Type": s3Response.ContentType || "application/octet-stream",
             "Content-Length": s3Response.ContentLength?.toString() || undefined,
             "Cache-Control": "public, max-age=3600",
         };
         if (download) {
+            const requestedName = searchParams.get("filename");
+            const filename = resolveDownloadFilename({
+                requested: requestedName ? decodeURIComponent(requestedName) : undefined,
+                s3Key: key,
+            });
             headers["Content-Disposition"] = `attachment; filename="${filename}"`;
         }
 

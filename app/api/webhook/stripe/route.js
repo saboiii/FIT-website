@@ -3,13 +3,20 @@ import Stripe from "stripe";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
 import Product from "@/models/Product";
-import PrintOrder from "@/models/PrintOrder";
 import CheckoutSession from "@/models/CheckoutSession";
 import Order from "@/models/Order";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
-import { sendEmail, wrapInTemplate } from "@/lib/email";
+import AppSettings from "@/models/AppSettings";
+import { getAppSettingsId } from "@/lib/appSettingsId";
+import { buildProductPrintRequestInput, colourNameFromVariants } from "@/lib/customPrint/productRequest";
+import { computeProductPrintQuote } from "@/lib/customPrint/productQuote";
+import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
+import { randomUUID } from "crypto";
+import { sendEmail } from "@/lib/email";
+import { buildNewSaleEmail, buildOrderConfirmationEmail } from "@/lib/email/templates/transactional";
+import { notifyCustomPrintEvent } from "@/lib/notifications/customPrint";
 import { clerkClient } from "@clerk/nextjs/server";
-import mongoose from "mongoose";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: "2025-05-28.basil",
@@ -39,27 +46,44 @@ export async function POST(req) {
     if (event.type === "checkout.session.completed") {
         const session = event.data.object;
 
+        // Released on failure paths so a Stripe retry can re-attempt fulfilment.
+        let claimed = false;
+        const releaseClaim = () =>
+            CheckoutSession.updateOne({ sessionId: session.id }, { processed: false })
+                .catch((err) => console.error('Failed to release webhook claim:', err));
+
         try {
             await connectToDatabase();
 
-            // Get the checkout session data from MongoDB
-            const checkoutSessionData = await CheckoutSession.findOne({
-                sessionId: session.id,
-            });
+            // Atomically claim the session so a redelivered event can never
+            // re-run fulfilment (stock decrements, Order creation, emails).
+            // Same claim-lock idiom as lib/newsletter/dispatch.js.
+            const checkoutSessionData = await CheckoutSession.findOneAndUpdate(
+                { sessionId: session.id, processed: { $ne: true } },
+                { processed: true },
+                { new: true },
+            );
 
             if (!checkoutSessionData) {
+                const existing = await CheckoutSession.findOne({ sessionId: session.id });
+                if (existing?.processed) {
+                    // Duplicate delivery of an already-fulfilled session.
+                    return NextResponse.json({ received: true, duplicate: true }, { status: 200 });
+                }
                 console.error(`CheckoutSession not found for sessionId: ${session.id}`);
                 return NextResponse.json(
                     { error: "Checkout session not found" },
                     { status: 404 }
                 );
             }
+            claimed = true;
 
             const userId = checkoutSessionData.userId;
             const user = await User.findOne({ userId });
 
             if (!user) {
                 console.error(`User not found for userId: ${userId}`);
+                await releaseClaim();
                 return NextResponse.json(
                     { error: "User not found" },
                     { status: 404 }
@@ -68,28 +92,28 @@ export async function POST(req) {
 
             // Create order history entries and handle print orders
             const orders = [];
-            const printOrderPromises = [];
             const orderItems = []; // For the new Order model
 
-            // Fetch payment method details from Stripe
+            // Fetch payment method details from Stripe (best-effort). Current
+            // API versions expose the charge via `latest_charge` (expanded),
+            // not the removed `charges` list.
             let paymentMethodDetails = null;
             try {
                 if (session.payment_intent) {
-                    const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent);
-                    const charges = paymentIntent?.charges?.data || [];
-                    if (charges.length > 0) {
-                        const charge = charges[0];
-                        const paymentMethod = charge.payment_method_details;
+                    const paymentIntent = await stripe.paymentIntents.retrieve(
+                        session.payment_intent,
+                        { expand: ['latest_charge'] },
+                    );
+                    const paymentMethod = paymentIntent?.latest_charge?.payment_method_details;
 
-                        if (paymentMethod) {
-                            paymentMethodDetails = {
-                                type: paymentMethod.type,
-                                brand: paymentMethod.card?.brand || paymentMethod.type,
-                                last4: paymentMethod.card?.last4 || null,
-                                expiryMonth: paymentMethod.card?.exp_month || null,
-                                expiryYear: paymentMethod.card?.exp_year || null
-                            };
-                        }
+                    if (paymentMethod) {
+                        paymentMethodDetails = {
+                            type: paymentMethod.type,
+                            brand: paymentMethod.card?.brand || paymentMethod.type,
+                            last4: paymentMethod.card?.last4 || null,
+                            expiryMonth: paymentMethod.card?.exp_month || null,
+                            expiryYear: paymentMethod.card?.exp_year || null
+                        };
                     }
                 }
             } catch (error) {
@@ -101,6 +125,9 @@ export async function POST(req) {
 
             // Load the base product used to represent custom print requests in orders
             const customPrintBaseProduct = await Product.findOne({ slug: 'custom-print-request' });
+
+            // Server pricing config for product-print fixed quotes (best-effort).
+            const appSettings = await AppSettings.findById(getAppSettingsId()).lean();
 
             for (const item of user.cart) {
                 let product = null;
@@ -130,20 +157,28 @@ export async function POST(req) {
                         // Use the configured base product for order linkage
                         product = customPrintBaseProduct;
 
-                        // Compute quoted pricing (base + print fee) and delivery fee from chosen delivery type
-                        const base = Number(customPrintRequest.basePrice || 0);
-                        const fee = Number(customPrintRequest.printFee || 0);
-                        customPrintQuotedPrice = base + fee;
+                        // Quoted pricing + delivery, same selector the cart
+                        // displays and checkout charges (instant → quote.total,
+                        // manual → basePrice + printFee).
+                        const charge = customPrintChargeBreakdown(customPrintRequest, item.chosenDeliveryType || '');
+                        customPrintQuotedPrice = charge.amount;
+                        customPrintChosenDeliveryType = charge.chosenDeliveryType;
+                        customPrintDeliveryFee = charge.deliveryFee;
 
-                        const availableDeliveryTypes = customPrintRequest.delivery?.deliveryTypes || [];
-                        const requestedDeliveryType = item.chosenDeliveryType || '';
-                        const requestedExists = availableDeliveryTypes.some(dt => dt.type === requestedDeliveryType);
-                        const chosenDeliveryType = requestedExists
-                            ? requestedDeliveryType
-                            : (availableDeliveryTypes[0]?.type || '');
-                        customPrintChosenDeliveryType = chosenDeliveryType;
-                        const chosenDeliveryObj = availableDeliveryTypes.find(dt => dt.type === chosenDeliveryType);
-                        customPrintDeliveryFee = Number(chosenDeliveryObj?.customPrice ?? chosenDeliveryObj?.price ?? 0);
+                        // Payment received → notify the customer (queued) and
+                        // the admin (start work) by email, and post a chat update
+                        // into the buyer↔vendor thread. Best-effort; never break
+                        // webhook processing on a notification failure.
+                        try {
+                            await notifyCustomPrintEvent({
+                                event: 'paid',
+                                request: customPrintRequest.toObject(),
+                                product: customPrintBaseProduct,
+                                breakdown: { ...charge, lines: customPrintRequest.quote?.lines },
+                            });
+                        } catch (notifyErr) {
+                            console.error('Paid notification failed:', notifyErr);
+                        }
                     }
                 } else {
                     product = await Product.findById(item.productId);
@@ -277,117 +312,105 @@ export async function POST(req) {
                     await product.save();
                 }
 
-                // Create print orders for print delivery items
-                if (item.chosenDeliveryType === "printDelivery") {
-                    let printOrderData;
-
-                    if (isCustomPrint && customPrintRequest) {
-                        const computedQuoted = Number(customPrintQuotedPrice ?? (Number(customPrintRequest.basePrice || 0) + Number(customPrintRequest.printFee || 0)));
-                        const computedDelivery = Number(customPrintDeliveryFee ?? 0);
-                        // For custom prints, no specific creator, handled by admin
-                        printOrderData = {
-                            orderId: `PO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                            stripeSessionId: session.id,
-                            userId: new mongoose.Types.ObjectId(user._id),
-                            creatorId: null, // Admin handled
-                            productId: null,
-                            productTitle: 'Custom 3D Print',
-                            quantity: 1,
-                            basePrice: Number(customPrintRequest.basePrice || 0),
-                            printFee: Number(customPrintRequest.printFee || 0),
-                            deliveryFee: computedDelivery,
-                            totalAmount: computedQuoted + computedDelivery,
-                            selectedVariants: {},
-                            variantInfo: [],
-                            variantName: null,
-                            currency: customPrintRequest.currency || 'SGD',
-                            modelUrl: customPrintRequest.modelFile?.s3Url,
-                            status: 'pending_config',
-                            customPrintRequestId: customPrintRequest._id,
-                            isCustomUpload: true,
-                            printConfiguration: customPrintRequest.printConfiguration,
-                        };
-                    } else {
-                        // Find creator user
-                        const creatorUser = await User.findOne({ userId: product.creatorUserId });
-                        if (!creatorUser) {
-                            console.error(`Creator user not found for userId: ${product.creatorUserId}`);
-                            continue;
-                        }
-
-                        // Generate unique order ID
-                        const orderId = `PO_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-                        // Get variant info from selectedVariants
-                        let variantName = null;
-                        let variantInfo = [];
-                        if (item.selectedVariants && Object.keys(item.selectedVariants).length > 0) {
-                            variantName = Object.entries(item.selectedVariants)
-                                .map(([type, option]) => `${type}: ${option}`)
-                                .join(", ");
-
-                            // Build variantInfo with fees
-                            if (product.variantTypes && product.variantTypes.length > 0) {
-                                for (const [variantTypeName, selectedOption] of Object.entries(item.selectedVariants)) {
-                                    const variantType = product.variantTypes.find(vt => vt.name === variantTypeName);
-                                    if (variantType) {
-                                        const option = variantType.options.find(opt => opt.name === selectedOption);
-                                        if (option) {
-                                            variantInfo.push({
-                                                type: variantTypeName,
-                                                option: selectedOption,
-                                                additionalFee: option.additionalFee || 0
-                                            });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Calculate base price
-                        let basePrice = product.basePrice?.presentmentAmount || 0;
-                        let totalPrice = basePrice;
-
-                        // Add variant fees
-                        if (variantInfo.length > 0) {
-                            const variantFees = variantInfo.reduce((sum, v) => sum + v.additionalFee, 0);
-                            totalPrice += variantFees;
-                        }
-
-                        printOrderData = {
-                            orderId: orderId,
-                            stripeSessionId: session.id,
-                            userId: new mongoose.Types.ObjectId(user._id),
-                            creatorId: new mongoose.Types.ObjectId(creatorUser._id),
-                            productId: item.productId,
-                            productTitle: product.name,
-                            quantity: item.quantity || 1,
-                            basePrice: basePrice,
-                            printFee: 0, // Can be calculated later
-                            deliveryFee: item.deliveryFee || 0,
-                            totalAmount: totalPrice,
-                            selectedVariants: item.selectedVariants || {},
-                            variantInfo: variantInfo,
-                            variantName: variantName,
-                            currency: product.basePrice?.presentmentCurrency || 'SGD',
-                            modelUrl: product.viewableModel,
-                            status: 'pending_config',
-                        };
-
-                        // If print configuration was stored in cart item before checkout, use it
-                        if (item.printConfiguration) {
-                            printOrderData.printConfiguration = item.printConfiguration;
-                            printOrderData.status = 'configured';
-                            printOrderData.printConfiguration.configuredAt = new Date();
+                // Product-sourced print jobs become CustomPrintRequests (admin
+                // queue + print-time/colour markers + email/chat lifecycle).
+                // Custom uploads were already marked paid above. PrintOrder is
+                // retired — no longer written. See openspec change
+                // `migrate-print-delivery-to-custom-requests`.
+                if (
+                    item.chosenDeliveryType === "printDelivery" &&
+                    !isCustomPrint &&
+                    product?.productType === 'print' &&
+                    product.viewableModel &&
+                    product.printConfig
+                ) {
+                    // Charge = product base price + selected variant fees.
+                    let variantFees = 0;
+                    if (item.selectedVariants && product.variantTypes?.length > 0) {
+                        for (const [variantTypeName, selectedOption] of Object.entries(item.selectedVariants)) {
+                            const variantType = product.variantTypes.find(vt => vt.name === variantTypeName);
+                            const option = variantType?.options.find(opt => opt.name === selectedOption);
+                            if (option) variantFees += option.additionalFee || 0;
                         }
                     }
-
-                    printOrderPromises.push(new PrintOrder(printOrderData).save());
+                    const chargeTotal = (product.basePrice?.presentmentAmount || 0) + variantFees;
+                    try {
+                        const input = buildProductPrintRequestInput({
+                            product,
+                            chosenColour: colourNameFromVariants(item.selectedVariants),
+                            user: {
+                                userId,
+                                email: user.email,
+                                name: user.name || session.customer_details?.name || user.email,
+                            },
+                            colourCatalogue: appSettings?.printColours || [],
+                        });
+                        let quote = null;
+                        try {
+                            quote = await computeProductPrintQuote({
+                                product,
+                                quoteSettings: input.quoteSettings,
+                                pricingConfig: appSettings?.quotingConfig || {},
+                                deliveryTypes: appSettings?.additionalDeliveryTypes || [],
+                            });
+                        } catch (quoteErr) {
+                            console.error('Product print quote failed (non-fatal):', quoteErr);
+                        }
+                        const { quoteSettings, ...requestFields } = input;
+                        const productRequest = await CustomPrintRequest.create({
+                            requestId: randomUUID(),
+                            ...requestFields,
+                            basePrice: chargeTotal, // charge = product price
+                            currency: (product.basePrice?.presentmentCurrency || 'SGD').toLowerCase(),
+                            status: 'paid',
+                            paidAt: new Date(),
+                            stripeSessionId: session.id,
+                            stripePaymentIntentId: session.payment_intent,
+                            quote: quote || undefined,
+                            quotedAt: quote ? new Date() : undefined,
+                            statusHistory: [{ status: 'paid', note: 'Product print purchased via Stripe' }],
+                        });
+                        try {
+                            await notifyCustomPrintEvent({
+                                event: 'paid',
+                                request: productRequest.toObject(),
+                                product,
+                                breakdown: {
+                                    amount: chargeTotal,
+                                    deliveryFee: item.deliveryFee || 0,
+                                    total: chargeTotal + (item.deliveryFee || 0),
+                                    currency: (product.basePrice?.presentmentCurrency || 'SGD').toUpperCase(),
+                                    chosenDeliveryType: item.chosenDeliveryType,
+                                    lines: quote?.lines,
+                                },
+                            });
+                        } catch (notifyErr) {
+                            console.error('Product print paid notification failed:', notifyErr);
+                        }
+                    } catch (reqErr) {
+                        console.error('Failed to create product print CustomPrintRequest:', reqErr);
+                    }
                 }
             }
 
-            // Wait for all print orders to be created
-            await Promise.all(printOrderPromises);
+            // Reconciliation (openspec change reconcile-webhook-charge-amounts,
+            // decision (b) 2026-07-05): fulfilment recomputes prices from the
+            // LIVE cart/config, which can diverge from what Stripe captured if
+            // anything changed mid-payment. Fulfil anyway (the customer paid),
+            // but flag the order for admin review/refund/adjustment.
+            const computedTotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
+            const computedAmountCents = Math.round(computedTotal * 100);
+            const stripeAmountCents = Number.isFinite(session.amount_total) ? session.amount_total : null;
+            const amountMismatch =
+                stripeAmountCents !== null && stripeAmountCents !== computedAmountCents
+                    ? { stripeAmountCents, computedAmountCents }
+                    : undefined;
+            if (amountMismatch) {
+                console.error(
+                    `[webhook] amount mismatch for session ${session.id}: ` +
+                        `Stripe captured ${stripeAmountCents}¢ but recomputed total is ${computedAmountCents}¢ — order flagged`,
+                );
+            }
 
             // Create the comprehensive Order record
             const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -411,19 +434,57 @@ export async function POST(req) {
                 subtotal: orderItems.reduce((sum, item) => sum + item.finalPrice, 0),
                 totalDiscount: orderItems.reduce((sum, item) => sum + item.discount, 0),
                 totalDelivery: orderItems.reduce((sum, item) => sum + item.deliveryFee, 0),
-                totalAmount: orderItems.reduce((sum, item) => sum + item.totalPrice, 0),
+                totalAmount: computedTotal,
                 currency: orderItems[0]?.currency || 'SGD',
                 status: 'pending',
+                amountMismatch,
                 statusHistory: [{
                     status: 'pending',
                     timestamp: new Date(),
                     updatedBy: 'system',
-                    note: 'Order created from successful checkout'
+                    note: amountMismatch
+                        ? `Order created from successful checkout — NEEDS REVIEW: Stripe captured ` +
+                          `${(amountMismatch.stripeAmountCents / 100).toFixed(2)} but recomputed total is ` +
+                          `${(amountMismatch.computedAmountCents / 100).toFixed(2)}`
+                        : 'Order created from successful checkout'
                 }],
                 customerNote: orderItems.map(item => item.orderNote).filter(Boolean).join('; ') || ""
             });
 
             await newOrder.save();
+
+            // Customer order confirmation — sent HERE, where the Order now
+            // exists, not from the return page (whose endpoint was an
+            // unauthenticated open relay). The idempotency claim above means
+            // Stripe retries can't double-send it. Best-effort.
+            try {
+                const confirmationTo = session.customer_details?.email || user.email;
+                if (confirmationTo) {
+                    const { subject, html } = buildOrderConfirmationEmail({
+                        customerName: session.customer_details?.name || "",
+                    });
+                    await sendEmail({ to: confirmationTo, subject, html });
+                }
+            } catch (emailErr) {
+                console.error("Order confirmation email failed:", emailErr);
+            }
+
+            try {
+                const phog = getPostHogClient();
+                phog.capture({
+                    distinctId: userId,
+                    event: 'order_created',
+                    properties: {
+                        order_id: orderId,
+                        total_amount: newOrder.totalAmount,
+                        currency: newOrder.currency,
+                        item_count: orderItems.length,
+                        has_custom_print: orderItems.some(item => item.productSlug === 'custom-print'),
+                    },
+                });
+            } catch (phErr) {
+                console.error('PostHog order_created capture failed:', phErr);
+            }
 
             // Add orders to order history (keep for backward compatibility)
             user.orderHistory.push(...orders);
@@ -459,23 +520,12 @@ export async function POST(req) {
                         const creatorEmail = creatorClerkUser?.emailAddresses?.[0]?.emailAddress;
                         if (!creatorEmail) continue;
 
-                        const itemsHtml = saleData.items.map(i =>
-                            `<li>${i.name} x${i.quantity} - ${i.currency} ${i.price.toFixed(2)}</li>`
-                        ).join('');
-
-                        const bodyHtml = `
-                            <p>You have a new sale on Fix It Today!</p>
-                            <h3 style="color: #ffdd00;">Order Details:</h3>
-                            <ul>${itemsHtml}</ul>
-                            <p><b>Total: ${saleData.items[0]?.currency || 'SGD'} ${saleData.total.toFixed(2)}</b></p>
-                            <p>Log in to your dashboard to manage this order.</p>
-                        `;
-
-                        await sendEmail({
-                            to: creatorEmail,
-                            subject: 'New Sale on Fix It Today!',
-                            html: wrapInTemplate(bodyHtml),
+                        const { subject, html } = buildNewSaleEmail({
+                            total: saleData.total,
+                            currency: saleData.items[0]?.currency || 'SGD',
+                            items: saleData.items,
                         });
+                        await sendEmail({ to: creatorEmail, subject, html });
                     } catch (emailErr) {
                         console.error(`Failed to email creator ${creatorUserId}:`, emailErr);
                     }
@@ -489,6 +539,15 @@ export async function POST(req) {
             return NextResponse.json({ received: true }, { status: 200 });
         } catch (error) {
             console.error("Error processing webhook:", error);
+            try {
+                getPostHogClient().captureException(error, undefined, {
+                    source: "stripe_webhook",
+                    session_id: session.id,
+                });
+            } catch (phErr) {
+                console.error("PostHog exception capture failed:", phErr);
+            }
+            if (claimed) await releaseClaim();
             return NextResponse.json(
                 { error: "Failed to process webhook" },
                 { status: 500 }

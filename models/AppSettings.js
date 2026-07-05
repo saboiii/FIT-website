@@ -94,12 +94,97 @@ const AppSettingsSchema = new mongoose.Schema({
     version: { type: Number, default: 1 },
 
     // Print pricing formula for auto-calculating custom print quotes
+    // (LEGACY: superseded by quotingConfig + the Instant Quoting Engine; kept
+    // until the admin "calculate print cost" tool migrates).
     printPricingFormula: {
         baseFee: { type: Number, default: 5 },
         materialCostPerGram: { type: Number, default: 0.05 },
         supportMultiplier: { type: Number, default: 1.2 },
         highQualityMultiplier: { type: Number, default: 1.5 },
         markupPercentage: { type: Number, default: 30 },
+    },
+
+    // Instant Quoting Engine configuration (see lib/quoting/pricingDefaults.js).
+    // Money in major units (SGD); material rate per gram, time rate per hour.
+    quotingConfig: {
+        materialRatePerGram: { type: Number, default: 0.02 }, // $20/kg
+        printTimeRatePerHour: { type: Number, default: 3 },   // $3/hr
+        baseFee: { type: Number, default: 0 },
+        postProcessingFee: { type: Number, default: 0 },
+        specialRequestFee: { type: Number, default: 0 },
+        priorityFee: { type: Number, default: 0 },
+        expediteMode: { type: String, enum: ['percent', 'flat', 'greater'], default: 'greater' },
+        expediteSurchargePercent: { type: Number, default: 50 },
+        expediteSurchargeFlat: { type: Number, default: 20 },
+        minimumPrice: { type: Number, default: 5 },
+        // Optional per-material density overrides (g/cm³): { pla: 1.24, ... }
+        materialDensities: { type: Map, of: Number, default: undefined },
+        // Machine-speed model for the print-time estimate (null = built-in
+        // default; see lib/quoting/pricingDefaults.DEFAULT_TIME_MODEL).
+        timeModel: {
+            baseFlowCm3PerHour: { type: Number, default: null },
+            layerHeightRefMm: { type: Number, default: null },
+            supportTimeFactor: { type: Number, default: null },
+            wallTimeFactorPerLoop: { type: Number, default: null },
+            minHours: { type: Number, default: null },
+        },
+        // Shape-aware (layer-stack) estimator constants, fitted from the
+        // admin's timed test prints (Print Timing panel). Null = built-in
+        // defaults (lib/quoting/printTime/layerStack.DEFAULT_LAYER_STACK_MODEL).
+        layerStackModel: {
+            flowMm3PerS: { type: Number, default: null },
+            perLayerOverheadS: { type: Number, default: null },
+        },
+    },
+
+    // Timed test prints for calibrating the shape-aware print-time estimator.
+    // Only derived shape components are stored — model bytes are parsed once
+    // at upload and discarded.
+    printTimeCalibration: {
+        samples: {
+            type: [{
+                label: { type: String, default: '' },
+                fileName: { type: String, default: '' },
+                settings: {
+                    layerHeightMm: { type: Number, default: 0.2 },
+                    infillPercent: { type: Number, default: 20 },
+                    wallLoops: { type: Number, default: 2 },
+                    enableSupport: { type: Boolean, default: false },
+                },
+                extrudedMm3: { type: Number, required: true },
+                totalLayers: { type: Number, required: true },
+                supportOn: { type: Boolean, default: false },
+                actualHours: { type: Number, default: null },
+                createdAt: { type: Date, default: Date.now },
+            }],
+            default: [],
+        },
+        fittedAt: { type: Date, default: null },
+    },
+
+    // Print-farm machine capacity (admin-entered; null = no limit enforced).
+    // Used to reject un-printable models at quote time and to catch unit typos
+    // on the admin dimension endpoints. Dimensions in cm, weight in kg.
+    machineLimits: {
+        maxLengthCm: { type: Number, default: null },
+        maxWidthCm: { type: Number, default: null },
+        maxHeightCm: { type: Number, default: null },
+        maxWeightKg: { type: Number, default: null },
+    },
+
+    // Available colours/materials for generic print configuration. Seeded from
+    // lib/quoting/genericPresets DEFAULT_PRINT_COLOURS; admins curate to stock.
+    // `material` (optional) maps to a quoting density key; `priceModifier`
+    // (optional) is reserved for per-colour surcharges.
+    printColours: {
+        type: [{
+            name: { type: String, required: true },
+            hex: { type: String, required: true },
+            material: { type: String, default: null },
+            priceModifier: { type: Number, default: null },
+            _id: false,
+        }],
+        default: undefined,
     }
 }, {
     timestamps: true

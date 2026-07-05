@@ -3,11 +3,10 @@ import { connectToDatabase } from "@/lib/db";
 import AppSettings from "@/models/AppSettings";
 import { checkAdminPrivileges } from "@/lib/checkPrivileges";
 import { authenticate } from "@/lib/authenticate";
+import { DEFAULT_PRINT_COLOURS } from "@/lib/quoting/genericPresets";
+import { getAppSettingsId } from "@/lib/appSettingsId";
 
 async function getAppSettings() {
-    function getAppSettingsId() {
-        return process.env.NODE_ENV === 'development' ? 'app-settings-dev' : 'app-settings';
-    }
     let settings = await AppSettings.findById(getAppSettingsId());
     if (!settings) {
         settings = new AppSettings({
@@ -50,7 +49,11 @@ export async function GET(request) {
             deliveryTypes: allDeliveryTypes,
             additionalDeliveryTypes: settings.additionalDeliveryTypes,
             categories: dbCategories,
-            additionalCategories: settings.additionalCategories || []
+            additionalCategories: settings.additionalCategories || [],
+            // Colour catalogue for print products (colour-variant swatches).
+            // Falls back to the built-in defaults like /api/quote/config so the
+            // palette shows even before an admin seeds/curates the catalogue.
+            printColours: settings.printColours?.length ? settings.printColours : DEFAULT_PRINT_COLOURS
         }, { status: 200 });
     } catch (error) {
         console.error("Error fetching app settings:", error);

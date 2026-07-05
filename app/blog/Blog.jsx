@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { IoArrowForward } from 'react-icons/io5'
+import SubscribeForm from '@/components/General/SubscribeForm'
 
 function FeaturedCarousel({ posts }) {
     const [index, setIndex] = useState(0)
@@ -95,6 +96,9 @@ function FeaturedCarousel({ posts }) {
 }
 
 function BlogList({ posts }) {
+    const [query, setQuery] = useState('')
+    const [activeTag, setActiveTag] = useState('')
+
     if (!posts || posts.length === 0) {
         return (
             <div className="w-full max-w-5xl text-xs text-lightColor mt-8 text-center">
@@ -102,9 +106,6 @@ function BlogList({ posts }) {
             </div>
         )
     }
-
-    const [query, setQuery] = useState('')
-    const [activeTag, setActiveTag] = useState('')
 
     const allTags = Array.from(new Set((posts || []).flatMap(p => p.tags || [])))
 
@@ -225,11 +226,11 @@ function Blog() {
     useEffect(() => {
         const load = async () => {
             try {
-                const res = await fetch('/api/admin/blog')
+                const res = await fetch('/api/blog')
                 const data = await res.json()
                 if (!data.ok) return
 
-                const all = (data.posts || []).filter(p => p.published)
+                const all = data.posts || []
 
                 const featuredPosts = all.filter(p => p.featured)
 
@@ -267,6 +268,14 @@ function Blog() {
                 <>
                     <FeaturedCarousel posts={featured.length > 0 ? featured : allPosts.slice(0, 3)} />
                     <BlogList posts={allPosts} />
+
+                    <section className="w-full max-w-5xl mt-16 px-6 md:px-0 flex flex-col items-center text-center gap-3">
+                        <h2 className="text-sm font-medium text-textColor uppercase tracking-wide">Stay in the loop</h2>
+                        <p className="text-xs text-lightColor max-w-md">
+                            Get new articles and updates from the FIT team in your inbox.
+                        </p>
+                        <SubscribeForm />
+                    </section>
                 </>
             )}
         </div>

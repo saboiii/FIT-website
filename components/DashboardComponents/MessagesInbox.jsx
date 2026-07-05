@@ -1,10 +1,24 @@
 'use client';
 
+// Creator messages — "mail" (blueprint §5.3). Two panes ≥1024px: conversation
+// list (320px) + thread. Unread = ink dot + semibold (never yellow); selected
+// row = sun-soft wash. The auto-welcome editor lives under the "…" menu in the
+// list header as a Sheet (Appendix A relocation). All Stream wiring, event
+// dispatches and mark-read logic are unchanged from the pre-redesign inbox.
 import { useEffect, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { StreamChat } from 'stream-chat';
 import Image from 'next/image';
+import Link from 'next/link';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { motion } from 'framer-motion';
+import { IoChevronBack, IoEllipsisHorizontal, IoMailOutline } from 'react-icons/io5';
+import { settle } from '@/lib/motion/tokens';
+import { DashProvider, EmptyState, GlassBar, Sheet, SkeletonRow, StatusPill } from '@/components/dashboard-ui';
 import useEntitlements from '@/utils/useEntitlements';
+
+dayjs.extend(relativeTime);
 
 export default function MessagesInbox() {
     const { user, isLoaded } = useUser();
@@ -21,6 +35,10 @@ export default function MessagesInbox() {
     const [autoReplyMessage, setAutoReplyMessage] = useState('');
     const [autoReplySaving, setAutoReplySaving] = useState(false);
     const [unreadTotal, setUnreadTotal] = useState(0);
+    // UI-only state (no effect on Stream wiring): the "…" welcome-message
+    // Sheet and the mobile list→thread pane swap.
+    const [welcomeOpen, setWelcomeOpen] = useState(false);
+    const [mobileThreadOpen, setMobileThreadOpen] = useState(false);
 
     useEffect(() => {
         const loadInbox = async () => {
@@ -218,182 +236,298 @@ export default function MessagesInbox() {
 
     if (!isLoaded || entitlementsLoading) {
         return (
-            <div className="flex min-h-[92vh] w-full items-center justify-center border-b border-borderColor">
-                <div className="loader" />
-            </div>
+            <DashProvider>
+                <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 px-6 py-8">
+                    <SkeletonRow className="max-w-[320px]" />
+                    <div className="flex gap-4">
+                        <div className="flex w-full flex-col gap-2 lg:w-[320px]">
+                            <SkeletonRow />
+                            <SkeletonRow />
+                            <SkeletonRow />
+                            <SkeletonRow />
+                        </div>
+                        <div className="hidden flex-1 flex-col gap-2 lg:flex">
+                            <SkeletonRow />
+                            <SkeletonRow />
+                        </div>
+                    </div>
+                </div>
+            </DashProvider>
         );
     }
 
     if (!canUseMessaging) {
         return (
-            <div className="flex min-h-[92vh] w-full items-center justify-center border-b border-borderColor">
-                <div className="text-center px-6 text-sm text-lightColor max-w-md">
-                    Messaging is only available to creators with an active subscription.
+            <DashProvider>
+                <div className="mx-auto flex min-h-[70vh] w-full max-w-[1200px] items-center justify-center px-6 py-8">
+                    <EmptyState
+                        icon={<IoMailOutline />}
+                        title="Messaging Requires an Active Subscription"
+                        body="Messaging is only available to creators with an active subscription."
+                    />
                 </div>
-            </div>
+            </DashProvider>
         );
     }
 
+    const activeChannel = channels.find((ch) => ch.channelId === activeChannelId) || null;
+    const activeParticipant = (activeChannel?.participants && activeChannel.participants[0]) || null;
+
     return (
-        <div className="flex flex-col min-h-[92vh] w-full border-b border-borderColor bg-background/50 pt-10">
-            <div className="flex flex-col items-start justify-end w-full mb-6 gap-2 px-6 lg:px-12">
-                <h3 className="text-xs font-semibold tracking-[0.2em] uppercase text-lightColor/80">Inbox</h3>
-                <h1 className="mb-1 text-2xl font-semibold text-textColor">Direct messages from customers</h1>
-                <p className="text-sm text-lightColor max-w-2xl">
-                    View and reply to conversations started by customers. This inbox is private to you as a creator.
-                </p>
-            </div>
+        <DashProvider>
+            <div className="mx-auto flex h-[92vh] w-full max-w-[1200px] flex-col gap-4 px-4 py-8 lg:px-6">
+                <div className="flex items-center">
+                    <Link href="/dashboard" className="dash-data dash-soft hover:text-[var(--dash-ink)]">
+                        ← Dashboard
+                    </Link>
+                </div>
 
-            <div className="flex flex-1 flex-col lg:flex-row gap-4 px-4 lg:px-8 pb-8">
-                <div className="lg:w-1/3 w-full border border-borderColor rounded-2xl bg-background overflow-hidden flex flex-col shadow-sm">
-                    <div className="px-4 py-3 border-b border-borderColor bg-gradient-to-r from-borderColor/20 to-background flex items-center justify-between">
-                        <div className="flex flex-col gap-0.5">
-                            <span className="text-xs font-semibold uppercase tracking-wide text-lightColor">Conversations</span>
-                            <span className="text-[11px] text-lightColor/80">
-                                {unreadTotal > 0
-                                    ? `${unreadTotal} unread message${unreadTotal === 1 ? '' : 's'}`
-                                    : 'All caught up'}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="px-4 py-3 border-b border-borderColor/80 bg-background flex flex-col gap-2 text-[11px] text-lightColor">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="font-medium text-textColor text-xs">Automatic welcome message</span>
-                                <span className="text-[10px] text-lightColor/80">
-                                    Sent automatically when a customer first messages you.
-                                </span>
-                            </div>
+                <div className="flex min-h-0 flex-1 gap-4">
+                    {/* Conversation list pane */}
+                    <section
+                        aria-label="Conversations"
+                        className={`${mobileThreadOpen ? 'hidden lg:flex' : 'flex'} min-h-0 w-full flex-col overflow-hidden rounded-[var(--dash-r-card)] border border-[var(--dash-line)] bg-[var(--dash-card)] shadow-[var(--dash-shadow-card)] lg:w-[320px] lg:shrink-0`}
+                    >
+                        <header className="flex items-center gap-2 border-b border-[var(--dash-line)] px-4 py-3">
+                            <h2 className="dash-section">Messages</h2>
+                            {unreadTotal > 0 && (
+                                <StatusPill tone="paper">
+                                    {unreadTotal} unread
+                                </StatusPill>
+                            )}
                             <button
                                 type="button"
-                                onClick={saveAutoReply}
-                                disabled={autoReplySaving}
-                                className="px-2 py-1 rounded-full bg-textColor text-background text-[10px] font-medium disabled:opacity-60"
+                                aria-label="Inbox options"
+                                onClick={() => setWelcomeOpen(true)}
+                                className="dash-hoverable ml-auto grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-[var(--dash-ink-soft)] hover:bg-[var(--dash-canvas)] hover:text-[var(--dash-ink)]"
                             >
-                                {autoReplySaving ? 'Saving…' : 'Save'}
+                                <IoEllipsisHorizontal size={16} />
                             </button>
+                        </header>
+
+                        {loading ? (
+                            <div className="flex flex-col gap-2 p-4">
+                                <SkeletonRow />
+                                <SkeletonRow />
+                                <SkeletonRow />
+                                <SkeletonRow />
+                            </div>
+                        ) : channels.length === 0 ? (
+                            <EmptyState
+                                icon={<IoMailOutline />}
+                                title="Messages From Your Customers"
+                                body="Conversations customers start with you land here. Reply in real time from this inbox."
+                            />
+                        ) : (
+                            <div className="dash-scroll flex-1">
+                                {channels.map((ch) => {
+                                    const p = (ch.participants && ch.participants[0]) || null;
+                                    const selected = ch.channelId === activeChannelId;
+                                    const unread = (ch.unreadCount || 0) > 0;
+                                    return (
+                                        <button
+                                            key={ch.channelId}
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveChannelId(ch.channelId);
+                                                setMobileThreadOpen(true);
+                                            }}
+                                            className={`dash-hoverable flex w-full cursor-pointer items-start gap-3 border-b border-[var(--dash-line)] px-4 py-3 text-left ${
+                                                selected ? 'bg-[var(--dash-sun-soft)]' : 'hover:bg-[var(--dash-canvas)]'
+                                            }`}
+                                        >
+                                            <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)] text-[12px] font-medium">
+                                                {p?.imageUrl ? (
+                                                    <Image
+                                                        src={p.imageUrl}
+                                                        alt={p.name || p.id || 'Customer'}
+                                                        width={32}
+                                                        height={32}
+                                                        className="h-full w-full object-cover"
+                                                    />
+                                                ) : (
+                                                    (p?.name?.[0] || '?').toUpperCase()
+                                                )}
+                                            </span>
+                                            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                <span className="flex items-center gap-2">
+                                                    {unread && (
+                                                        <span
+                                                            data-testid="unread-dot"
+                                                            aria-hidden="true"
+                                                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--dash-ink)]"
+                                                        />
+                                                    )}
+                                                    <span className={`truncate text-[13px] ${unread ? 'font-semibold' : 'font-medium'}`}>
+                                                        {p?.name || p?.id || 'Customer'}
+                                                    </span>
+                                                    {ch.lastMessage?.createdAt && (
+                                                        <span className="dash-data dash-soft ml-auto shrink-0">
+                                                            {dayjs(ch.lastMessage.createdAt).fromNow(true)}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                {ch.lastMessage?.text && (
+                                                    <span className="dash-soft truncate text-[13px]">{ch.lastMessage.text}</span>
+                                                )}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Thread pane */}
+                    <motion.section
+                        key={mobileThreadOpen ? 'thread-open' : 'thread-idle'}
+                        aria-label="Conversation"
+                        initial={{ x: 24, opacity: 0 }}
+                        animate={{ x: 0, opacity: 1 }}
+                        transition={settle}
+                        className={`${mobileThreadOpen ? 'flex' : 'hidden lg:flex'} min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--dash-r-card)] border border-[var(--dash-line)] bg-[var(--dash-canvas)]`}
+                    >
+                        {/* Mobile: back chevron in a GlassBar */}
+                        <GlassBar className="lg:hidden">
+                            <button
+                                type="button"
+                                aria-label="Back to conversations"
+                                onClick={() => setMobileThreadOpen(false)}
+                                className="dash-hoverable grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)]"
+                            >
+                                <IoChevronBack size={16} />
+                            </button>
+                            <span className="truncate text-[13px] font-semibold">
+                                {activeParticipant?.name || 'Conversation'}
+                            </span>
+                        </GlassBar>
+
+                        {/* Desktop: quiet thread header */}
+                        <header className="hidden items-baseline gap-3 border-b border-[var(--dash-line)] bg-[var(--dash-card)] px-4 py-3 lg:flex">
+                            <span className="truncate text-[13px] font-semibold">
+                                {activeParticipant?.name || 'Conversation'}
+                            </span>
+                            {activeParticipant?.email && (
+                                <span className="dash-data dash-soft truncate">{activeParticipant.email}</span>
+                            )}
+                        </header>
+
+                        {/* Quiet inline strips — never spinners over a thread */}
+                        {error && (
+                            <div className="border-b border-[var(--dash-line)] bg-[var(--dash-bad-bg)] px-4 py-2 text-[13px] text-[var(--dash-bad)]">
+                                {error}
+                            </div>
+                        )}
+                        {connectingChannel && !error && (
+                            <div className="dash-soft border-b border-[var(--dash-line)] bg-[var(--dash-card)] px-4 py-2 text-[13px]">
+                                Connecting…
+                            </div>
+                        )}
+
+                        {!activeChannelId ? (
+                            <div className="dash-soft flex flex-1 items-center justify-center px-6 text-center text-[13px]">
+                                Select a conversation to start replying.
+                            </div>
+                        ) : (
+                            <>
+                                <div className="dash-scroll flex flex-1 flex-col gap-3 px-4 py-4">
+                                    {messages.map((m) => (
+                                        <div
+                                            key={m.id}
+                                            className={`flex max-w-[80%] flex-col gap-1 ${
+                                                m.from === 'me' ? 'items-end self-end' : 'items-start self-start'
+                                            }`}
+                                        >
+                                            <div
+                                                className={`rounded-[var(--dash-r-inner)] px-3 py-2 text-[13px] ${
+                                                    m.from === 'me'
+                                                        ? 'bg-[var(--dash-ink)] text-[var(--dash-canvas)]'
+                                                        : 'border border-[var(--dash-line)] bg-[var(--dash-card)]'
+                                                }`}
+                                            >
+                                                {m.text}
+                                            </div>
+                                            {m.createdAt && (
+                                                <span className="dash-data dash-soft">
+                                                    {dayjs(m.createdAt).format('D MMM, HH:mm')}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {messages.length === 0 && !connectingChannel && (
+                                        <div className="dash-soft mt-2 text-center text-[13px]">
+                                            No messages in this conversation yet.
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Composer — Tier-1 bar pinned to the bottom */}
+                                <form
+                                    onSubmit={handleSend}
+                                    className="flex items-center gap-2 border-t border-[var(--dash-line)] bg-[var(--dash-card)] px-3 py-3"
+                                >
+                                    <input
+                                        type="text"
+                                        value={input}
+                                        onChange={(e) => setInput(e.target.value)}
+                                        placeholder="Type a reply…"
+                                        aria-label="Type a reply"
+                                        className="min-w-0 flex-1 rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)] px-4 py-2 text-[13px] focus:outline-none"
+                                        disabled={connectingChannel}
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!input.trim() || connectingChannel}
+                                        className="dash-hoverable shrink-0 cursor-pointer rounded-full bg-[var(--dash-ink)] px-4 py-2 text-[13px] font-medium text-[var(--dash-canvas)] active:scale-[0.97] disabled:opacity-50"
+                                    >
+                                        Send
+                                    </button>
+                                </form>
+                            </>
+                        )}
+                    </motion.section>
+                </div>
+
+                {/* Auto-welcome message editor — relocated from an always-visible
+                    card into the list-header "…" Sheet (Appendix A). */}
+                <Sheet open={welcomeOpen} onClose={() => setWelcomeOpen(false)} label="Automatic welcome message">
+                    <div className="flex flex-col gap-3 p-6">
+                        <div>
+                            <h3 className="dash-section">Automatic Welcome Message</h3>
+                            <p className="dash-soft mt-1 text-[13px]">
+                                Sent automatically when a customer first messages you.
+                            </p>
                         </div>
                         <textarea
                             value={autoReplyMessage}
                             onChange={(e) => setAutoReplyMessage(e.target.value)}
-                            rows={3}
+                            rows={4}
                             placeholder="e.g. Thanks for your message! I'll get back to you as soon as I can."
-                            className="w-full rounded-xl bg-background border border-borderColor px-3 py-2 text-[11px] text-textColor placeholder-lightColor focus:outline-none focus:ring-1 focus:ring-textColor/40 resize-none"
+                            aria-label="Automatic welcome message"
+                            className="w-full resize-none rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 py-2 text-[13px] focus:outline-none"
                         />
+                        <div className="flex items-center justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setWelcomeOpen(false)}
+                                className="dash-soft cursor-pointer text-[13px] hover:text-[var(--dash-ink)]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    await saveAutoReply();
+                                    setWelcomeOpen(false);
+                                }}
+                                disabled={autoReplySaving}
+                                className="dash-hoverable cursor-pointer rounded-full bg-[var(--dash-ink)] px-4 py-2 text-[13px] font-medium text-[var(--dash-canvas)] active:scale-[0.97] disabled:opacity-50"
+                            >
+                                {autoReplySaving ? 'Saving…' : 'Save'}
+                            </button>
+                        </div>
                     </div>
-                    {loading ? (
-                        <div className="flex-1 flex items-center justify-center text-xs text-lightColor">
-                            Loading conversations…
-                        </div>
-                    ) : channels.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center text-xs text-lightColor">
-                            No conversations yet.
-                        </div>
-                    ) : (
-                        <div className="flex-1 overflow-y-auto divide-y divide-borderColor/60">
-                            {channels.map((ch) => {
-                                const p = (ch.participants && ch.participants[0]) || null;
-                                return (
-                                    <button
-                                        key={ch.channelId}
-                                        type="button"
-                                        onClick={() => setActiveChannelId(ch.channelId)}
-                                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-borderColor/20 text-xs transition-colors ${
-                                            ch.channelId === activeChannelId ? 'bg-borderColor/10' : 'bg-background'
-                                        }`}
-                                    >
-                                        <div className="relative flex-shrink-0">
-                                            <div className="w-8 h-8 rounded-full overflow-hidden bg-borderColor flex items-center justify-center">
-                                                {p?.imageUrl ? (
-                                                    <Image
-                                                        src={p.imageUrl}
-                                                        alt={p.name || p.id}
-                                                        width={32}
-                                                        height={32}
-                                                        className="object-cover w-full h-full"
-                                                    />
-                                                ) : (
-                                                    <span className="text-[10px] text-lightColor">{p?.name?.[0] || '?'}</span>
-                                                )}
-                                            </div>
-                                            {ch.unreadCount > 0 && (
-                                                <span className="absolute -bottom-1 -right-1 bg-red-600 text-white rounded-full text-[9px] px-1.5 py-0.5">
-                                                    {ch.unreadCount > 9 ? '9+' : ch.unreadCount}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col min-w-0">
-                                            <span className="text-xs font-medium text-textColor truncate">{p?.name || p?.id || 'Customer'}</span>
-                                            <span className="text-[10px] text-lightColor truncate">{p?.id}</span>
-                                            {ch.lastMessage?.text && (
-                                                <span className="mt-0.5 text-[10px] text-lightColor/80 truncate">
-                                                    {ch.lastMessage.text}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                <div className="lg:flex-1 w-full border border-borderColor rounded-md bg-background flex flex-col min-h-[260px]">
-                    <div className="px-3 py-2 border-b border-borderColor bg-borderColor/20 text-xs font-medium uppercase tracking-wide text-lightColor flex items-center justify-between">
-                        <span>Conversation</span>
-                        {connectingChannel && <span className="text-[10px] text-lightColor/80">Connecting…</span>}
-                    </div>
-                    {error ? (
-                        <div className="flex-1 flex items-center justify-center text-xs text-red-500 px-4 text-center">
-                            {error}
-                        </div>
-                    ) : !activeChannelId ? (
-                        <div className="flex-1 flex items-center justify-center text-xs text-lightColor px-4 text-center">
-                            Select a conversation on the left to start replying.
-                        </div>
-                    ) : (
-                        <>
-                            <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-1 text-xs">
-                                {messages.map((m) => (
-                                    <div
-                                        key={m.id}
-                                        className={`px-2 py-1 rounded max-w-[80%] ${
-                                            m.from === 'me'
-                                                ? 'self-end bg-black text-white'
-                                                : 'self-start bg-borderColor/40 text-textColor'
-                                        }`}
-                                    >
-                                        {m.text}
-                                    </div>
-                                ))}
-                                {messages.length === 0 && (
-                                    <div className="text-[11px] text-lightColor/80 mt-2">
-                                        No messages in this conversation yet.
-                                    </div>
-                                )}
-                            </div>
-                            <form onSubmit={handleSend} className="border-t border-borderColor px-2 py-2 flex items-center gap-2 bg-borderColor/10">
-                                <input
-                                    type="text"
-                                    value={input}
-                                    onChange={(e) => setInput(e.target.value)}
-                                    placeholder="Type a reply…"
-                                    className="flex-1 text-sm px-2 py-1 border border-borderColor rounded focus:outline-none"
-                                    disabled={connectingChannel}
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={!input.trim() || connectingChannel}
-                                    className="text-sm px-3 py-1 rounded bg-black text-white disabled:opacity-50"
-                                >
-                                    Send
-                                </button>
-                            </form>
-                        </>
-                    )}
-                </div>
+                </Sheet>
             </div>
-        </div>
+        </DashProvider>
     );
 }

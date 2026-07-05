@@ -1,15 +1,14 @@
 'use client'
-import { useToast } from '@/components/General/ToastProvider';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import React, { useEffect, useState } from 'react'
+import posthog from 'posthog-js'
 
 function Return() {
     const [status, setStatus] = useState(null);
     const [customerEmail, setCustomerEmail] = useState('');
     const urlParams = useSearchParams();
     const sessionId = urlParams.get('session_id');
-    const { showToast } = useToast();
 
     useEffect(() => {
         fetch(`/api/checkout/session/${sessionId}`)
@@ -19,20 +18,10 @@ function Return() {
                 const email = await data.session.customer_details?.email;
                 setCustomerEmail(email);
                 if (data.session.status === 'complete') {
-                    // Send confirmation email
-                    const confEmailSent = `emailSent_${sessionId}`;
-                    if (!localStorage.getItem(confEmailSent)) {
-                        try {
-                            await fetch("/api/user/checkout/confirmation", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ email }),
-                            });
-                            localStorage.setItem(confEmailSent, "true");
-                        } catch (err) {
-                            showToast('Failed to send confirmation email: ' + err, 'error');
-                        }
-                    }
+                    posthog.capture('purchase_completed', { session_id: sessionId });
+                    // The order-confirmation email is sent by the Stripe
+                    // webhook when the Order is created (see
+                    // openspec change harden-payment-webhooks).
 
                     // Clear print configurations from localStorage after payment success
                     // The webhook will handle creating orders and emptying cart

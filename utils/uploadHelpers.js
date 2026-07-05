@@ -1,3 +1,38 @@
+/** Pure: clamp+round an upload progress percentage. Unknown/zero total => 0. */
+export function progressPercent(loaded, total) {
+    if (!(Number(total) > 0)) return 0;
+    const pct = Math.round((Number(loaded) / Number(total)) * 100);
+    return Math.min(100, Math.max(0, pct));
+}
+
+/**
+ * PUT a body to `url` via XMLHttpRequest so upload progress is observable
+ * (fetch cannot report request-body progress). Calls `onProgress(percent)` as
+ * bytes are sent; resolves on 2xx, rejects otherwise.
+ */
+export function putWithProgress({ url, body, contentType, onProgress }) {
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url);
+        if (contentType) xhr.setRequestHeader('Content-Type', contentType);
+        if (xhr.upload && typeof onProgress === 'function') {
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) onProgress(progressPercent(e.loaded, e.total));
+            };
+        }
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                if (typeof onProgress === 'function') onProgress(100);
+                resolve({ ok: true, status: xhr.status });
+            } else {
+                reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+        };
+        xhr.onerror = () => reject(new Error('Upload failed'));
+        xhr.send(body);
+    });
+}
+
 export function getMimeType(ext) {
     const mimeTypes = {
         obj: "application/octet-stream",

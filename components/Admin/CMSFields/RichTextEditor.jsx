@@ -1,6 +1,8 @@
 import dynamic from 'next/dynamic'
 import '@uiw/react-md-editor/markdown-editor.css'
 import { useRef, useState } from 'react'
+import { useToast } from '@/components/General/ToastProvider'
+import { labelCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 const MDEditor = dynamic(
     () => import('@uiw/react-md-editor').then((mod) => mod.default),
@@ -19,6 +21,7 @@ export default function RichTextEditor({
     showHtmlTip = false
 }) {
     const [uploading, setUploading] = useState(false)
+    const { showToast } = useToast()
 
     const handleFilesSelected = async (e) => {
         const files = Array.from(e.target.files || [])
@@ -48,7 +51,7 @@ export default function RichTextEditor({
             onChange((value || '') + addition)
         } catch (err) {
             console.error('Image upload error:', err)
-            alert(err.message || 'Image upload failed')
+            showToast(err.message || 'Image upload failed', 'error')
         } finally {
             setUploading(false)
         }
@@ -56,15 +59,15 @@ export default function RichTextEditor({
 
     return (
         <div className={`flex flex-col gap-2 ${className}`}>
-            <label className="formLabel">
-                {label} {required && <span className="text-red-500">*</span>}
-                <span className="text-xs text-gray-500 font-normal ml-2">
+            <label className={labelCls}>
+                {label} {required && <span className="text-[var(--dash-bad)]">*</span>}
+                <span className="normal-case tracking-normal font-normal ml-2">
                     (Rich Text Editor - Markdown/HTML)
                 </span>
             </label>
 
 
-            <div className="border border-borderColor rounded-md overflow-hidden">
+            <div className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden">
                 <MDEditor
                     value={value || ''}
                     onChange={(val) => onChange(val || '')}
@@ -88,9 +91,9 @@ export default function RichTextEditor({
             </div>
 
             {showHtmlTip && (
-                <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded">
+                <InfoStrip tone="info">
                     <strong>Tip:</strong> This editor supports both Markdown and HTML. Use the toolbar for formatting, or write HTML directly for complex layouts.
-                </div>
+                </InfoStrip>
             )}
         </div>
     )

@@ -1,10 +1,21 @@
 import { NextResponse } from 'next/server'
-import { clerkClient } from '@clerk/nextjs/server'
+import { auth, clerkClient } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import User from '@/models/User'
+import { checkAdminPrivileges } from '@/lib/checkPrivileges'
 
 export async function GET(request) {
     try {
+        // Returns emails, phones, addresses, and Stripe account ids — strictly
+        // admin tooling (CreatorPayments dashboard).
+        const { userId } = await auth()
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+        if (!(await checkAdminPrivileges(userId))) {
+            return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+        }
+
         const { searchParams } = new URL(request.url)
         const idsParam = searchParams.get('ids')
 

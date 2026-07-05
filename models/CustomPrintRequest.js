@@ -9,6 +9,18 @@ const CustomPrintRequestSchema = new mongoose.Schema({
     userEmail: { type: String, required: true },
     userName: { type: String, required: true },
 
+    // Where this request came from:
+    //   - 'upload'  — customer uploaded their own model (the original flow).
+    //   - 'product' — a productType:"print" product bought with print delivery;
+    //                 fixed vendor print config + fixed quote, customer picks
+    //                 colour only. `modelFile.s3Key` reuses the product model.
+    // See openspec change `migrate-print-delivery-to-custom-requests`.
+    source: { type: String, enum: ['upload', 'product'], default: 'upload' },
+    sourceProduct: {
+        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', default: null },
+        variantId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    },
+
     // Uploaded model
     modelFile: {
         originalName: { type: String, required: false },
@@ -21,6 +33,15 @@ const CustomPrintRequestSchema = new mongoose.Schema({
 
     // Print configuration
     printConfiguration: {
+        // Generic (simple-mode) selection — kept alongside printSettings so the
+        // cart can show the friendly view (Strength/Quality/Colour) for instant
+        // quotes without recomputing it from the advanced settings.
+        generic: {
+            strength: { type: String, default: null },
+            quality: { type: String, default: null },
+            colour: { type: String, default: null },
+            material: { type: String, default: null },
+        },
         meshColors: { type: Map, of: String }, // { meshName: colorHex }
         printSettings: {
             // Layer Height
@@ -64,6 +85,40 @@ const CustomPrintRequestSchema = new mongoose.Schema({
     printFee: { type: Number, default: 0 }, // Admin-specified extra print fee
     currency: { type: String, default: 'sgd' },
 
+    // Instant Quoting Engine result (server-authoritative breakdown). Set when
+    // the request is auto-quoted; mirrors lib/quoting/quote.js output shape.
+    quote: {
+        currency: { type: String },
+        lines: [{
+            key: { type: String },
+            label: { type: String },
+            amount: { type: Number },
+            _id: false,
+        }],
+        subtotal: { type: Number },
+        expedite: {
+            applied: { type: Boolean, default: false },
+            mode: { type: String },
+            amount: { type: Number, default: 0 },
+        },
+        total: { type: Number },
+        confidence: { type: String, enum: ['high', 'low'] },
+        inputs: {
+            volumeCm3: { type: Number },
+            weightGrams: { type: Number },
+            printHours: { type: Number },
+            // Shape-aware layer-stack estimate, recorded for print-farm
+            // validation only — NOT priced (see add-lightweight-print-time-estimator).
+            printHoursShapeAware: { type: Number },
+        },
+    },
+    quotedAt: { type: Date },
+
+    // How this request was quoted:
+    //   - 'instant' — server-authoritative price from the Instant Quoting Engine.
+    //   - 'manual'  — admin reviewed advanced settings and set the price.
+    quoteMode: { type: String, enum: ['instant', 'manual'], default: null },
+
     // Payment info
     stripeSessionId: { type: String },
     stripePaymentIntentId: { type: String },
@@ -73,6 +128,10 @@ const CustomPrintRequestSchema = new mongoose.Schema({
     configDeadline: { type: Date }, // 7 days from payment
     reminderSent: { type: Boolean, default: false },
     autoCancelledAt: { type: Date },
+    // When we last sent a pre-payment "idle / unconfigured" nudge (distinct from
+    // the post-payment configDeadline reminder above). Drives the nudge cron's
+    // cooldown so customers aren't emailed repeatedly.
+    idleNudgeSentAt: { type: Date, default: null },
 
     // Delivery information
     shippingAddress: {

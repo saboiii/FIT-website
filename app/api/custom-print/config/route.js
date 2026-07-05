@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { connectToDatabase } from '@/lib/db'
 import CustomPrintRequest from '@/models/CustomPrintRequest'
+import Product from '@/models/Product'
+import { sendEmail } from '@/lib/email'
+import { buildManualQuoteAdminEmail } from '@/lib/manualQuoteEmail'
+import { notifyCustomPrintEvent } from '@/lib/notifications/customPrint'
 
 const STATUS_RANK = {
     pending_upload: 0,
@@ -52,7 +56,7 @@ export async function PUT(req) {
         await connectToDatabase()
 
         const body = await req.json()
-        const { requestId, printSettings, meshColors } = body
+        const { requestId, printSettings, meshColors, generic, mode } = body
 
         if (!requestId) {
             return NextResponse.json({ error: 'Request ID is required' }, { status: 400 })
@@ -68,8 +72,28 @@ export async function PUT(req) {
             return NextResponse.json({ error: 'Custom print request not found' }, { status: 404 })
         }
 
-        // Update print configuration
+        const isManual = mode === 'manual'
+
+        // Update print configuration (persist mode). Never assign
+        // `generic: undefined` — Mongoose fails casting undefined to the
+        // subdocument. A MANUAL (advanced) save supersedes any earlier
+        // simple-mode selection entirely, so its generic block is dropped;
+        // instant saves carry the sent generic; otherwise preserve what's there.
+        const existingGeneric = customPrintRequest.printConfiguration?.generic
+        const nextGeneric = isManual
+            ? null
+            : generic && typeof generic === 'object'
+                ? {
+                    strength: generic.strength ?? null,
+                    quality: generic.quality ?? null,
+                    colour: generic.colour ?? null,
+                    material: generic.material ?? null,
+                }
+                : (existingGeneric && typeof existingGeneric.toObject === 'function'
+                    ? existingGeneric.toObject()
+                    : existingGeneric) || null
         customPrintRequest.printConfiguration = {
+            ...(nextGeneric ? { generic: nextGeneric } : {}),
             meshColors: meshColors || {},
             printSettings: {
                 layerHeight: printSettings.layerHeight,
@@ -88,10 +112,65 @@ export async function PUT(req) {
             isConfigured: true
         }
 
+        // Persist the quote mode (instant vs manual). The instant path will
+        // separately POST /api/quote to compute and persist the actual quote;
+        // the manual path stays at `configured` until an admin sets a quote.
+        if (mode === 'instant' || mode === 'manual') {
+            customPrintRequest.quoteMode = mode
+        }
+
+        // A manual save supersedes any prior instant quote: clear the stale
+        // server quote so the cart stops showing the old instant price, and
+        // step the request back to `configured` to await a fresh admin quote.
+        if (isManual) {
+            customPrintRequest.quote = undefined
+            customPrintRequest.quotedAt = undefined
+            if (customPrintRequest.status === 'quoted') {
+                customPrintRequest.status = 'configured'
+                customPrintRequest.statusHistory = customPrintRequest.statusHistory || []
+                customPrintRequest.statusHistory.push({
+                    status: 'configured',
+                    updatedAt: new Date(),
+                    note: 'Switched to advanced (manual) configuration — awaiting admin quote',
+                })
+            }
+        }
+
         // Ensure status never lags behind stored data (e.g. pending_upload -> configured)
         maybeUpgradeStatusToMatchData(customPrintRequest, 'Print configuration saved');
 
         await customPrintRequest.save()
+
+        // Manual mode: best-effort notify the admin so they know to quote, and
+        // tell the customer their config is in and a quote is coming (email +
+        // buyer↔vendor chat). Never block the save on notification failure —
+        // credentials/Stream may be unset in some envs.
+        if (customPrintRequest.quoteMode === 'manual') {
+            const adminEmail = process.env.ADMIN_EMAIL || process.env.GMAIL_USER
+            if (adminEmail) {
+                try {
+                    const { subject, html } = buildManualQuoteAdminEmail({
+                        request: customPrintRequest.toObject(),
+                    })
+                    await sendEmail({ to: adminEmail, subject, html })
+                } catch (emailErr) {
+                    console.error('Manual-quote admin notification failed:', emailErr)
+                }
+            }
+
+            try {
+                const product = await Product.findOne({ slug: 'custom-print-request' })
+                    .select('creatorUserId')
+                    .lean()
+                await notifyCustomPrintEvent({
+                    event: 'awaiting-quote',
+                    request: customPrintRequest.toObject(),
+                    product,
+                })
+            } catch (notifyErr) {
+                console.error('Awaiting-quote customer notification failed:', notifyErr)
+            }
+        }
 
         return NextResponse.json({
             success: true,
@@ -101,9 +180,7 @@ export async function PUT(req) {
 
     } catch (error) {
         console.error('Error saving print configuration:', error)
-        return NextResponse.json({
-            error: 'Failed to save configuration',
-            details: error.message
-        }, { status: 500 })
+        // Full detail is logged above; never echo internals to the client.
+        return NextResponse.json({ error: 'Failed to save configuration' }, { status: 500 })
     }
 }

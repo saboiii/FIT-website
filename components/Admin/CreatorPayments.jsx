@@ -1,17 +1,71 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { FaRegCopy, FaDownload } from 'react-icons/fa'
+import { IoDownloadOutline, IoCardOutline } from 'react-icons/io5'
 import * as XLSX from 'xlsx'
+import {
+    StatTile,
+    ViewTabs,
+    GlassBar,
+    StatusPill,
+    DottedRow,
+    LedgerTable,
+    PeekPanel,
+    EmptyState,
+    SkeletonRow,
+    FreshnessStamp,
+} from '@/components/dashboard-ui'
+import { barSelectCls, barDateCls, quietPillCls, useUrlSub } from './dashPanelUi'
+
+// Payments as accounting (blueprint §9.10): three sub-views over the same
+// loaded sessions — the ledger, the payout run, and the month statements.
+const SUB_VIEWS = [
+    { key: 'transactions', label: 'Transactions' },
+    { key: 'byCreator', label: 'By creator' },
+    { key: 'statements', label: 'Statements' },
+]
+
+const money = (cents) => `$${(cents / 100).toFixed(2)}`
+
+const unitPriceLabel = (unitPrice) =>
+    `$${typeof unitPrice === 'number' ? unitPrice.toFixed(2) : (unitPrice / 100).toFixed(2)}`
+
+/**
+ * Product-vs-shipping split as a bar-only pill: the amounts stay off the
+ * screen at rest and surface in the hover tooltip (client directive). Ink =
+ * product revenue, hatch = shipping.
+ */
+function RevenueSplitBar({ productCents, shippingCents }) {
+    const total = Math.max(productCents + shippingCents, 1)
+    const label = `Product ${money(productCents)} / Shipping ${money(shippingCents)}`
+    return (
+        <div
+            role="img"
+            aria-label={label}
+            title={label}
+            className="flex h-4 max-w-[220px] rounded-full overflow-hidden border border-[var(--dash-line)]"
+        >
+            <div
+                className="bg-[var(--dash-ink)]"
+                title={`Product ${money(productCents)}`}
+                style={{ width: `${(Math.max(0, productCents) / total) * 100}%` }}
+            />
+            <div className="dash-hatch bg-[var(--dash-card)] flex-1" title={`Shipping ${money(shippingCents)}`} />
+        </div>
+    )
+}
 
 export default function CreatorPayments() {
     const { showToast } = useToast()
     const [sessions, setSessions] = useState([])
+    const [fetchedAt, setFetchedAt] = useState(null)
     const [sessionsLoading, setSessionsLoading] = useState(false)
     const [sessionFilter, setSessionFilter] = useState('pending')
     const [enrichedSessions, setEnrichedSessions] = useState([])
     const [productCache, setProductCache] = useState({})
     const [userCache, setUserCache] = useState({})
+    const [subView, setSubView] = useUrlSub(SUB_VIEWS.map((v) => v.key), 'transactions')
+    const [peekSessionId, setPeekSessionId] = useState(null)
 
     // Date range states
     const [dateRange, setDateRange] = useState('all')
@@ -22,42 +76,6 @@ export default function CreatorPayments() {
     useEffect(() => {
         fetchSessions()
     }, [sessionFilter, dateRange, customStartDate, customEndDate])
-
-    const fetchProductData = async (productId) => {
-        if (productCache[productId]) {
-            return productCache[productId]
-        }
-
-        try {
-            const response = await fetch(`/api/product/${productId}`)
-            if (response.ok) {
-                const product = await response.json()
-                setProductCache(prev => ({ ...prev, [productId]: product }))
-                return product
-            }
-        } catch (error) {
-            console.error('Failed to fetch product:', error)
-        }
-        return null
-    }
-
-    const fetchUserData = async (userId) => {
-        if (userCache[userId]) {
-            return userCache[userId]
-        }
-
-        try {
-            const response = await fetch(`/api/user/${userId}`)
-            if (response.ok) {
-                const user = await response.json()
-                setUserCache(prev => ({ ...prev, [userId]: user }))
-                return user
-            }
-        } catch (error) {
-            console.error('Failed to fetch user:', error)
-        }
-        return null
-    }
 
     const enrichSessionsWithData = async (sessions) => {
         const uniqueUserIds = new Set()
@@ -100,7 +118,6 @@ export default function CreatorPayments() {
                 productLookup[product._id] = product
             }
         })
-
 
         const enrichedSessionsData = sessions.map(session => {
             const enrichedSession = { ...session, enrichedData: {} }
@@ -260,6 +277,7 @@ export default function CreatorPayments() {
             // Enrich sessions with product and user data
             const enriched = await enrichSessionsWithData(data.sessions)
             setEnrichedSessions(enriched)
+            setFetchedAt(Date.now())
         } catch (error) {
             showToast('Failed to load sessions: ' + error.message, 'error')
         } finally {
@@ -310,87 +328,226 @@ export default function CreatorPayments() {
         return { startDate, endDate }
     }
 
+    // --- Client-side aggregations over the loaded sessions (§9.10) ---
+
+    // Volume across creators — same sum the legacy summary showed.
+    const volumeCents = useMemo(
+        () => enrichedSessions.reduce((sum, s) => (
+            sum + Object.values(s.salesData).reduce((total, sale) => total + sale.totalAmount, 0)
+        ), 0),
+        [enrichedSessions]
+    )
+
+    const pendingCount = useMemo(
+        () => enrichedSessions.filter(s => !s.processed).length,
+        [enrichedSessions]
+    )
+
+    // Transactions: sessions grouped by day, newest group first.
+    const dayGroups = useMemo(() => {
+        const map = new Map()
+        enrichedSessions.forEach(session => {
+            const d = new Date(session.createdAt)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+            if (!map.has(key)) {
+                map.set(key, {
+                    key,
+                    label: d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
+                    sessions: [],
+                })
+            }
+            map.get(key).sessions.push(session)
+        })
+        return [...map.values()].sort((a, b) => (a.key < b.key ? 1 : -1))
+    }, [enrichedSessions])
+
+    // By creator: the payout-run view — one row per creator across the view.
+    const creatorRows = useMemo(() => {
+        const map = {}
+        enrichedSessions.forEach(session => {
+            Object.entries(session.salesData).forEach(([creatorId, saleData]) => {
+                if (!map[creatorId]) {
+                    map[creatorId] = {
+                        creatorId,
+                        user: null,
+                        sessions: 0,
+                        items: 0,
+                        productRevenue: 0,
+                        shippingRevenue: 0,
+                        totalAmount: 0,
+                    }
+                }
+                const row = map[creatorId]
+                row.user = row.user || session.enrichedData?.[creatorId]?.user || null
+                row.sessions += 1
+                row.items += saleData.items.length
+                row.productRevenue += saleData.productRevenue
+                row.shippingRevenue += saleData.shippingRevenue
+                row.totalAmount += saleData.totalAmount
+            })
+        })
+        return Object.values(map).sort((a, b) => b.totalAmount - a.totalAmount)
+    }, [enrichedSessions])
+
+    // Statements: month rollups with pending/processed split.
+    const monthRows = useMemo(() => {
+        const map = {}
+        enrichedSessions.forEach(session => {
+            const d = new Date(session.createdAt)
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+            if (!map[key]) {
+                map[key] = {
+                    key,
+                    label: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+                    sessions: 0,
+                    gross: 0,
+                    productRevenue: 0,
+                    shippingRevenue: 0,
+                    pending: 0,
+                    processed: 0,
+                }
+            }
+            const row = map[key]
+            row.sessions += 1
+            Object.values(session.salesData).forEach(sale => {
+                row.gross += sale.totalAmount
+                row.productRevenue += sale.productRevenue
+                row.shippingRevenue += sale.shippingRevenue
+            })
+            if (session.processed) row.processed += 1
+            else row.pending += 1
+        })
+        return Object.values(map).sort((a, b) => (a.key < b.key ? 1 : -1))
+    }, [enrichedSessions])
+
+    const monthTotals = useMemo(() => monthRows.reduce(
+        (acc, r) => ({
+            sessions: acc.sessions + r.sessions,
+            gross: acc.gross + r.gross,
+            productRevenue: acc.productRevenue + r.productRevenue,
+            shippingRevenue: acc.shippingRevenue + r.shippingRevenue,
+            pending: acc.pending + r.pending,
+            processed: acc.processed + r.processed,
+        }),
+        { sessions: 0, gross: 0, productRevenue: 0, shippingRevenue: 0, pending: 0, processed: 0 }
+    ), [monthRows])
+
+    // Export respects the active sub-view (§9.10): Transactions keeps the
+    // detailed legacy export verbatim; the other views export their rows.
     const exportToExcel = () => {
         if (enrichedSessions.length === 0) {
             showToast('No data to export', 'error')
             return
         }
 
-        // Prepare data for export
-        const exportData = []
-
-        enrichedSessions.forEach(session => {
-            Object.entries(session.salesData).forEach(([creatorId, saleData]) => {
-                const enrichedCreatorData = session.enrichedData[creatorId]
-
-                // Add creator summary row
-                exportData.push({
-                    'Session ID': session.sessionId,
-                    'Date': new Date(session.createdAt).toLocaleDateString(),
-                    'Status': session.processed ? 'Processed' : 'Pending',
-                    'Creator Name': enrichedCreatorData?.user?.name || 'Unknown',
-                    'Creator Email': enrichedCreatorData?.user?.email || creatorId,
-                    'Creator Phone': enrichedCreatorData?.user?.phone || 'N/A',
-                    'Stripe Account': enrichedCreatorData?.user?.stripeAccountId || 'No Account',
-                    'Is Admin': enrichedCreatorData?.user?.role === 'admin' ? 'Yes' : 'No',
-                    'Total Amount': `$${(saleData.totalAmount / 100).toFixed(2)}`,
-                    'Product Revenue': `$${(saleData.productRevenue / 100).toFixed(2)}`,
-                    'Shipping Revenue': `$${(saleData.shippingRevenue / 100).toFixed(2)}`,
-                    'Currency': session.currency.toUpperCase(),
-                    'Buyer Name': session.enrichedData.buyer?.name || 'Unknown',
-                    'Buyer Email': session.enrichedData.buyer?.email || 'N/A',
-                    'Buyer Phone': session.enrichedData.buyer?.phone || 'N/A',
-                    'Items Count': saleData.items.length,
-                })
-
-                // Add item details
-                enrichedCreatorData?.items?.forEach((item, idx) => {
-                    exportData.push({
-                        'Session ID': `  └─ Item ${idx + 1}`,
-                        'Product Name': item.productName,
-                        'Variant': item.variantName,
-                        'Quantity': item.quantity,
-                        'Unit Price': `$${typeof item.unitPrice === 'number' ? item.unitPrice.toFixed(2) : (item.unitPrice / 100).toFixed(2)}`,
-                        'Delivery Type': item.deliveryType,
-                    })
-                })
-            })
-        })
-
-        // Create worksheet
-        const ws = XLSX.utils.json_to_sheet(exportData)
-
-        // Set column widths
-        ws['!cols'] = [
-            { wch: 20 }, // Session ID
-            { wch: 12 }, // Date
-            { wch: 10 }, // Status
-            { wch: 20 }, // Creator Name
-            { wch: 25 }, // Creator Email
-            { wch: 15 }, // Creator Phone
-            { wch: 20 }, // Stripe Account
-            { wch: 10 }, // Is Admin
-            { wch: 12 }, // Total Amount
-            { wch: 15 }, // Product Revenue
-            { wch: 15 }, // Shipping Revenue
-            { wch: 10 }, // Currency
-            { wch: 20 }, // Buyer Name
-            { wch: 25 }, // Buyer Email
-            { wch: 15 }, // Buyer Phone
-            { wch: 12 }, // Items Count
-        ]
-
-        // Create workbook
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(wb, ws, 'Creator Payments')
-
-        // Generate filename with date range
         const dateRangeText = dateRange === 'all' ? 'All_Time' :
             dateRange === 'custom' ? `${customStartDate}_to_${customEndDate}` :
                 dateRange.charAt(0).toUpperCase() + dateRange.slice(1)
-        const filename = `Creator_Payments_${dateRangeText}_${new Date().toISOString().split('T')[0]}.xlsx`
 
-        // Save file
+        let exportData = []
+        let cols = []
+        let sheetName = 'Creator Payments'
+        let filename = `Creator_Payments_${dateRangeText}_${new Date().toISOString().split('T')[0]}.xlsx`
+
+        if (subView === 'byCreator') {
+            exportData = creatorRows.map(row => ({
+                'Creator Name': row.user?.name || 'Unknown',
+                'Creator Email': row.user?.email || row.creatorId,
+                'Stripe Account': row.user?.role === 'admin' ? 'Admin Account' : (row.user?.stripeAccountId || 'No Account'),
+                'Sessions': row.sessions,
+                'Items': row.items,
+                'Product Revenue': `$${(row.productRevenue / 100).toFixed(2)}`,
+                'Shipping Revenue': `$${(row.shippingRevenue / 100).toFixed(2)}`,
+                'Owed Total': `$${(row.totalAmount / 100).toFixed(2)}`,
+            }))
+            cols = [{ wch: 20 }, { wch: 25 }, { wch: 20 }, { wch: 10 }, { wch: 8 }, { wch: 15 }, { wch: 15 }, { wch: 12 }]
+            sheetName = 'By Creator'
+            filename = `Creator_Payments_By_Creator_${dateRangeText}_${new Date().toISOString().split('T')[0]}.xlsx`
+        } else if (subView === 'statements') {
+            exportData = monthRows.map(row => ({
+                'Month': row.label,
+                'Sessions': row.sessions,
+                'Gross Revenue': `$${(row.gross / 100).toFixed(2)}`,
+                'Product Revenue': `$${(row.productRevenue / 100).toFixed(2)}`,
+                'Shipping Revenue': `$${(row.shippingRevenue / 100).toFixed(2)}`,
+                'Pending': row.pending,
+                'Processed': row.processed,
+            }))
+            exportData.push({
+                'Month': 'Total',
+                'Sessions': monthTotals.sessions,
+                'Gross Revenue': `$${(monthTotals.gross / 100).toFixed(2)}`,
+                'Product Revenue': `$${(monthTotals.productRevenue / 100).toFixed(2)}`,
+                'Shipping Revenue': `$${(monthTotals.shippingRevenue / 100).toFixed(2)}`,
+                'Pending': monthTotals.pending,
+                'Processed': monthTotals.processed,
+            })
+            cols = [{ wch: 16 }, { wch: 10 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }]
+            sheetName = 'Statements'
+            filename = `Creator_Payments_Statements_${dateRangeText}_${new Date().toISOString().split('T')[0]}.xlsx`
+        } else {
+            // Transactions: the legacy per-creator + per-item detail export, unchanged.
+            enrichedSessions.forEach(session => {
+                Object.entries(session.salesData).forEach(([creatorId, saleData]) => {
+                    const enrichedCreatorData = session.enrichedData[creatorId]
+
+                    // Add creator summary row
+                    exportData.push({
+                        'Session ID': session.sessionId,
+                        'Date': new Date(session.createdAt).toLocaleDateString(),
+                        'Status': session.processed ? 'Processed' : 'Pending',
+                        'Creator Name': enrichedCreatorData?.user?.name || 'Unknown',
+                        'Creator Email': enrichedCreatorData?.user?.email || creatorId,
+                        'Creator Phone': enrichedCreatorData?.user?.phone || 'N/A',
+                        'Stripe Account': enrichedCreatorData?.user?.stripeAccountId || 'No Account',
+                        'Is Admin': enrichedCreatorData?.user?.role === 'admin' ? 'Yes' : 'No',
+                        'Total Amount': `$${(saleData.totalAmount / 100).toFixed(2)}`,
+                        'Product Revenue': `$${(saleData.productRevenue / 100).toFixed(2)}`,
+                        'Shipping Revenue': `$${(saleData.shippingRevenue / 100).toFixed(2)}`,
+                        'Currency': session.currency.toUpperCase(),
+                        'Buyer Name': session.enrichedData.buyer?.name || 'Unknown',
+                        'Buyer Email': session.enrichedData.buyer?.email || 'N/A',
+                        'Buyer Phone': session.enrichedData.buyer?.phone || 'N/A',
+                        'Items Count': saleData.items.length,
+                    })
+
+                    // Add item details
+                    enrichedCreatorData?.items?.forEach((item, idx) => {
+                        exportData.push({
+                            'Session ID': `  └─ Item ${idx + 1}`,
+                            'Product Name': item.productName,
+                            'Variant': item.variantName,
+                            'Quantity': item.quantity,
+                            'Unit Price': `$${typeof item.unitPrice === 'number' ? item.unitPrice.toFixed(2) : (item.unitPrice / 100).toFixed(2)}`,
+                            'Delivery Type': item.deliveryType,
+                        })
+                    })
+                })
+            })
+            cols = [
+                { wch: 20 }, // Session ID
+                { wch: 12 }, // Date
+                { wch: 10 }, // Status
+                { wch: 20 }, // Creator Name
+                { wch: 25 }, // Creator Email
+                { wch: 15 }, // Creator Phone
+                { wch: 20 }, // Stripe Account
+                { wch: 10 }, // Is Admin
+                { wch: 12 }, // Total Amount
+                { wch: 15 }, // Product Revenue
+                { wch: 15 }, // Shipping Revenue
+                { wch: 10 }, // Currency
+                { wch: 20 }, // Buyer Name
+                { wch: 25 }, // Buyer Email
+                { wch: 15 }, // Buyer Phone
+                { wch: 12 }, // Items Count
+            ]
+        }
+
+        const ws = XLSX.utils.json_to_sheet(exportData)
+        ws['!cols'] = cols
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
         XLSX.writeFile(wb, filename)
         showToast('Export successful!', 'success')
     }
@@ -426,300 +583,429 @@ export default function CreatorPayments() {
         }
     }
 
+    const peekSession = peekSessionId
+        ? enrichedSessions.find((s) => s.sessionId === peekSessionId)
+        : null
+
+    // Processed toggle rendered as the row's ONE StatusPill; span[role=button]
+    // so it can live inside the clickable ledger row.
+    const processedToggle = (session) => (
+        <span
+            role="button"
+            tabIndex={0}
+            aria-label={session.processed ? 'Mark as pending' : 'Mark as processed'}
+            title={session.processed ? 'Click to mark as pending' : 'Click to mark as processed'}
+            onClick={(e) => {
+                e.stopPropagation()
+                markSessionAsProcessed(session.sessionId, !session.processed)
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    markSessionAsProcessed(session.sessionId, !session.processed)
+                }
+            }}
+            className="cursor-pointer inline-flex"
+        >
+            <StatusPill tone={session.processed ? 'ink' : 'hatch'}>
+                {session.processed ? 'Processed' : 'Pending'}
+            </StatusPill>
+        </span>
+    )
+
+    const transactionColumns = [
+        { key: 'session', label: 'Session', width: '1.5fr' },
+        { key: 'buyer', label: 'Buyer', width: '1.5fr' },
+        { key: 'creators', label: 'Creators', width: '0.6fr' },
+        { key: 'total', label: 'Total', align: 'right', width: '0.7fr' },
+        { key: 'status', label: 'Status', align: 'right', width: '0.9fr' },
+    ]
+
+    // Sales gets a real column of its own so the count never squishes against
+    // the split bar; the bar carries its numbers in the hover tooltip.
+    const creatorColumns = [
+        { key: 'creator', label: 'Creator', width: 'minmax(0,1.5fr)' },
+        { key: 'sales', label: 'Sales', align: 'right', width: 'minmax(4rem,0.7fr)' },
+        { key: 'split', label: 'Product / shipping', width: 'minmax(0,1.4fr)' },
+        { key: 'stripe', label: 'Stripe', width: 'minmax(0,1.1fr)' },
+        { key: 'owed', label: 'Owed', align: 'right', width: 'minmax(5rem,0.7fr)' },
+    ]
+
+    const stripeChip = (user) => {
+        if (user?.role === 'admin') {
+            return <StatusPill tone="paper">Admin account</StatusPill>
+        }
+        if (user?.stripeAccountId) {
+            return (
+                <span
+                    role="button"
+                    tabIndex={0}
+                    title="Copy Stripe account ID"
+                    onClick={(e) => {
+                        e.stopPropagation()
+                        copyToClipboard(user.stripeAccountId, 'Stripe Account ID copied')
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.stopPropagation()
+                            copyToClipboard(user.stripeAccountId, 'Stripe Account ID copied')
+                        }
+                    }}
+                    className="cursor-pointer inline-flex max-w-full"
+                >
+                    <StatusPill tone="paper" className="max-w-full">
+                        <span className="dash-data truncate">{user.stripeAccountId}</span>
+                    </StatusPill>
+                </span>
+            )
+        }
+        return <StatusPill tone="bad">No Stripe account</StatusPill>
+    }
+
     return (
-        <div className="flex flex-col gap-6 p-6 md:p-12 bg-borderColor/30 min-h-screen">
-            {/* Header Section */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h2 className="text-xl sm:text-2xl font-semibold text-textColor">Creator Payments</h2>
-                    <p className="text-xs sm:text-sm text-lightColor mt-1">Manage and track creator revenue from digital product sales</p>
-                </div>
+        <div className="p-4 md:p-6">
+            {/* Filters live in the GlassBar as chips/selects (§5.9) */}
+            <GlassBar className="flex-wrap">
+                <select
+                    value={sessionFilter}
+                    onChange={(e) => setSessionFilter(e.target.value)}
+                    aria-label="Status filter"
+                    className={barSelectCls}
+                >
+                    <option value="all">All sessions</option>
+                    <option value="pending">Pending</option>
+                    <option value="processed">Processed</option>
+                </select>
+                <select
+                    value={dateRange}
+                    onChange={(e) => {
+                        setDateRange(e.target.value)
+                        setShowDatePicker(e.target.value === 'custom')
+                    }}
+                    aria-label="Date range"
+                    className={barSelectCls}
+                >
+                    <option value="all">All time</option>
+                    <option value="today">Today</option>
+                    <option value="week">Past week</option>
+                    <option value="month">Past month</option>
+                    <option value="3months">Past 3 months</option>
+                    <option value="6months">Past 6 months</option>
+                    <option value="year">Past year</option>
+                    <option value="custom">Custom range</option>
+                </select>
+                {showDatePicker && (
+                    <span className="flex items-center gap-2">
+                        <input
+                            type="date"
+                            value={customStartDate}
+                            onChange={(e) => setCustomStartDate(e.target.value)}
+                            max={customEndDate || new Date().toISOString().split('T')[0]}
+                            aria-label="Start date"
+                            className={barDateCls}
+                        />
+                        <span className="dash-soft text-[13px]" aria-hidden="true">–</span>
+                        <input
+                            type="date"
+                            value={customEndDate}
+                            onChange={(e) => setCustomEndDate(e.target.value)}
+                            min={customStartDate}
+                            max={new Date().toISOString().split('T')[0]}
+                            aria-label="End date"
+                            className={barDateCls}
+                        />
+                    </span>
+                )}
                 <button
+                    type="button"
                     onClick={exportToExcel}
                     disabled={enrichedSessions.length === 0}
-                    className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+                    className={`${quietPillCls} ml-auto flex items-center gap-1.5`}
                 >
-                    <FaDownload />
-                    Export to Excel
+                    <IoDownloadOutline size={14} aria-hidden="true" /> Export
                 </button>
+                <FreshnessStamp at={fetchedAt} />
+            </GlassBar>
+
+            {/* Summary strip — volume is the view's ink hero (§5.9) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                <StatTile label="Sessions" value={enrichedSessions.length} hint="in current filter" />
+                <StatTile label="Volume" value={money(volumeCents)} hint="across creators" variant="ink" />
+                <StatTile label="Pending" value={pendingCount} hint="to process" />
             </div>
 
-            {/* Filter Controls */}
-            <div className="bg-white border border-borderColor rounded-xl p-4 sm:p-6 shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    {/* Status Filter */}
-                    <div>
-                        <label className="block text-sm font-medium text-textColor mb-2">Status</label>
-                        <select
-                            value={sessionFilter}
-                            onChange={(e) => setSessionFilter(e.target.value)}
-                            className="formInput"
-                        >
-                            <option value="all">All Sessions</option>
-                            <option value="pending">Pending</option>
-                            <option value="processed">Processed</option>
-                        </select>
-                    </div>
+            <ViewTabs
+                tabs={SUB_VIEWS.map((v) => ({ key: v.key, label: v.label }))}
+                active={subView}
+                onChange={setSubView}
+                className="mt-4"
+            />
 
-                    {/* Date Range Filter */}
-                    <div>
-                        <label className="block text-sm font-medium text-textColor mb-2">Date Range</label>
-                        <select
-                            value={dateRange}
-                            onChange={(e) => {
-                                setDateRange(e.target.value)
-                                if (e.target.value === 'custom') {
-                                    setShowDatePicker(true)
-                                } else {
-                                    setShowDatePicker(false)
-                                }
-                            }}
-                            className="formInput"
-                        >
-                            <option value="all">All Time</option>
-                            <option value="today">Today</option>
-                            <option value="week">Past Week</option>
-                            <option value="month">Past Month</option>
-                            <option value="3months">Past 3 Months</option>
-                            <option value="6months">Past 6 Months</option>
-                            <option value="year">Past Year</option>
-                            <option value="custom">Custom Range</option>
-                        </select>
+            <div className="mt-4">
+                {sessionsLoading ? (
+                    <div className="flex flex-col gap-3" aria-label="Loading sessions">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <SkeletonRow key={i} />
+                        ))}
                     </div>
+                ) : enrichedSessions.length === 0 ? (
+                    <EmptyState
+                        icon={<IoCardOutline />}
+                        title="No Sessions Found"
+                        body="Nothing matches the selected status and date range."
+                        secondary="Clear filters"
+                        onSecondary={() => {
+                            setSessionFilter('all')
+                            setDateRange('all')
+                            setShowDatePicker(false)
+                        }}
+                    />
+                ) : subView === 'byCreator' ? (
+                    <LedgerTable
+                        columns={creatorColumns}
+                        groups={[{
+                            key: 'creators',
+                            rows: creatorRows.map((row) => ({
+                                key: row.creatorId,
+                                cells: [
+                                    <div key="creator" className="min-w-0">
+                                        <p className="text-[13px] font-medium truncate">{row.user?.name || 'Unknown Creator'}</p>
+                                        <p className="text-[13px] dash-soft truncate">{row.user?.email || row.creatorId}</p>
+                                    </div>,
+                                    `${row.sessions}`,
+                                    <RevenueSplitBar
+                                        key="split"
+                                        productCents={row.productRevenue}
+                                        shippingCents={row.shippingRevenue}
+                                    />,
+                                    <div key="stripe" className="min-w-0">{stripeChip(row.user)}</div>,
+                                    money(row.totalAmount),
+                                ],
+                            })),
+                        }]}
+                    />
+                ) : subView === 'statements' ? (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-[13px]">
+                            <thead>
+                                <tr className="border-b border-[var(--dash-line)]">
+                                    <th className="dash-label text-left px-4 py-2 font-medium">Month</th>
+                                    <th className="dash-label text-right px-4 py-2 font-medium">Sessions</th>
+                                    <th className="dash-label text-right px-4 py-2 font-medium">Gross</th>
+                                    <th className="dash-label text-right px-4 py-2 font-medium">Product</th>
+                                    <th className="dash-label text-right px-4 py-2 font-medium">Shipping</th>
+                                    <th className="dash-label text-right px-4 py-2 font-medium">Pending</th>
+                                    <th className="dash-label text-right px-4 py-2 font-medium">Processed</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[var(--dash-line)]">
+                                {monthRows.map((row) => (
+                                    <tr key={row.key}>
+                                        <td className="px-4 py-2.5 font-medium">{row.label}</td>
+                                        <td className="px-4 py-2.5 text-right dash-data">{row.sessions}</td>
+                                        <td className="px-4 py-2.5 text-right dash-data">{money(row.gross)}</td>
+                                        <td className="px-4 py-2.5 text-right dash-data">{money(row.productRevenue)}</td>
+                                        <td className="px-4 py-2.5 text-right dash-data">{money(row.shippingRevenue)}</td>
+                                        <td className="px-4 py-2.5 text-right dash-data">{row.pending}</td>
+                                        <td className="px-4 py-2.5 text-right dash-data">{row.processed}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr className="border-t border-[var(--dash-ink)]">
+                                    <td className="px-4 py-2.5 font-semibold">Total</td>
+                                    <td className="px-4 py-2.5 text-right dash-data font-semibold">{monthTotals.sessions}</td>
+                                    <td className="px-4 py-2.5 text-right dash-data font-semibold">{money(monthTotals.gross)}</td>
+                                    <td className="px-4 py-2.5 text-right dash-data font-semibold">{money(monthTotals.productRevenue)}</td>
+                                    <td className="px-4 py-2.5 text-right dash-data font-semibold">{money(monthTotals.shippingRevenue)}</td>
+                                    <td className="px-4 py-2.5 text-right dash-data font-semibold">{monthTotals.pending}</td>
+                                    <td className="px-4 py-2.5 text-right dash-data font-semibold">{monthTotals.processed}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                ) : (
+                    <LedgerTable
+                        columns={transactionColumns}
+                        groups={dayGroups.map((group) => ({
+                            key: group.key,
+                            label: group.label,
+                            rows: group.sessions.map((session) => ({
+                                key: session.sessionId,
+                                onClick: () => setPeekSessionId(session.sessionId),
+                                selected: peekSessionId === session.sessionId,
+                                cells: [
+                                    <span
+                                        key="id"
+                                        role="button"
+                                        tabIndex={0}
+                                        title={`${session.sessionId} (click to copy)`}
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            copyToClipboard(session.sessionId, 'Session ID copied')
+                                        }}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.stopPropagation()
+                                                copyToClipboard(session.sessionId, 'Session ID copied')
+                                            }
+                                        }}
+                                        className="dash-data dash-soft hover:text-[var(--dash-ink)] cursor-pointer truncate block max-w-full"
+                                    >
+                                        {session.sessionId.substring(0, 18)}…
+                                    </span>,
+                                    <div key="buyer" className="min-w-0">
+                                        <p className="text-[13px] truncate">{session.enrichedData.buyer?.name || 'Unknown'}</p>
+                                        <p className="text-[13px] dash-soft truncate">{session.enrichedData.buyer?.email || ''}</p>
+                                    </div>,
+                                    `${Object.keys(session.salesData).length}`,
+                                    money(session.totalAmount),
+                                    <span key="status" className="inline-flex justify-end w-full">{processedToggle(session)}</span>,
+                                ],
+                            })),
+                        }))}
+                    />
+                )}
+            </div>
 
-                    {/* Stats Summary */}
-                    <div className="flex flex-col justify-center">
-                        <div className="text-sm text-lightColor mb-1">Summary</div>
-                        <div className="flex items-center gap-4 text-sm">
-                            <span className="text-textColor font-medium">{enrichedSessions.length} sessions</span>
-                            <span className="text-lightColor">•</span>
-                            <span className="text-textColor font-medium">
-                                ${(enrichedSessions.reduce((sum, s) => {
-                                    return sum + Object.values(s.salesData).reduce((total, sale) => total + sale.totalAmount, 0)
-                                }, 0) / 100).toFixed(2)}
+            <PeekPanel
+                open={Boolean(peekSession)}
+                onClose={() => setPeekSessionId(null)}
+                title={peekSession ? `Session ${peekSession.sessionId.substring(0, 14)}…` : ''}
+                widthClass="max-w-[520px]"
+                actions={peekSession && (
+                    <>
+                        {/* Honest stub (openspec add-refunds-ui): no refund endpoint yet. */}
+                        <button
+                            type="button"
+                            disabled
+                            title="Refunds, coming soon"
+                            className="dash-hoverable rounded-full px-3.5 py-1.5 text-[13px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-bad)] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Refund…
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => markSessionAsProcessed(peekSession.sessionId, !peekSession.processed)}
+                            className={quietPillCls}
+                        >
+                            {peekSession.processed ? 'Mark as pending' : 'Mark as processed'}
+                        </button>
+                    </>
+                )}
+            >
+                {peekSession && (
+                    <div className="flex flex-col gap-6">
+                        <div className="flex items-center justify-between gap-3">
+                            <StatusPill tone={peekSession.processed ? 'ink' : 'hatch'}>
+                                {peekSession.processed ? 'Processed' : 'Pending'}
+                            </StatusPill>
+                            <span className="dash-data">
+                                {money(peekSession.totalAmount)} {peekSession.currency.toUpperCase()}
                             </span>
                         </div>
-                    </div>
-                </div>
 
-                {/* Custom Date Range Picker */}
-                {showDatePicker && (
-                    <div className="mt-4 pt-4 border-t border-borderColor">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-textColor mb-2">Start Date</label>
-                                <input
-                                    type="date"
-                                    value={customStartDate}
-                                    onChange={(e) => setCustomStartDate(e.target.value)}
-                                    max={customEndDate || new Date().toISOString().split('T')[0]}
-                                    className="formInput"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-textColor mb-2">End Date</label>
-                                <input
-                                    type="date"
-                                    value={customEndDate}
-                                    onChange={(e) => setCustomEndDate(e.target.value)}
-                                    min={customStartDate}
-                                    max={new Date().toISOString().split('T')[0]}
-                                    className="formInput"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>            {sessionsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                    <div className="loader" />
-                </div>
-            ) : enrichedSessions.length > 0 ? (
-                <div className="space-y-4">
-                    {enrichedSessions.map((session) => (
-                        <div key={session.sessionId} className="adminDashboardContainer">
-                            <div className="px-4 sm:px-6 py-4 border-b border-borderColor bg-baseColor">
-                                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-2">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                <h3 className="text-xs sm:text-sm font-mono text-textColor truncate" title={session.sessionId}>
-                                                    {session.sessionId.substring(0, 20)}...
-                                                </h3>
-                                                <button
-                                                    onClick={() => copyToClipboard(session.sessionId, 'Session ID copied')}
-                                                    className="text-lightColor hover:text-textColor transition-colors shrink-0"
-                                                    title="Copy Session ID"
-                                                >
-                                                    <FaRegCopy size={14} />
-                                                </button>
+                        {/* Buyer block */}
+                        <section>
+                            <h4 className="dash-label mb-1">Buyer</h4>
+                            {peekSession.enrichedData.buyer ? (
+                                <>
+                                    <DottedRow label="Name">{peekSession.enrichedData.buyer.name}</DottedRow>
+                                    <DottedRow label="Email">{peekSession.enrichedData.buyer.email}</DottedRow>
+                                    {peekSession.enrichedData.buyer.phone && peekSession.enrichedData.buyer.phone !== 'No phone' && (
+                                        <DottedRow label="Phone">{peekSession.enrichedData.buyer.phone}</DottedRow>
+                                    )}
+                                    {peekSession.enrichedData.buyer.address && peekSession.enrichedData.buyer.address !== 'No address' && (
+                                        <p className="text-[13px] dash-soft mt-1">{peekSession.enrichedData.buyer.address}</p>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="text-[13px] dash-soft">Buyer details unavailable.</p>
+                            )}
+                        </section>
+
+                        {/* Per-creator breakdown */}
+                        <section>
+                            <h4 className="dash-label mb-2">Creator sales</h4>
+                            <div className="flex flex-col gap-3">
+                                {Object.entries(peekSession.salesData).map(([creatorId, saleData]) => {
+                                    const enrichedCreatorData = peekSession.enrichedData[creatorId]
+                                    return (
+                                        <div
+                                            key={creatorId}
+                                            className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] p-3"
+                                        >
+                                            <div className="flex items-start justify-between gap-3 mb-1">
+                                                <div className="min-w-0">
+                                                    <p className="text-[13px] font-medium truncate">
+                                                        {enrichedCreatorData?.user?.name || 'Unknown Creator'}
+                                                    </p>
+                                                    <p className="text-[13px] dash-soft truncate">
+                                                        {enrichedCreatorData?.user?.email || `${creatorId.substring(0, 20)}…`}
+                                                    </p>
+                                                </div>
+                                                <span className="dash-data font-medium shrink-0">
+                                                    {money(saleData.totalAmount)}
+                                                </span>
                                             </div>
-                                            <span className={`inline-flex px-2 sm:px-3 py-1 text-xs font-medium rounded-full border shrink-0 ${session.processed
-                                                ? 'bg-green-100 border-green-800/50 text-green-800'
-                                                : 'bg-red-100 border-red-800/50 text-red-800'
-                                                }`}>
-                                                {session.processed ? 'Processed' : 'Pending'}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-lightColor">
-                                            <span className="font-medium text-textColor">
-                                                ${(session.totalAmount / 100).toFixed(2)} {session.currency.toUpperCase()}
-                                            </span>
-                                            <span className="hidden sm:inline">•</span>
-                                            <span>{new Date(session.createdAt).toLocaleDateString()}</span>
-                                            <span className="hidden sm:inline">•</span>
-                                            <span>{Object.keys(session.salesData).length} creator(s)</span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => markSessionAsProcessed(session.sessionId, !session.processed)}
-                                        className="formBlackButton text-xs w-full sm:w-auto shrink-0"
-                                    >
-                                        Mark as {session.processed ? 'Pending' : 'Processed'}
-                                    </button>
-                                </div>
-
-                                {/* Buyer Information */}
-                                {session.enrichedData.buyer && (
-                                    <div className="mt-3 pt-3 border-t border-borderColor text-sm text-lightColor">
-                                        <strong className="text-textColor">Buyer:</strong> {session.enrichedData.buyer.name} ({session.enrichedData.buyer.email})
-                                        {session.enrichedData.buyer.phone !== 'No phone' && (
-                                            <span> • {session.enrichedData.buyer.phone}</span>
-                                        )}
-                                        {session.enrichedData.buyer.address !== 'No address' && (
-                                            <div className="text-xs mt-1">
-                                                {session.enrichedData.buyer.address}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Sales Data Breakdown */}
-                            <div className="p-4 sm:p-6">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                                    {/* Creator Sales */}
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-textColor uppercase tracking-wide mb-3">Creator Sales</h4>
-                                        <div className="space-y-3">
-                                            {Object.entries(session.salesData).map(([creatorId, saleData]) => {
-                                                const enrichedCreatorData = session.enrichedData[creatorId]
-                                                return (
-                                                    <div key={creatorId} className="bg-baseColor border border-borderColor p-3 rounded-lg">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <div className="text-sm">
-                                                                <div className="font-medium text-textColor">
-                                                                    {enrichedCreatorData?.user?.name || 'Unknown Creator'}
-                                                                </div>
-                                                                <div className="text-xs text-lightColor">
-                                                                    {enrichedCreatorData?.user?.email || creatorId.substring(0, 20) + '...'}
-                                                                </div>
-                                                                {enrichedCreatorData?.user?.phone && enrichedCreatorData.user.phone !== 'No phone' && (
-                                                                    <div className="text-xs text-lightColor">
-                                                                        {enrichedCreatorData.user.phone}
-                                                                    </div>
-                                                                )}
-                                                                {enrichedCreatorData?.user?.role === 'admin' ? (
-                                                                    <div className="text-xs text-textColor mt-1 font-medium">
-                                                                        This user is an admin
-                                                                    </div>
-                                                                ) : enrichedCreatorData?.user?.stripeAccountId ? (
-                                                                    <div className="flex items-center gap-2 mt-1">
-                                                                        <span className="text-xs text-lightColor font-mono bg-white px-2 py-1 rounded border border-borderColor">
-                                                                            {enrichedCreatorData.user.stripeAccountId}
-                                                                        </span>
-                                                                        <button
-                                                                            onClick={() => copyToClipboard(enrichedCreatorData.user.stripeAccountId, 'Stripe Account ID copied')}
-                                                                            className="text-lightColor hover:text-textColor transition-colors"
-                                                                            title="Copy Account ID"
-                                                                        >
-                                                                            <FaRegCopy />
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="text-xs text-red-600 mt-1">
-                                                                        No Stripe Account
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <span className="text-sm font-semibold text-textColor">
-                                                                ${(saleData.totalAmount / 100).toFixed(2)}
+                                            <div className="mb-2">{stripeChip(enrichedCreatorData?.user)}</div>
+                                            {enrichedCreatorData?.user?.phone && enrichedCreatorData.user.phone !== 'No phone' && (
+                                                <DottedRow label="Phone">{enrichedCreatorData.user.phone}</DottedRow>
+                                            )}
+                                            <DottedRow label="Product revenue">{money(saleData.productRevenue)}</DottedRow>
+                                            <DottedRow label="Shipping revenue">{money(saleData.shippingRevenue)}</DottedRow>
+                                            <DottedRow label="Items">{saleData.items.length}</DottedRow>
+                                            <div className="mt-2 flex flex-col gap-1.5">
+                                                {(enrichedCreatorData?.items?.length ? enrichedCreatorData.items : saleData.items).map((item, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-2.5 py-1.5"
+                                                    >
+                                                        <div className="flex justify-between gap-2 text-[13px]">
+                                                            <span className="font-medium truncate">
+                                                                {item.productName || 'Loading product data…'}
                                                             </span>
+                                                            <span className="dash-data shrink-0">×{item.quantity}</span>
                                                         </div>
-                                                        <div className="text-xs text-lightColor space-y-1 mb-2">
-                                                            <div>Product Revenue: ${(saleData.productRevenue / 100).toFixed(2)}</div>
-                                                            <div>Shipping Revenue: ${(saleData.shippingRevenue / 100).toFixed(2)}</div>
-                                                            <div>Items: {saleData.items.length}</div>
-                                                        </div>
-
-                                                        {/* Item Details */}
-                                                        <div className="mt-2 space-y-1">
-                                                            {enrichedCreatorData?.items?.map((item, idx) => (
-                                                                <div key={idx} className="text-xs text-lightColor bg-white border border-borderColor p-2 rounded">
-                                                                    <div className="flex justify-between mb-1">
-                                                                        <span className="font-medium text-textColor">{item.productName}</span>
-                                                                        <span>Qty: {item.quantity}</span>
-                                                                    </div>
-                                                                    <div className="flex justify-between mb-1">
-                                                                        <span>Variant: {item.variantName}</span>
-                                                                        <span>Delivery: {item.deliveryType}</span>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        Unit Price: ${typeof item.unitPrice === 'number' ? item.unitPrice.toFixed(2) : (item.unitPrice / 100).toFixed(2)}
-                                                                    </div>
-                                                                </div>
-                                                            )) || saleData.items.map((item, idx) => (
-                                                                <div key={idx} className="text-xs text-lightColor bg-white border border-borderColor p-2 rounded">
-                                                                    <div className="flex justify-between">
-                                                                        <span>Loading product data...</span>
-                                                                        <span>Qty: {item.quantity}</span>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {/* Digital Products */}
-                                    <div>
-                                        <h4 className="text-sm font-semibold text-textColor uppercase tracking-wide mb-3">Digital Products</h4>
-                                        {Object.keys(session.digitalProductData).length > 0 ? (
-                                            <div className="space-y-3">
-                                                {Object.entries(session.digitalProductData).map(([productId, digitalData]) => (
-                                                    <div key={productId} className="bg-baseColor border border-borderColor p-3 rounded-lg">
-                                                        <div className="text-sm">
-                                                            <div className="font-medium text-textColor mb-1">
-                                                                Product: {productId.substring(0, 12)}...
-                                                            </div>
-                                                            <div className="text-xs text-lightColor">
-                                                                Buyer: {digitalData.buyer.substring(0, 20)}...
-                                                            </div>
-                                                            <div className="text-xs text-lightColor">
-                                                                Download Links: {digitalData.links.length} available
-                                                            </div>
+                                                        <div className="flex justify-between gap-2 text-[13px] dash-soft">
+                                                            <span className="truncate">
+                                                                {item.variantName ? `${item.variantName}, ` : ''}{item.deliveryType}
+                                                            </span>
+                                                            <span className="dash-data shrink-0">{unitPriceLabel(item.unitPrice)}</span>
                                                         </div>
                                                     </div>
                                                 ))}
                                             </div>
-                                        ) : (
-                                            <div className="text-sm text-lightColor bg-baseColor border border-borderColor p-3 rounded-lg">
-                                                No digital products in this session
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                        </div>
+                                    )
+                                })}
                             </div>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <div className="text-center py-12 bg-white border border-borderColor rounded-xl">
-                    <p className="text-lightColor">No sessions found for the selected filter.</p>
-                </div>
-            )}
+                        </section>
+
+                        {/* Digital deliveries */}
+                        <section>
+                            <h4 className="dash-label mb-1">Digital products</h4>
+                            {Object.keys(peekSession.digitalProductData || {}).length > 0 ? (
+                                <div className="flex flex-col">
+                                    {Object.entries(peekSession.digitalProductData).map(([productId, digitalData]) => (
+                                        <div key={productId} className="py-1">
+                                            <DottedRow label={`${productId.substring(0, 12)}…`}>
+                                                {digitalData.links.length} link{digitalData.links.length !== 1 ? 's' : ''}
+                                            </DottedRow>
+                                            <p className="text-[13px] dash-soft">
+                                                Buyer: {digitalData.buyer.substring(0, 20)}…
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-[13px] dash-soft">No digital products in this session.</p>
+                            )}
+                        </section>
+                    </div>
+                )}
+            </PeekPanel>
         </div>
     )
 }

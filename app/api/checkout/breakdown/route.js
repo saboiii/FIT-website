@@ -4,6 +4,7 @@ import User from "@/models/User";
 import Event from "@/models/Event";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
 import { calculateCartItemBreakdown } from "../calculateBreakdown";
+import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
 import { authenticate } from "@/lib/authenticate";
 
 async function fetchProduct(productId) {
@@ -82,37 +83,52 @@ export async function GET(req) {
                     'delivered',
                 ].includes(customPrintRequest.status);
 
-                if (isFixedPricedCustomPrint) {
-                    // Use quoted pricing for custom prints
-                    const base = Number(customPrintRequest.basePrice || 0);
-                    const fee = Number(customPrintRequest.printFee || 0);
-                    const quotedPrice = base + fee;
+                const isCustomPrintItem = String(item.productId || '').startsWith('custom-print:');
 
-                    const availableDeliveryTypes = customPrintRequest.delivery?.deliveryTypes || [];
-                    const requestedDeliveryType = item.chosenDeliveryType || '';
-                    const requestedExists = availableDeliveryTypes.some(dt => dt.type === requestedDeliveryType);
-                    const chosenDeliveryType = requestedExists
-                        ? requestedDeliveryType
-                        : (availableDeliveryTypes[0]?.type || '');
-                    const chosenDeliveryObj = availableDeliveryTypes.find(dt => dt.type === chosenDeliveryType);
-                    const deliveryFee = Number(chosenDeliveryObj?.customPrice ?? chosenDeliveryObj?.price ?? 0);
+                if (isFixedPricedCustomPrint) {
+                    // Quoted pricing: instant quotes charge quote.total, manual
+                    // quotes charge basePrice + printFee — always the same amount
+                    // the cart displays (customPrintDisplayPrice).
+                    const charge = customPrintChargeBreakdown(customPrintRequest, item.chosenDeliveryType || '');
 
                     breakdown = {
                         productId: item.productId,
                         selectedVariants: item.selectedVariants || {},
                         name: product.name,
                         quantity: 1,
-                        price: quotedPrice,
-                        priceBeforeDiscount: quotedPrice,
-                        basePrice: base,
+                        price: charge.amount,
+                        priceBeforeDiscount: charge.amount,
+                        basePrice: Number(customPrintRequest.basePrice || 0),
                         variantInfo: [],
-                        chosenDeliveryType,
-                        deliveryFee,
-                        total: quotedPrice + deliveryFee,
+                        chosenDeliveryType: charge.chosenDeliveryType,
+                        deliveryFee: charge.deliveryFee,
+                        total: charge.total,
                         creatorUserId: product.creatorUserId,
-                        currency: (customPrintRequest.currency || 'sgd').toUpperCase(),
+                        currency: charge.currency,
                         customPrintRequestId: customPrintRequest.requestId,
                         customPrintStatus: customPrintRequest.status
+                    };
+                } else if (isCustomPrintItem) {
+                    // Custom print not yet quoted — model missing/deleted, awaiting
+                    // upload, config, or a manual admin quote. There is no charge
+                    // yet, so price/delivery are 0 (no stale snapshot leaks through).
+                    const requestId = item.customPrintRequestId || (item.productId || '').split(':')[1];
+                    breakdown = {
+                        productId: item.productId,
+                        selectedVariants: item.selectedVariants || {},
+                        name: product.name,
+                        quantity: 1,
+                        price: 0,
+                        priceBeforeDiscount: 0,
+                        basePrice: 0,
+                        variantInfo: [],
+                        chosenDeliveryType: item.chosenDeliveryType || '',
+                        deliveryFee: 0,
+                        total: 0,
+                        creatorUserId: product.creatorUserId,
+                        currency: 'SGD',
+                        customPrintRequestId: requestId,
+                        customPrintStatus: customPrintRequest?.status || 'pending'
                     };
                 } else {
                     // Normal product breakdown

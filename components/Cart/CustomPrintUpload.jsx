@@ -5,9 +5,9 @@ import { HiUpload, HiCheck, HiCube, HiTrash } from 'react-icons/hi'
 import { useToast } from '@/components/General/ToastProvider'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
-import { getMimeType } from '@/utils/uploadHelpers'
+import { getMimeType, putWithProgress } from '@/utils/uploadHelpers'
 
-export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
+export default function CustomPrintUpload({ cartItem, onUploadComplete, onDeleteComplete }) {
     const [uploading, setUploading] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [uploadProgress, setUploadProgress] = useState(0)
@@ -120,15 +120,13 @@ export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
             }
             const { url, key: s3Key } = await signedRes.json();
             key = s3Key;
-            // Step 2: Upload to S3
-            const uploadRes = await fetch(url, {
-                method: 'PUT',
-                headers: { 'Content-Type': contentType },
-                body: file
+            // Step 2: Upload to S3 (XHR so we can show real upload progress)
+            await putWithProgress({
+                url,
+                body: file,
+                contentType,
+                onProgress: setUploadProgress,
             });
-            if (!uploadRes.ok) {
-                throw new Error('Failed to upload model to S3');
-            }
             // Step 3: Update custom print request with model file info (store only the S3 key)
             const putRes = await fetch('/api/custom-print', {
                 method: 'PUT',
@@ -214,6 +212,9 @@ export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
                 })
             })
             showToast('Model deleted successfully', 'success')
+            // Let the cart refresh its request map so the step checklist
+            // (upload/configure) goes back to incomplete immediately.
+            if (onDeleteComplete) await onDeleteComplete()
         } catch (error) {
             showToast(error.message || 'Failed to delete model', 'error')
         } finally {
@@ -269,34 +270,55 @@ export default function CustomPrintUpload({ cartItem, onUploadComplete }) {
                                 {new Date(savedConfig.configuredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                             </span>
                         </div>
-                        <div className="space-y-3">
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Layer Height</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.layerHeight}mm</span>
+                        {savedConfig?.generic?.strength || savedConfig?.generic?.quality || savedConfig?.generic?.colour ? (
+                            // Instant-quote (simple-mode) view: the customer picked Strength /
+                            // Quality / Colour, so showing the leva-detail list is noise.
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Strength</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.generic.strength || '—'}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Quality</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.generic.quality || '—'}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-xs text-lightColor">Colour</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.generic.colour || '—'}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Wall Loops</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.wallLoops}</span>
+                        ) : (
+                            // Manual-quote (advanced-mode) view: the admin needs to see all the
+                            // detailed leva settings.
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Layer Height</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.layerHeight}mm</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Wall Loops</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.wallLoops}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Infill</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.sparseInfillDensity}% {savedConfig.printSettings.sparseInfillPattern}</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Nozzle</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.nozzleDiameter}mm</span>
+                                </div>
+                                <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
+                                    <span className="text-xs text-lightColor">Support</span>
+                                    <span className="text-xs font-medium text-textColor">
+                                        {savedConfig.printSettings.enableSupport ? savedConfig.printSettings.supportType : 'None'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-xs text-lightColor">Print Plate</span>
+                                    <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.printPlate}</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Infill</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.sparseInfillDensity}% {savedConfig.printSettings.sparseInfillPattern}</span>
-                            </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Nozzle</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.nozzleDiameter}mm</span>
-                            </div>
-                            <div className="flex justify-between items-center py-2 border-b border-borderColor/50">
-                                <span className="text-xs text-lightColor">Support</span>
-                                <span className="text-xs font-medium text-textColor">
-                                    {savedConfig.printSettings.enableSupport ? savedConfig.printSettings.supportType : 'None'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center py-2">
-                                <span className="text-xs text-lightColor">Print Plate</span>
-                                <span className="text-xs font-medium text-textColor">{savedConfig.printSettings.printPlate}</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
                 <div className="border-t border-borderColor bg-baseColor p-6">

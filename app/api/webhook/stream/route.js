@@ -2,6 +2,57 @@ import { NextResponse } from "next/server";
 import { getStreamServerClient } from "@/lib/streamChat";
 import { connectToDatabase } from "@/lib/db";
 import ChannelSummary from "@/models/ChannelSummary";
+import { clerkClient } from "@clerk/nextjs/server";
+import { sendEmail } from "@/lib/email";
+import { buildNewChatMessageEmail } from "@/lib/email/templates/chat";
+
+/**
+ * Best-effort: email every channel member except the sender that they have a
+ * new chat message. Resolves emails/names via Clerk. Never throws — chat
+ * delivery already succeeded; the email is a courtesy.
+ */
+async function emailRecipientsOfNewMessage({ members, message }) {
+    try {
+        const senderId = message?.user?.id || message?.user_id || null;
+        const recipientIds = (members || [])
+            .map((m) => m.user_id)
+            .filter((id) => id && id !== senderId);
+        if (recipientIds.length === 0) return;
+
+        const clerk = await clerkClient();
+
+        // Sender display name (fall back to the webhook's embedded user).
+        let senderName =
+            message?.user?.name || message?.user?.username || null;
+
+        const sendOne = async (id) => {
+            try {
+                const u = await clerk.users.getUser(id);
+                const to = u?.emailAddresses?.[0]?.emailAddress;
+                if (!to) return;
+                if (!senderName && senderId) {
+                    try {
+                        const s = await clerk.users.getUser(senderId);
+                        senderName = s?.firstName || s?.username || "someone";
+                    } catch {
+                        senderName = "someone";
+                    }
+                }
+                const { subject, html } = buildNewChatMessageEmail({
+                    senderName: senderName || "someone",
+                    messageText: message?.text,
+                });
+                await sendEmail({ to, subject, html });
+            } catch (e) {
+                console.error("[stream webhook] failed to email recipient", id, e);
+            }
+        };
+
+        await Promise.all(recipientIds.map(sendOne));
+    } catch (e) {
+        console.error("[stream webhook] new-message email notification failed", e);
+    }
+}
 
 export async function POST(req) {
     try {
@@ -81,6 +132,12 @@ export async function POST(req) {
                 },
                 { upsert: true, new: true, setDefaultsOnInsert: true }
             );
+
+            // Email the other participant(s) on a brand-new message so personal
+            // messages aren't missed. Updates don't re-notify.
+            if (type === "message.new" && last) {
+                await emailRecipientsOfNewMessage({ members, message: last });
+            }
         }
 
         return NextResponse.json({ received: true });

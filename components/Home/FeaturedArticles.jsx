@@ -13,11 +13,11 @@ function FeaturedArticles() {
     const load = async () => 
     {
       try {
-        const res = await fetch('/api/admin/blog')
+        const res = await fetch('/api/blog')
         const data = await res.json()
         if (!data.ok) return
 
-        const all = (data.posts || []).filter(p => p.published)
+        const all = data.posts || []
 
         const sorted = all
           .map(post => ({

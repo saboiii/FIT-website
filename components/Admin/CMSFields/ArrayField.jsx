@@ -123,7 +123,7 @@ export default function ArrayField({ label, value = [], onChange, fieldMeta = {}
 
     return (
         <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+            <label className="dash-label">
                 {label}
             </label>
 
@@ -133,13 +133,13 @@ export default function ArrayField({ label, value = [], onChange, fieldMeta = {}
                     return (
                         <div
                             key={index}
-                            className="border border-borderColor rounded-lg bg-white overflow-hidden"
+                            className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] bg-[var(--dash-card)] overflow-hidden"
                         >
-                            <div className="flex items-center justify-between p-3 bg-borderColor/30 border-b border-borderColor">
+                            <div className="flex items-center justify-between px-3 py-2 bg-[var(--dash-canvas)] border-b border-[var(--dash-line)]">
                                 <button
                                     type="button"
                                     onClick={() => toggleExpanded(index)}
-                                    className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-textColor transition-colors"
+                                    className="dash-hoverable flex items-center gap-2 text-[13px] font-medium text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] cursor-pointer"
                                 >
                                     {isExpanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
                                     <span>{getItemPreview(item)} #{index + 1}</span>
@@ -150,7 +150,7 @@ export default function ArrayField({ label, value = [], onChange, fieldMeta = {}
                                         type="button"
                                         onClick={() => moveItem(index, 'up')}
                                         disabled={index === 0}
-                                        className="p-1.5 text-xs text-gray-600 hover:text-textColor disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        className="dash-hoverable p-1.5 text-[13px] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                                         title="Move up"
                                     >
                                         ↑
@@ -159,7 +159,7 @@ export default function ArrayField({ label, value = [], onChange, fieldMeta = {}
                                         type="button"
                                         onClick={() => moveItem(index, 'down')}
                                         disabled={index === items.length - 1}
-                                        className="p-1.5 text-xs text-gray-600 hover:text-textColor disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                        className="dash-hoverable p-1.5 text-[13px] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                                         title="Move down"
                                     >
                                         ↓
@@ -167,7 +167,7 @@ export default function ArrayField({ label, value = [], onChange, fieldMeta = {}
                                     <button
                                         type="button"
                                         onClick={() => removeItem(index)}
-                                        className="p-1.5 text-red-600 hover:text-red-700 transition-colors"
+                                        className="dash-hoverable p-1.5 text-[var(--dash-bad)] hover:opacity-80 cursor-pointer"
                                         title="Remove"
                                     >
                                         <FaTrash size={12} />
@@ -190,7 +190,7 @@ export default function ArrayField({ label, value = [], onChange, fieldMeta = {}
                 <button
                     type="button"
                     onClick={addItem}
-                    className="flex items-center justify-center gap-2 p-3 border border-dashed border-borderColor rounded-lg hover:border-textColor/20 hover:bg-borderColor/20 transition-colors text-sm font-medium text-gray-600 cursor-pointer hover:text-textColor"
+                    className="dash-hoverable flex items-center justify-center gap-2 p-3 border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] hover:bg-[var(--dash-canvas)] text-[13px] font-medium text-[var(--dash-ink-soft)] cursor-pointer hover:text-[var(--dash-ink)]"
                 >
                     <FaPlus size={12} />
                     Add {label}

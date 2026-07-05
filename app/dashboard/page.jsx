@@ -21,8 +21,8 @@ export const metadata = {
     },
 };
 
-function DashboardLayout() {
+function DashboardHome() {
     return <DashboardPage />;
 }
 
-export default DashboardLayout
+export default DashboardHome

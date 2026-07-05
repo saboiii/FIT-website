@@ -12,7 +12,7 @@ function TermsPage() {
             <div className="w-full max-w-2xl flex flex-col">
                 <div className="border border-borderColor rounded p-6 flex flex-col items-start gap-4 bg-white text-xs">
                     <h2 className="text-base font-semibold mb-2">Terms and Conditions</h2>
-                    <p>These Terms and Conditions ("Agreement") govern your use of the Website <a href="https://www.fixitoday.com" className="underline" target="_blank" rel="noopener noreferrer">www.fixitoday.com</a> and the services offered by Fix It Today Pte. Ltd. By accessing or using our Website and services, you agree to be bound by these terms. If you do not agree with these terms, you are not permitted to use this Website.</p>
+                    <p>These Terms and Conditions (&quot;Agreement&quot;) govern your use of the Website <a href="https://www.fixitoday.com" className="underline" target="_blank" rel="noopener noreferrer">www.fixitoday.com</a> and the services offered by Fix It Today Pte. Ltd. By accessing or using our Website and services, you agree to be bound by these terms. If you do not agree with these terms, you are not permitted to use this Website.</p>
 
                     <h3 className="text-textColor text-sm mt-4">Definitions</h3>
                     <ul className="list-disc ml-6">

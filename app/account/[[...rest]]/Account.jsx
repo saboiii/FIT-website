@@ -1,130 +1,93 @@
 'use client'
+// Customer account hub, rebuilt on the "Sunlit Paper" design language
+// (docs/DASHBOARD-UX-BLUEPRINT.md §4/§9/§10). Every legacy capability is kept:
+// profile editing, security (password/devices/delete), billing contact, order
+// history, digital downloads. ?tab= deep links (used by the cart and product
+// pages) keep working and now cover every section.
 import React, { useEffect, useState } from 'react'
-import { useUser, useSession } from "@clerk/nextjs"
+import { useUser, useSession } from '@clerk/nextjs'
 import { useSearchParams } from 'next/navigation'
-import ContactSection from '@/components/Account/ContactSection';
-import OrderSection from '@/components/Account/OrderSection';
-import ProfileSettings from '@/components/Account/ProfileSettings';
-import SecuritySettings from '@/components/Account/SecuritySettings';
-import { PiDotsThree } from 'react-icons/pi';
-import DownloadsSection from '@/components/Account/DownloadsSection';
+import AccountShell, { ACCOUNT_SECTIONS } from '@/components/Account/AccountShell'
+import AccountOverview from '@/components/Account/AccountOverview'
+import ContactSection from '@/components/Account/ContactSection'
+import OrderSection from '@/components/Account/OrderSection'
+import ProfileSettings from '@/components/Account/ProfileSettings'
+import SecuritySettings from '@/components/Account/SecuritySettings'
+import DownloadsSection from '@/components/Account/DownloadsSection'
+
+const TAB_KEYS = ACCOUNT_SECTIONS.map((s) => s.key)
 
 function Account() {
-    const { user, isLoaded } = useUser();
-    const { session: currentSession } = useSession();
-    const searchParams = useSearchParams();
+    const { user, isLoaded } = useUser()
+    const { session: currentSession } = useSession()
+    const searchParams = useSearchParams()
 
-    const [tab, setTab] = useState("profile");
-    const [connectedAccounts, setConnectedAccounts] = useState([]);
-    const [devices, setDevices] = useState([]);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [tab, setTab] = useState('overview')
+    const [connectedAccounts, setConnectedAccounts] = useState([])
+    const [devices, setDevices] = useState([])
 
-    // Check for tab parameter on component mount
+    // ?tab= deep links (cart → billing, product downloads → downloads, ...).
     useEffect(() => {
-        const tabParam = searchParams.get('tab');
-        if (tabParam && ['profile', 'security', 'orders', 'billing', 'downloads'].includes(tabParam)) {
-            setTab(tabParam);
-            setSidebarOpen(true); // Auto-open sidebar when navigating with tab param
+        const tabParam = searchParams.get('tab')
+        if (tabParam && TAB_KEYS.includes(tabParam)) {
+            setTab(tabParam)
         }
-    }, [searchParams]);
+    }, [searchParams])
 
     useEffect(() => {
-        if (!isLoaded || !user) return;
-        setConnectedAccounts(user.externalAccounts || []);
-        (async () => {
-            if (typeof user.getSessions === "function") {
+        if (!isLoaded || !user) return
+        setConnectedAccounts(user.externalAccounts || [])
+        ;(async () => {
+            if (typeof user.getSessions === 'function') {
                 try {
-                    const sessions = await user.getSessions();
-                    setDevices(sessions || []);
+                    const sessions = await user.getSessions()
+                    setDevices(sessions || [])
                 } catch (err) {
-                    setDevices([]);
+                    setDevices([])
                 }
             } else {
-                setDevices(user.sessions || []);
+                setDevices(user.sessions || [])
             }
-        })();
-    }, [isLoaded, user]);
+        })()
+    }, [isLoaded, user])
 
-    const onSidebarToggle = () => {
-        setSidebarOpen((prev) => !prev);
-    };
+    // Switch sections in place and keep the URL shareable/deep-linkable.
+    const selectTab = (key) => {
+        setTab(key)
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href)
+            url.searchParams.set('tab', key)
+            window.history.replaceState(null, '', url)
+        }
+    }
+
+    const header = (
+        <div>
+            <p className="dash-label">Your account</p>
+            <h1 className="dash-display mt-1">
+                Hello, <strong>{(isLoaded && user?.firstName) || 'there'}.</strong>
+            </h1>
+            <p className="dash-data dash-soft mt-2">
+                Profile, security, orders, downloads and your plan in one place.
+            </p>
+        </div>
+    )
 
     return (
-        <div className="flex flex-col w-full border-b border-borderColor py-12 px-8 md:px-12 items-center justify-center">
-            <div className='flex flex-col w-full bg-baseColor'>
-                <h3>Profile</h3>
-                <h1>Account Settings</h1>
-                <div className='flex relative min-h-[92vh] w-full bg-background mt-6 rounded-lg divide-x divide-borderColor drop-shadow-sm overflow-x-hidden'>
-                    <div
-                        className={`absolute bg-background flex flex-col z-10 sidebar ${sidebarOpen ? 'translate-x-0' : '-translate-x-[82%]'}`}
-                    >
-                        <div className='flex flex-row items-center justify-end w-full'>
-                            <PiDotsThree size={20} onClick={onSidebarToggle} className='flex hover:cursor-pointer mb-5 mt-4' />
-                        </div>
-                        <button
-                            onClick={() => setTab("profile")}
-                            className={`flex px-2 py-1 sidebarButton ${tab === "profile" ? "bg-borderColor/40" : "bg-transparent"}`}
-                            disabled={!sidebarOpen}
-                        >
-                            Profile
-                        </button>
-                        <button
-                            onClick={() => setTab("security")}
-                            className={`flex px-2 py-1 sidebarButton ${tab === "security" ? "bg-borderColor/40" : "bg-transparent"}`}
-                            disabled={!sidebarOpen}
-                        >
-                            Security
-                        </button>
-                        <button
-                            onClick={() => setTab("orders")}
-                            className={`flex px-2 py-1 sidebarButton ${tab === "orders" ? "bg-borderColor/40" : "bg-transparent"}`}
-                            disabled={!sidebarOpen}
-                        >
-                            Orders
-                        </button>
-                        <button
-                            onClick={() => setTab("billing")}
-                            className={`flex px-2 py-1 sidebarButton ${tab === "billing" ? "bg-borderColor/40" : "bg-transparent"}`}
-                            disabled={!sidebarOpen}
-                        >
-                            Billing
-                        </button>
-                        <button
-                            onClick={() => setTab("downloads")}
-                            className={`flex px-2 py-1 sidebarButton ${tab === "downloads" ? "bg-borderColor/40" : "bg-transparent"}`}
-                            disabled={!sidebarOpen}
-                        >
-                            Downloads
-                        </button>
-                    </div>
-                    <div className='flex flex-col pl-16 pr-4 py-8 w-full'>
-                        {tab === "profile" && (
-                            <ProfileSettings
-                                connectedAccounts={connectedAccounts}
-                                user={user}
-                                isLoaded={isLoaded}
-                            />
-                        )}
-                        {tab === "security" && (
-                            <SecuritySettings
-                                user={user}
-                                devices={devices}
-                                currentSession={currentSession}
-                            />
-                        )}
-                        {tab === "billing" && (
-                            <ContactSection />
-                        )}
-                        {tab === "orders" && (
-                            <OrderSection />
-                        )}
-                        {tab === "downloads" && (
-                            <DownloadsSection user={user} isLoaded={isLoaded} />
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
+        <AccountShell active={tab} onSelect={selectTab} header={header}>
+            {tab === 'overview' && (
+                <AccountOverview user={user} isLoaded={isLoaded} onSelect={selectTab} />
+            )}
+            {tab === 'profile' && (
+                <ProfileSettings connectedAccounts={connectedAccounts} user={user} isLoaded={isLoaded} />
+            )}
+            {tab === 'security' && (
+                <SecuritySettings user={user} devices={devices} currentSession={currentSession} />
+            )}
+            {tab === 'billing' && <ContactSection />}
+            {tab === 'orders' && <OrderSection />}
+            {tab === 'downloads' && <DownloadsSection user={user} isLoaded={isLoaded} />}
+        </AccountShell>
     )
 }
 

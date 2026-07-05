@@ -1,0 +1,40 @@
+name: Custom-print idle nudges
+
+# Free scheduler for the idle-request nudge cron. GitHub Actions triggers the
+# already-authenticated endpoint daily; the app does the work + cooldown logic.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   CRON_SECRET    — must match the deployment's CRON_SECRET env var.
+#   CRON_BASE_URL  — deployment origin, e.g. https://www.fixitoday.com (no trailing slash).
+#
+# Note: GitHub's scheduled runs are best-effort and can be delayed under load —
+# fine for a once-daily reminder. Use "Run workflow" to trigger manually.
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # daily at 09:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger idle-request nudge endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          CRON_BASE_URL: ${{ secrets.CRON_BASE_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$CRON_BASE_URL" ]; then
+            echo "::error::Missing CRON_SECRET or CRON_BASE_URL repository secret" >&2
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/nudge.json -w '%{http_code}' \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${CRON_BASE_URL%/}/api/cron/custom-print-nudges")
+          echo "HTTP $code"
+          cat /tmp/nudge.json 2>/dev/null || true
+          echo
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Nudge endpoint returned HTTP $code" >&2
+            exit 1
+          fi

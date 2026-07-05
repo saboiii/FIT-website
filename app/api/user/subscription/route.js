@@ -44,6 +44,13 @@ export async function GET(req) {
         });
 
     } catch (error) {
+        // A subscription id that no longer exists in the connected Stripe
+        // account (e.g. stale metadata after a test-data reset) means "no
+        // subscription", not a server failure.
+        if (error?.code === 'resource_missing') {
+            console.warn('Stale stripeSubscriptionId in Clerk metadata — treating as no subscription');
+            return NextResponse.json({ error: 'No subscription found' }, { status: 404 });
+        }
         console.error('Error fetching subscription:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }

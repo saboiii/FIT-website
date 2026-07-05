@@ -1,50 +1,48 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { RxCross1 } from 'react-icons/rx'
-import { BsPlus, BsChevronDown, BsChevronRight } from 'react-icons/bs'
+import { IoAddOutline, IoTrashOutline } from 'react-icons/io5'
+import { TbTruck } from 'react-icons/tb'
+import { DashCard, ConfirmDialog, StatusPill, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
+import { quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import DeliveryTypeFormSheet from './DeliveryTypeFormSheet'
+import { DeliverySwitch, DeliveryTypeIcon, PricingStrip, sunBtnCls } from './deliveryTypeUi'
+
+const BLANK_FORM = {
+    name: '',
+    displayName: '',
+    description: '',
+    applicableToProductTypes: [],
+    basePricing: {
+        basePrice: '',
+        volumeFactor: '',
+        weightFactor: '',
+        minPrice: '',
+        maxPrice: '',
+        freeShippingThreshold: ''
+    },
+    isActive: true
+}
+
+const TYPE_LABELS = { shop: 'Shop', print: 'Print' }
 
 export default function DeliveryTypeManagement() {
     const [deliveryTypes, setDeliveryTypes] = useState([])
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [expandedDeliveryTypes, setExpandedDeliveryTypes] = useState({})
     const [showDeliveryTypeForm, setShowDeliveryTypeForm] = useState(false)
     const [editingDeliveryType, setEditingDeliveryType] = useState(null)
+    const [deleteTarget, setDeleteTarget] = useState(null)
+    const [deleteBusy, setDeleteBusy] = useState(false)
+    const [tourOpen, setTourOpen] = useState(false)
+    const tourOffer = useTourOffer('delivery')
     const { showToast } = useToast()
 
-    const [formData, setFormData] = useState({
-        name: '',
-        displayName: '',
-        description: '',
-        applicableToProductTypes: [],
-        basePricing: {
-            basePrice: '',
-            volumeFactor: '',
-            weightFactor: '',
-            minPrice: '',
-            maxPrice: '',
-            freeShippingThreshold: ''
-        },
-        isActive: true
-    })
-
-    const [customExample, setCustomExample] = useState({
-        volume: '',
-        weight: ''
-    })
-
-
-
-    const toggleDeliveryType = (deliveryTypeName) => {
-        setExpandedDeliveryTypes(prev => ({
-            ...prev,
-            [deliveryTypeName]: !prev[deliveryTypeName]
-        }))
-    }
+    const [formData, setFormData] = useState(BLANK_FORM)
 
     useEffect(() => {
         fetchDeliveryTypes()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const fetchDeliveryTypes = async () => {
@@ -63,7 +61,37 @@ export default function DeliveryTypeManagement() {
         }
     }
 
+    const openCreate = () => {
+        setEditingDeliveryType(null)
+        setFormData(BLANK_FORM)
+        setShowDeliveryTypeForm(true)
+    }
 
+    const openEdit = (dt) => {
+        setEditingDeliveryType(dt)
+        setFormData({
+            name: dt.name,
+            displayName: dt.displayName,
+            description: dt.description || '',
+            applicableToProductTypes: dt.applicableToProductTypes || [],
+            basePricing: {
+                basePrice: dt.basePricing?.basePrice ?? '',
+                volumeFactor: dt.basePricing?.volumeFactor ?? '',
+                weightFactor: dt.basePricing?.weightFactor ?? '',
+                minPrice: dt.basePricing?.minPrice ?? '',
+                maxPrice: dt.basePricing?.maxPrice ?? '',
+                freeShippingThreshold: dt.basePricing?.freeShippingThreshold ?? '',
+            },
+            isActive: dt.isActive,
+        })
+        setShowDeliveryTypeForm(true)
+    }
+
+    const closeForm = () => {
+        setShowDeliveryTypeForm(false)
+        setEditingDeliveryType(null)
+        setFormData(BLANK_FORM)
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -145,23 +173,7 @@ export default function DeliveryTypeManagement() {
                     }
                 }
 
-                setFormData({
-                    name: '',
-                    displayName: '',
-                    description: '',
-                    applicableToProductTypes: [],
-                    basePricing: {
-                        basePrice: '',
-                        volumeFactor: '',
-                        weightFactor: '',
-                        minPrice: '',
-                        maxPrice: '',
-                        freeShippingThreshold: ''
-                    },
-                    isActive: true
-                })
-                setShowDeliveryTypeForm(false)
-                setEditingDeliveryType(null)
+                closeForm()
                 fetchDeliveryTypes()
             } else {
                 showToast(result.error || 'Failed to add', 'error')
@@ -173,9 +185,10 @@ export default function DeliveryTypeManagement() {
         }
     }
 
-    const handleDelete = async (name) => {
-        if (!confirm('Delete this delivery type?')) return
-
+    // Delete goes through ConfirmDialog (window.confirm is banned — §4.10).
+    const confirmDelete = async () => {
+        const name = deleteTarget?.name
+        setDeleteBusy(true)
         try {
             const deliveryType = deliveryTypes.find(dt => dt.name === name && !dt.isHardcoded)
             if (!deliveryType || !deliveryType._id) {
@@ -197,6 +210,9 @@ export default function DeliveryTypeManagement() {
             }
         } catch (error) {
             showToast('Error: ' + error.message, 'error')
+        } finally {
+            setDeleteBusy(false)
+            setDeleteTarget(null)
         }
     }
 
@@ -224,532 +240,143 @@ export default function DeliveryTypeManagement() {
         }
     }
 
-    if (loading) return (
-        <div className="flex items-center justify-center p-12">
-            <div className="loader"></div>
-        </div>
-    ) 
+    if (loading) {
+        return (
+            <div className="flex flex-col gap-3 p-4 md:p-6" aria-label="Loading delivery types">
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+            </div>
+        )
+    }
 
     return (
-        <div className="flex flex-col gap-4 sm:gap-6 p-6 md:p-12 bg-borderColor/30 min-h-screen">
-            {/* Header Section */}
-            <div className="flex flex-col gap-2">
-                <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Delivery Type Management</h1>
-                <p className="text-xs sm:text-sm text-lightColor">Configure delivery options with custom pricing tiers for creators</p>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-2 sm:gap-3 flex-wrap">
-                <button
-                    onClick={() => setShowDeliveryTypeForm(!showDeliveryTypeForm)}
-                    className={`${showDeliveryTypeForm ? 'formBlackButton' : 'formButton2'} transition-all duration-300 text-xs sm:text-sm`}
-                >
-                    <BsPlus size={18} />
-                    New Delivery Type
-                </button>
-            </div>
-
-            {/* Delivery Type Form - Progressive Disclosure */}
-            {showDeliveryTypeForm && (
-                <div className="adminDashboardContainer animate-slideDown">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-medium">{editingDeliveryType ? 'Edit Delivery Type' : 'Add New Delivery Type'}</h3>
-                        <button
-                            onClick={() => { setShowDeliveryTypeForm(false); setEditingDeliveryType(null); }}
-                            className="toggleXbutton"
-                        >
-                            <RxCross1 size={14} />
-                        </button>
-                    </div>
-                    <form onSubmit={handleSubmit} className="gap-4 flex flex-col">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">URL Name*</label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-                                    className="formInput"
-                                    placeholder="premium-delivery"
-                                    required
-                                />
-                                <span className="text-xs text-extraLight">Lowercase, no spaces</span>
-                            </div>
-                            <div className='gap-2 flex flex-col'>
-                                <label className="formLabel">Display Name*</label>
-                                <input
-                                    type="text"
-                                    value={formData.displayName}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                                    className="formInput"
-                                    placeholder="Premium Delivery"
-                                    required
-                                />
-                                <span className="text-xs text-extraLight">Shown to users</span>
-                            </div>
-                        </div>
-
-                        <div className='gap-2 flex flex-col'>
-                            <label className="formLabel">Description</label>
-                            <textarea
-                                value={formData.description}
-                                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                                className="formInput resize-none"
-                                placeholder="Optional instructions for creators (e.g., pickup location, estimated delivery time)"
-                                rows={2}
-                            />
-                            <span className="text-xs text-extraLight">Creators can customize this per product</span>
-                        </div>
-
-                        <div className='gap-2 flex flex-col'>
-                            <label className="formLabel">Applicable To*</label>
-                            <div className="flex gap-4">
-                                <label className="flex items-center text-sm text-lightColor cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.applicableToProductTypes.includes('shop')}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                applicableToProductTypes: checked
-                                                    ? [...prev.applicableToProductTypes, 'shop']
-                                                    : prev.applicableToProductTypes.filter(t => t !== 'shop')
-                                            }))
-                                        }}
-                                        className="mr-2"
-                                    />
-                                    Shop Products
-                                </label>
-                                <label className="flex items-center text-sm text-lightColor cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.applicableToProductTypes.includes('print')}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                applicableToProductTypes: checked
-                                                    ? [...prev.applicableToProductTypes, 'print']
-                                                    : prev.applicableToProductTypes.filter(t => t !== 'print')
-                                            }))
-                                        }}
-                                        className="mr-2"
-                                    />
-                                    Print Products
-                                </label>
-                            </div>
-                            <span className="text-xs text-extraLight">Select product types this delivery option applies to</span>
-                        </div>
-
-                        {/* Formula-Based Pricing Section */}
-                        <div className="border-t border-borderColor pt-4 mt-2">
-                            <div className="flex items-center justify-between mb-3">
-                                <div>
-                                    <h4 className="text-sm font-medium text-textColor">Automatic Pricing Formula</h4>
-                                    <p className="text-xs text-extraLight mt-1">Price = Base Price + (Volume × Volume Factor) + (Weight × Weight Factor)</p>
-                                </div>
-                            </div>
-
-                            <div className="bg-baseColor border border-borderColor rounded-lg p-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-medium text-textColor">Base Price ($)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.basePricing.basePrice}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                basePricing: { ...prev.basePricing, basePrice: e.target.value }
-                                            }))}
-                                            className="formInput"
-                                            placeholder="5.00"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                        <span className="text-xs text-extraLight">Flat fee added to all deliveries</span>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-medium text-textColor">Volume Factor ($/cm³)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.basePricing.volumeFactor}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                basePricing: { ...prev.basePricing, volumeFactor: e.target.value }
-                                            }))}
-                                            className="formInput"
-                                            placeholder="0.001"
-                                            min="0"
-                                            step="0.0001"
-                                        />
-                                        <span className="text-xs text-extraLight">Cost per cubic centimeter</span>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-medium text-textColor">Weight Factor ($/g)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.basePricing.weightFactor}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                basePricing: { ...prev.basePricing, weightFactor: e.target.value }
-                                            }))}
-                                            className="formInput"
-                                            placeholder="0.01"
-                                            min="0"
-                                            step="0.001"
-                                        />
-                                        <span className="text-xs text-extraLight">Cost per gram</span>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-medium text-textColor">Minimum Price ($)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.basePricing.minPrice}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                basePricing: { ...prev.basePricing, minPrice: e.target.value }
-                                            }))}
-                                            className="formInput"
-                                            placeholder="5.00"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                        <span className="text-xs text-extraLight">Floor price (never go below)</span>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-medium text-textColor">Maximum Price ($)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.basePricing.maxPrice}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                basePricing: { ...prev.basePricing, maxPrice: e.target.value }
-                                            }))}
-                                            className="formInput"
-                                            placeholder="50.00"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                        <span className="text-xs text-extraLight">Ceiling price (never exceed)</span>
-                                    </div>
-
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-xs font-medium text-textColor">Free Shipping Threshold ($)</label>
-                                        <input
-                                            type="number"
-                                            value={formData.basePricing.freeShippingThreshold}
-                                            onChange={(e) => setFormData(prev => ({
-                                                ...prev,
-                                                basePricing: { ...prev.basePricing, freeShippingThreshold: e.target.value }
-                                            }))}
-                                            className="formInput"
-                                            placeholder="100.00"
-                                            min="0"
-                                            step="0.01"
-                                        />
-                                        <span className="text-xs text-extraLight">Free if product value exceeds (optional)</span>
-                                    </div>
-                                </div>
-
-                                {/* Pricing Calculator Preview */}
-                                {formData.basePricing.basePrice && formData.basePricing.volumeFactor && formData.basePricing.weightFactor && (
-                                    <div className="mt-4 pt-4 border-t border-borderColor">
-                                        <h5 className="text-xs font-medium text-textColor mb-3">Example Calculations</h5>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            {[
-                                                { volume: 1000, weight: 100, label: 'Small Item' },
-                                                { volume: 5000, weight: 500, label: 'Medium Item' },
-                                                { volume: 10000, weight: 1000, label: 'Large Item' }
-                                            ].map(example => {
-                                                const calculated = parseFloat(formData.basePricing.basePrice) +
-                                                    (example.volume * parseFloat(formData.basePricing.volumeFactor)) +
-                                                    (example.weight * parseFloat(formData.basePricing.weightFactor))
-                                                const minPrice = parseFloat(formData.basePricing.minPrice) || 0
-                                                const maxPrice = parseFloat(formData.basePricing.maxPrice) || Infinity
-                                                const finalPrice = Math.max(minPrice, Math.min(maxPrice, calculated))
-
-                                                return (
-                                                    <div key={example.label} className="bg-background border border-borderColor rounded p-3">
-                                                        <div className="text-xs font-medium text-textColor mb-2">{example.label}</div>
-                                                        <div className="text-xs text-extraLight space-y-1">
-                                                            <div>{example.volume} cm³ × ${formData.basePricing.volumeFactor}</div>
-                                                            <div>{example.weight}g × ${formData.basePricing.weightFactor}</div>
-                                                            <div className="pt-1 border-t border-borderColor mt-2 font-medium text-textColor">
-                                                                Price: ${finalPrice.toFixed(2)}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-
-                                        {/* Custom example input */}
-                                        <div className="mt-4 pt-4 border-t border-borderColor">
-                                            <h5 className="text-xs font-medium text-textColor mb-3">Test Your Own Example</h5>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-medium text-textColor">Volume (cm³)</label>
-                                                    <input
-                                                        type="number"
-                                                        value={customExample.volume}
-                                                        onChange={(e) => setCustomExample(prev => ({ ...prev, volume: e.target.value }))}
-                                                        className="formInput"
-                                                        placeholder="e.g., 2500"
-                                                        min="0"
-                                                        step="1"
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <label className="text-xs font-medium text-textColor">Weight (g)</label>
-                                                    <input
-                                                        type="number"
-                                                        value={customExample.weight}
-                                                        onChange={(e) => setCustomExample(prev => ({ ...prev, weight: e.target.value }))}
-                                                        className="formInput"
-                                                        placeholder="e.g., 300"
-                                                        min="0"
-                                                        step="1"
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <span className="text-xs font-medium text-textColor">Calculated Price</span>
-                                                    <div className="px-3 py-2 text-xs font-medium text-textColor flex items-center">
-                                                        {(() => {
-                                                            const basePrice = parseFloat(formData.basePricing.basePrice)
-                                                            const volumeFactor = parseFloat(formData.basePricing.volumeFactor)
-                                                            const weightFactor = parseFloat(formData.basePricing.weightFactor)
-                                                            const minPrice = parseFloat(formData.basePricing.minPrice) || 0
-                                                            const maxPrice = isNaN(parseFloat(formData.basePricing.maxPrice)) ? Infinity : parseFloat(formData.basePricing.maxPrice)
-                                                            const volume = parseFloat(customExample.volume)
-                                                            const weight = parseFloat(customExample.weight)
-
-                                                            if (isNaN(basePrice) || isNaN(volumeFactor) || isNaN(weightFactor) || isNaN(volume) || isNaN(weight)) {
-                                                                return <span className="text-extraLight">Enter volume and weight to preview</span>
-                                                            }
-
-                                                            const raw = basePrice + (volume * volumeFactor) + (weight * weightFactor)
-                                                            const final = Math.max(minPrice, Math.min(maxPrice, raw))
-                                                            return `$${final.toFixed(2)}`
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 justify-end pt-2 border-t border-borderColor">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowDeliveryTypeForm(false)
-                                    setFormData({
-                                        name: '',
-                                        displayName: '',
-                                        description: '',
-                                        applicableToProductTypes: [],
-                                        basePricing: {
-                                            basePrice: '',
-                                            volumeFactor: '',
-                                            weightFactor: '',
-                                            minPrice: '',
-                                            maxPrice: '',
-                                            freeShippingThreshold: ''
-                                        },
-                                        isActive: true
-                                    })
-                                }}
-                                className="formButton2 min-w-24"
-                                disabled={saving}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={saving}
-                                className="formBlackButton min-w-24"
-                            >
-                                {saving ? (editingDeliveryType ? 'Saving...' : 'Adding...') : (editingDeliveryType ? 'Save Changes' : 'Add Delivery Type')}
-                            </button>
-                        </div>
-                    </form>
+        <div className="flex flex-col gap-4 p-4 md:p-6">
+            {/* Header */}
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 className="dash-title">Delivery</h2>
+                    <p className="text-[13px] dash-soft mt-1">
+                        The shipping options customers pick at checkout. Digital delivery is always available.
+                    </p>
                 </div>
+                <div className="flex items-center gap-2">
+                    {deliveryTypes.length > 0 && (
+                        <button onClick={openCreate} data-tour="delivery-new" className={`${sunBtnCls} flex items-center gap-1.5`}>
+                            <IoAddOutline size={16} aria-hidden="true" />
+                            New Delivery Type
+                        </button>
+                    )}
+                    <TourHelpButton onClick={() => setTourOpen(true)} />
+                </div>
+            </div>
+
+            {tourOffer.offered && !tourOpen && (
+                <TourOfferStrip
+                    onStart={() => { tourOffer.accept(); setTourOpen(true) }}
+                    onDismiss={tourOffer.dismiss}
+                />
             )}
 
-            {/* Delivery Types List */}
-            <div className="adminDashboardContainer">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 className="text-base font-medium">All Delivery Types</h3>
-                        <p className="text-xs text-extraLight mt-1">{deliveryTypes.length} total • Digital delivery is always available</p>
-                    </div>
-                </div>
-
+            {/* Delivery types — icon cards with a sentence-style pricing strip (§5.14) */}
+            <DashCard
+                data-tour="delivery-list"
+                title="All delivery types"
+                action={<span className="text-[13px] dash-soft"><span className="dash-data">{deliveryTypes.length}</span> total</span>}
+            >
                 {deliveryTypes.length === 0 ? (
-                    <div className="text-center py-12 text-extraLight">
-                        <p>No custom delivery types yet</p>
-                        <p className="text-xs mt-2">Create delivery options for creators to use</p>
-                    </div>
+                    <EmptyState
+                        icon={<TbTruck />}
+                        title="No Delivery Types Yet"
+                        body="Create delivery options for creators to use on their products."
+                        cta="Add Delivery Type"
+                        onCta={openCreate}
+                    />
                 ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                         {deliveryTypes.map((dt, idx) => (
-                            <div key={dt.name || idx} className="border border-borderColor rounded-lg overflow-hidden transition-all duration-200 hover:border-extraLight">
-                                {/* Delivery Type Row */}
-                                <div className="flex flex-col gap-3 p-4 bg-baseColor">
-                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                        {/* Expand/Collapse Button */}
-                                        {dt.basePricing && dt.basePricing.basePrice != null && !(Number(dt.basePricing.basePrice) === 0 && Number(dt.basePricing.volumeFactor || 0) === 0 && Number(dt.basePricing.weightFactor || 0) === 0) && (
-                                            <button
-                                                onClick={() => toggleDeliveryType(dt.name)}
-                                                className="toggleXbutton p-1 shrink-0"
-                                                aria-label={expandedDeliveryTypes[dt.name] ? 'Collapse' : 'Expand'}
-                                            >
-                                                {expandedDeliveryTypes[dt.name] ? (
-                                                    <BsChevronDown size={14} />
-                                                ) : (
-                                                    <BsChevronRight size={14} />
-                                                )}
-                                            </button>
-                                        )}
-
+                            <div
+                                key={dt.name || idx}
+                                data-delivery-card="true"
+                                className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] p-4"
+                            >
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                        <DeliveryTypeIcon dt={dt} />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-medium text-sm">{dt.displayName}</span>
-                                                <span className="text-xs px-2 py-0.5 bg-borderColor rounded text-lightColor font-mono">{dt.name}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                                {dt.applicableToProductTypes?.map(type => (
-                                                    <span key={type} className="text-xs px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full font-medium">
-                                                        {type}
-                                                    </span>
-                                                ))}
-                                                {dt.isHardcoded && (
-                                                    <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">
-                                                        Built-in
-                                                    </span>
-                                                )}
-                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${dt.isActive
-                                                    ? 'bg-green-50 text-green-700'
-                                                    : 'bg-red-50 text-red-700'
-                                                    }`}>
-                                                    {dt.isActive ? 'Active' : 'Inactive'}
+                                                <span className="text-[14px] font-semibold text-[var(--dash-ink)]">{dt.displayName}</span>
+                                                <span className="dash-data rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)] px-2 py-0.5 text-[var(--dash-ink-soft)]">
+                                                    {dt.name}
                                                 </span>
-                                                {dt.basePricing && dt.basePricing.basePrice != null && (
-                                                    <span className="text-xs text-extraLight">
-                                                        {Number(dt.basePricing.basePrice) === 0 && Number(dt.basePricing.volumeFactor || 0) === 0 && Number(dt.basePricing.weightFactor || 0) === 0
-                                                            ? 'Free'
-                                                            : 'Formula-based pricing'}
-                                                    </span>
-                                                )}
-                                                {(!dt.basePricing || dt.basePricing.basePrice == null) && (
-                                                    <span className="text-xs text-extraLight">
-                                                        Creator-defined pricing
-                                                    </span>
-                                                )}
+                                                {dt.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
+                                                {dt.applicableToProductTypes?.map(type => (
+                                                    <StatusPill key={type} tone="paper">{TYPE_LABELS[type] || type}</StatusPill>
+                                                ))}
+                                            </div>
+                                            <div className="mt-2">
+                                                <PricingStrip basePricing={dt.basePricing} />
                                             </div>
                                             {dt.description && (
-                                                <p className="text-xs text-lightColor mt-2">{dt.description}</p>
+                                                <p className="text-[13px] dash-soft mt-2">{dt.description}</p>
                                             )}
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <DeliverySwitch
+                                            checked={dt.isActive}
+                                            onChange={() => handleToggleActive(dt.name, dt.isActive)}
+                                            label={`${dt.displayName} active`}
+                                            data-tour="delivery-toggle"
+                                        />
                                         {!dt.isHardcoded && (
-                                            <button
-                                                onClick={() => {
-                                                    setEditingDeliveryType(dt)
-                                                    setFormData({
-                                                        name: dt.name,
-                                                        displayName: dt.displayName,
-                                                        description: dt.description || '',
-                                                        applicableToProductTypes: dt.applicableToProductTypes || [],
-                                                        basePricing: {
-                                                            basePrice: dt.basePricing?.basePrice ?? '',
-                                                            volumeFactor: dt.basePricing?.volumeFactor ?? '',
-                                                            weightFactor: dt.basePricing?.weightFactor ?? '',
-                                                            minPrice: dt.basePricing?.minPrice ?? '',
-                                                            maxPrice: dt.basePricing?.maxPrice ?? '',
-                                                            freeShippingThreshold: dt.basePricing?.freeShippingThreshold ?? '',
-                                                        },
-                                                        isActive: dt.isActive,
-                                                    })
-                                                    setShowDeliveryTypeForm(true)
-                                                }}
-                                                className="text-xs px-3 py-1.5 rounded border border-borderColor hover:bg-borderColor/30 text-lightColor font-medium whitespace-nowrap"
-                                            >
-                                                Edit
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={() => handleToggleActive(dt.name, dt.isActive)}
-                                            className={`text-xs px-3 py-1.5 rounded transition-all duration-200 font-medium whitespace-nowrap ${dt.isActive
-                                                ? 'border border-borderColor hover:bg-borderColor/30 text-lightColor'
-                                                : 'bg-textColor text-background hover:bg-textColor/90'
-                                                }`}
-                                        >
-                                            {dt.isActive ? 'Deactivate' : 'Activate'}
-                                        </button>
-
-                                        {!dt.isHardcoded && (
-                                            <button
-                                                onClick={() => handleDelete(dt.name)}
-                                                className="p-2 text-extraLight hover:text-red-600 transition-colors duration-200 rounded hover:bg-red-50 shrink-0"
-                                                aria-label="Delete delivery type"
-                                            >
-                                                <RxCross1 size={14} />
-                                            </button>
+                                            <>
+                                                <button onClick={() => openEdit(dt)} className={quietBtnCls}>
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteTarget(dt)}
+                                                    className="dash-hoverable p-2 rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-bad)] hover:bg-[var(--dash-bad-bg)] cursor-pointer shrink-0"
+                                                    aria-label="Delete delivery type"
+                                                >
+                                                    <IoTrashOutline size={14} aria-hidden="true" />
+                                                </button>
+                                            </>
                                         )}
                                     </div>
                                 </div>
-
-                                {/* Pricing Formula Details - Collapsible */}
-                                {dt.basePricing && dt.basePricing.basePrice != null && !(Number(dt.basePricing.basePrice) === 0 && Number(dt.basePricing.volumeFactor || 0) === 0 && Number(dt.basePricing.weightFactor || 0) === 0) && expandedDeliveryTypes[dt.name] && (
-                                    <div className="border-t border-borderColor bg-background/50">
-                                        <div className="p-4">
-                                            <h4 className="text-xs font-medium text-lightColor mb-3">Pricing Formula</h4>
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-extraLight">Base Price</span>
-                                                    <span className="font-medium text-textColor">${dt.basePricing.basePrice}</span>
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-extraLight">Volume Factor</span>
-                                                    <span className="font-medium text-textColor">${dt.basePricing.volumeFactor}/cm³</span>
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-extraLight">Weight Factor</span>
-                                                    <span className="font-medium text-textColor">${dt.basePricing.weightFactor}/g</span>
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-extraLight">Min Price</span>
-                                                    <span className="font-medium text-textColor">${dt.basePricing.minPrice}</span>
-                                                </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="text-extraLight">Max Price</span>
-                                                    <span className="font-medium text-textColor">${dt.basePricing.maxPrice}</span>
-                                                </div>
-                                                {dt.basePricing.freeShippingThreshold && (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-extraLight">Free Shipping</span>
-                                                        <span className="font-medium text-textColor">${dt.basePricing.freeShippingThreshold}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         ))}
                     </div>
                 )}
-            </div>
+            </DashCard>
+
+            {/* Create / edit — stepped sheet flow (§5.14 + client feedback) */}
+            <DeliveryTypeFormSheet
+                open={showDeliveryTypeForm}
+                onClose={closeForm}
+                editing={!!editingDeliveryType}
+                formData={formData}
+                setFormData={setFormData}
+                saving={saving}
+                onSubmit={handleSubmit}
+            />
+
+            {/* Delete confirmation — never window.confirm (§4.10) */}
+            <ConfirmDialog
+                open={!!deleteTarget}
+                onClose={() => setDeleteTarget(null)}
+                onConfirm={confirmDelete}
+                title="Delete this delivery type?"
+                body={deleteTarget ? `"${deleteTarget.displayName}" will no longer be available to creators or customers.` : ''}
+                confirmLabel="Delete"
+                tone="bad"
+                busy={deleteBusy}
+            />
+
+            {/* Guided tour (§9.11) */}
+            <CoachMarks steps={TOURS.delivery} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="delivery" />
         </div>
     )
 }

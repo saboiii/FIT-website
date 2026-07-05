@@ -47,6 +47,10 @@ import {
     IoCarOutline,
     IoSparklesOutline,
     IoSearchOutline,
+    IoFlashOutline,
+    IoResizeOutline,
+    IoColorPaletteOutline,
+    IoDownloadOutline,
     IoLockClosedOutline,
     IoChevronBackOutline,
     IoChevronForwardOutline,
@@ -312,19 +316,21 @@ function AdminDashboard() {
             label: item.label,
             description: item.description,
             keywords: [item.key],
+            icon: item.icon,
             perform: () => setActiveTab(item.key),
         }))
         const settings = [
-            { id: 'set:rates', label: 'Change pricing rates', tab: 'quoting', sub: 'rates' },
-            { id: 'set:expedite', label: 'Change expedite fees', tab: 'quoting', sub: 'fees' },
-            { id: 'set:limits', label: 'Edit machine limits', tab: 'quoting', sub: 'limits' },
-            { id: 'set:colour', label: 'Add a colour', tab: 'quoting', sub: 'colours' },
-            { id: 'set:calibrate', label: 'Calibrate print times', tab: 'printTiming' },
-            { id: 'set:deliveryType', label: 'Add a delivery type', tab: 'delivery' },
+            { id: 'set:rates', label: 'Change pricing rates', tab: 'quoting', sub: 'rates', icon: IoCalculatorOutline },
+            { id: 'set:expedite', label: 'Change expedite fees', tab: 'quoting', sub: 'fees', icon: IoFlashOutline },
+            { id: 'set:limits', label: 'Edit machine limits', tab: 'quoting', sub: 'limits', icon: IoResizeOutline },
+            { id: 'set:colour', label: 'Add a colour', tab: 'quoting', sub: 'colours', icon: IoColorPaletteOutline },
+            { id: 'set:calibrate', label: 'Calibrate print times', tab: 'printTiming', icon: IoTimeOutline },
+            { id: 'set:deliveryType', label: 'Add a delivery type', tab: 'delivery', icon: IoCarOutline },
         ].map((s) => ({
             id: s.id,
             label: s.label,
             description: `Opens ${NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === s.tab)?.label}`,
+            icon: s.icon,
             perform: () => setActiveTab(s.tab, s.sub),
         }))
         const actions = [
@@ -332,12 +338,14 @@ function AdminDashboard() {
                 id: 'act:wizard',
                 label: 'Run setup wizard',
                 description: 'Guided store setup: pricing, machines, colours, delivery.',
+                icon: IoSparklesOutline,
                 perform: openWizard,
             },
             {
                 id: 'act:exportRequests',
                 label: 'Export print requests',
                 description: 'Opens Print Requests, where the export lives.',
+                icon: IoDownloadOutline,
                 perform: () => setActiveTab('customPrintRequests'),
             },
         ]

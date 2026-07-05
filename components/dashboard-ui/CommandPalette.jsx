@@ -221,10 +221,15 @@ export default function CommandPalette({ open, onOpen, onClose, groups = [] }) {
                                         data-active={isActive || undefined}
                                         onMouseMove={() => setActiveIndex(myIndex)}
                                         onClick={() => commit(item)}
-                                        className={`w-full flex items-baseline gap-2 text-left rounded-[var(--dash-r-inner)] px-3 py-2 cursor-pointer ${
+                                        className={`w-full flex items-center gap-2.5 text-left rounded-[var(--dash-r-inner)] px-3 py-2 cursor-pointer ${
                                             isActive ? 'bg-[var(--dash-sun-soft)]' : ''
                                         }`}
                                     >
+                                        {item.icon && (
+                                            <span className="w-4 shrink-0 grid place-items-center text-[var(--dash-ink-soft)]" aria-hidden="true">
+                                                <item.icon size={15} />
+                                            </span>
+                                        )}
                                         <span className="text-[14px] font-medium text-[var(--dash-ink)] whitespace-nowrap">
                                             {item.label}
                                         </span>

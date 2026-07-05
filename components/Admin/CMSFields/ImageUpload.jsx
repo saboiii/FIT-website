@@ -2,9 +2,9 @@ import { useToast } from '@/components/General/ToastProvider';
 import { useState, useRef } from 'react'
 import { FaRegCopy } from 'react-icons/fa'
 import ImageDrop from '@/components/General/ImageDrop'
-import { RxReset } from 'react-icons/rx';
 import { BiUndo } from 'react-icons/bi';
 import Cropper from 'react-easy-crop';
+import { inputCls, labelCls, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 export default function ImageUpload({
     label,
@@ -69,7 +69,7 @@ export default function ImageUpload({
             }
         } catch (error) {
             console.error('Upload error:', error)
-            alert('Failed to upload image')
+            showToast('Failed to upload image', 'error')
         } finally {
             setIsUploading(false)
         }
@@ -99,7 +99,7 @@ export default function ImageUpload({
                 setIsCropModalOpen(true)
             } catch (err) {
                 console.error('Failed to read file for cropping:', err)
-                alert('Failed to open image for cropping')
+                showToast('Failed to open image for cropping', 'error')
             }
         } else {
             await uploadFile(file)
@@ -122,7 +122,7 @@ export default function ImageUpload({
             } catch (err) {
                 console.error('Failed to delete existing image:', err)
                 // Non-blocking: notify in console/UI but continue to reset locally
-                alert('Unable to delete the existing image from storage, but the banner has been reset.');
+                showToast('Unable to delete the existing image from storage, but the field has been reset.', 'error');
             }
         }
 
@@ -212,7 +212,7 @@ export default function ImageUpload({
             await uploadFile(croppedFile)
         } catch (err) {
             console.error('Error while cropping/uploading image:', err)
-            alert('Failed to process cropped image')
+            showToast('Failed to process cropped image', 'error')
         } finally {
             setIsUploading(false)
             setIsCropModalOpen(false)
@@ -230,19 +230,19 @@ export default function ImageUpload({
     }
 
     return (
-        <div className={`flex flex-col w-full space-y-2 ${className}`}>
-            <label className="formLabel">
-                {label} {required && <span className="text-red-500">*</span>}
+        <div className={`flex flex-col w-full gap-2 ${className}`}>
+            <label className={labelCls}>
+                {label} {required && <span className="text-[var(--dash-bad)]">*</span>}
             </label>
 
-            <div className="flex flex-col w-full space-y-3">
-                <div className="flex items-center space-x-2">
+            <div className="flex flex-col w-full gap-3">
+                <div className="flex items-center gap-2">
                     <input
                         type="text"
                         value={value || ''}
                         readOnly
                         placeholder={placeholder || "Upload an image using the button"}
-                        className="formInput"
+                        className={`${inputCls()} opacity-70`}
                         disabled
                     />
                     <button
@@ -256,22 +256,23 @@ export default function ImageUpload({
                                 // noop
                             }
                         }}
-                        className="px-3 py-2 border border-borderColor rounded text-xs hover:bg-baseColor transition flex items-center gap-1 cursor-pointer"
+                        title="Copy value"
+                        className={`${quietBtnCls} flex items-center gap-1 shrink-0`}
                     >
                         <FaRegCopy />
                     </button>
                 </div>
-                <div className="flex h-full flex-col">
+                <div className="flex h-full flex-col gap-1">
                     <button
                         type="button"
                         onClick={handleReset}
                         disabled={disabled}
-                        className="formButton"
+                        className={`${quietBtnCls} flex items-center justify-center gap-1.5 self-start`}
                     >
                         Reset to placeholder
                         <BiUndo size={16} />
                     </button>
-                    {isUploading && <span className="text-sm text-blue-600">Uploading...</span>}
+                    {isUploading && <span className="text-[13px] dash-soft">Uploading...</span>}
                 </div>
 
                 <div className="flex w-full">
@@ -291,10 +292,11 @@ export default function ImageUpload({
             </div>
 
             {isCropModalOpen && imageSrc && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-xl mx-4 p-4 flex flex-col gap-4">
-                        <h3 className="text-sm font-medium">Adjust image before upload</h3>
-                        <div className="relative w-full h-64 bg-black/80 rounded-md overflow-hidden">
+                <div className="fixed inset-0 z-50 flex items-center justify-center">
+                    <div className="dash-scrim absolute inset-0" onClick={handleCancelCrop} />
+                    <div className="relative bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-card)] shadow-[var(--dash-shadow-float)] w-full max-w-xl mx-4 p-4 flex flex-col gap-4">
+                        <h3 className="dash-section">Adjust image before upload</h3>
+                        <div className="relative w-full h-64 bg-[var(--dash-ink)] rounded-[var(--dash-r-inner)] overflow-hidden">
                             <Cropper
                                 image={imageSrc}
                                 crop={crop}
@@ -306,7 +308,7 @@ export default function ImageUpload({
                             />
                         </div>
                         <div className="flex items-center gap-3">
-                            <span className="text-xs text-lightColor">Zoom</span>
+                            <span className="dash-label">Zoom</span>
                             <input
                                 type="range"
                                 min={1}
@@ -314,21 +316,21 @@ export default function ImageUpload({
                                 step={0.1}
                                 value={zoom}
                                 onChange={(e) => setZoom(Number(e.target.value))}
-                                className="w-full accent-textColor"
+                                className="w-full cursor-pointer accent-[var(--dash-ink)]"
                             />
                         </div>
                         <div className="flex justify-end gap-2 mt-2">
                             <button
                                 type="button"
                                 onClick={handleCancelCrop}
-                                className="px-3 py-1.5 text-xs border border-borderColor rounded hover:bg-baseColor transition"
+                                className={quietBtnCls}
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
                                 onClick={handleConfirmCrop}
-                                className="px-3 py-1.5 text-xs rounded bg-black text-white hover:bg-gray-900 transition disabled:opacity-60"
+                                className="dash-hoverable rounded-full px-3.5 py-1.5 text-[13px] font-medium bg-[var(--dash-ink)] text-[var(--dash-canvas)] cursor-pointer hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={isUploading || !croppedAreaPixels}
                             >
                                 {isUploading ? 'Uploading…' : 'Save & Upload'}

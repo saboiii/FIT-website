@@ -1,4 +1,5 @@
-import { useState } from 'react'
+'use client'
+import { inputCls, labelCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 export default function TextInput({
     label,
@@ -12,12 +13,12 @@ export default function TextInput({
     helpText
 }) {
     return (
-        <div className={`space-y-2 ${className}`}>
-            <label className="formLabel">
-                {label} {required && <span className="text-red-500">*</span>}
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+            <label className={labelCls}>
+                {label} {required && <span className="text-[var(--dash-bad)]">*</span>}
             </label>
             {helpText && (
-                <p className="text-xs text-lightColor -mt-1">{helpText}</p>
+                <p className="text-[13px] dash-soft">{helpText}</p>
             )}
             {rows > 1 ? (
                 <textarea
@@ -26,7 +27,7 @@ export default function TextInput({
                     rows={rows}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="formInput"
+                    className={`${inputCls()} disabled:opacity-50`}
                 />
             ) : (
                 <input
@@ -35,7 +36,7 @@ export default function TextInput({
                     onChange={(e) => onChange(e.target.value)}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="formInput"
+                    className={`${inputCls()} disabled:opacity-50`}
                 />
             )}
         </div>

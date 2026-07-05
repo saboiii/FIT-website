@@ -1,4 +1,5 @@
-import { useState } from 'react'
+'use client'
+import { inputCls, labelCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 export default function SelectField({
     label,
@@ -11,15 +12,15 @@ export default function SelectField({
     className = ""
 }) {
     return (
-        <div className={`space-y-2 ${className}`}>
-            <label className="block text-sm font-medium text-gray-700">
-                {label} {required && <span className="text-red-500">*</span>}
+        <div className={`flex flex-col gap-1.5 ${className}`}>
+            <label className={labelCls}>
+                {label} {required && <span className="text-[var(--dash-bad)]">*</span>}
             </label>
             <select
                 value={value || ''}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled}
-                className="w-full px-3 py-2 border border-borderColor rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
+                className={`${inputCls()} cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}
             >
                 <option value="">{placeholder}</option>
                 {options.map((option, index) => (

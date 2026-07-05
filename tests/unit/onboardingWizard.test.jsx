@@ -81,6 +81,22 @@ describe('OnboardingWizard', () => {
     })
   })
 
+  it('rail steps jump back but never forward', async () => {
+    render(<OnboardingWizard adminEmailPresent onClose={vi.fn()} />)
+    fireEvent.click(screen.getByText('Next')) // → pricing
+    await screen.findByText('Rates & fees')
+    fireEvent.click(screen.getByText('Next')) // → machines
+    await screen.findByText(/Print time estimation/)
+
+    // Forward jump (colours is still todo) is disabled — nothing changes.
+    fireEvent.click(screen.getByRole('button', { name: /Curate your catalogue/ }))
+    expect(screen.getByText(/Print time estimation/)).toBeInTheDocument()
+
+    // Jumping back to a completed step works.
+    fireEvent.click(screen.getByRole('button', { name: /What do you charge/ }))
+    expect(await screen.findByText('Rates & fees')).toBeInTheDocument()
+  })
+
   it('"Set up later" dismisses persistently', () => {
     const onClose = vi.fn()
     render(<OnboardingWizard adminEmailPresent onClose={onClose} />)

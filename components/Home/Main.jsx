@@ -84,8 +84,9 @@ function Main({ adbanner }) {
                     }}
                 />
             )}
-            {content?.darkOverlay && (
-                <div className="absolute inset-0 bg-black/50 z-[5]" />
+            {Boolean(content?.darkOverlay) && (
+                // darkOverlay is a 0–80 percentage (legacy boolean true = 50)
+                <div className="absolute inset-0 bg-black z-[5]" style={{ opacity: (content.darkOverlay === true ? 50 : Number(content.darkOverlay) || 0) / 100 }} />
             )}
             <div className="relative z-10 flex flex-col items-center w-full text-background text-center px-4">
                 {isImageLoaded && (

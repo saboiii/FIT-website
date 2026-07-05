@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { FiSearch, FiX, FiCheck } from 'react-icons/fi'
 import { MdDragIndicator } from 'react-icons/md'
+import { inputCls, labelCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 
 export default function ProductSearch({ label, value, onChange, helpText }) {
     const [searchQuery, setSearchQuery] = useState('')
@@ -132,11 +133,11 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
     }, [])
 
     return (
-        <div className="space-y-3">
-            <label className="formLabel">{label}</label>
+        <div className="flex flex-col gap-3">
+            <label className={labelCls}>{label}</label>
 
             {helpText && (
-                <p className="text-xs text-lightColor">{helpText}</p>
+                <p className="text-[13px] dash-soft">{helpText}</p>
             )}
 
             <div className="relative" ref={dropdownRef}>
@@ -147,15 +148,15 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
                         onChange={handleSearchChange}
                         onFocus={() => setShowDropdown(true)}
                         placeholder="Search products by name..."
-                        className="formInput pl-10"
+                        className={`${inputCls()} pr-10`}
                     />
-                    <FiSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-borderColor" size={18} />
+                    <FiSearch className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--dash-ink-soft)]" size={18} />
                 </div>
 
                 {showDropdown && (searchQuery.trim() || isSearching) && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-borderColor rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] shadow-[var(--dash-shadow-float)] max-h-64 overflow-y-auto">
                         {isSearching ? (
-                            <div className="p-4 text-center text-sm text-lightColor">
+                            <div className="p-4 text-center text-[13px] dash-soft">
                                 <div className="loader mx-auto mb-2" style={{ width: '20px', height: '20px' }} />
                                 Searching...
                             </div>
@@ -167,31 +168,31 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
                                         type="button"
                                         onClick={() => addProduct(product)}
                                         disabled={selectedProducts.find(p => p._id === product._id)}
-                                        className="w-full px-4 py-2 text-left hover:bg-baseColor transition-colors flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="dash-hoverable w-full px-4 py-2 text-left hover:bg-[var(--dash-canvas)] flex items-center gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         {product.images?.[0] && (
                                             <img
                                                 src={`/api/proxy?key=${encodeURIComponent(product.images[0])}`}
                                                 alt={product.name}
-                                                className="w-10 h-10 object-cover rounded border border-borderColor"
+                                                className="w-10 h-10 object-cover rounded-[8px] border border-[var(--dash-line)]"
                                             />
                                         )}
                                         <div className="flex-1 min-w-0">
-                                            <div className="text-sm font-medium text-textColor truncate">
+                                            <div className="text-[13px] font-medium text-[var(--dash-ink)] truncate">
                                                 {product.name}
                                             </div>
-                                            <div className="text-xs text-lightColor">
+                                            <div className="text-[13px] dash-soft">
                                                 {product.productCategory || 'Uncategorized'}
                                             </div>
                                         </div>
                                         {selectedProducts.find(p => p._id === product._id) && (
-                                            <FiCheck className="text-green-600 flex-shrink-0" />
+                                            <FiCheck className="text-[var(--dash-ok)] flex-shrink-0" />
                                         )}
                                     </button>
                                 ))}
                             </div>
                         ) : searchQuery.trim() ? (
-                            <div className="p-4 text-center text-sm text-lightColor">
+                            <div className="p-4 text-center text-[13px] dash-soft">
                                 No products found
                             </div>
                         ) : null}
@@ -201,11 +202,11 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
 
             {/* Selected Products */}
             {selectedProducts.length > 0 && (
-                <div className="space-y-2">
-                    <div className="text-xs font-medium text-textColor">
-                        Selected Products ({selectedProducts.length}) - Drag to reorder
+                <div className="flex flex-col gap-2">
+                    <div className="dash-label">
+                        Selected Products ({selectedProducts.length}) — drag to reorder
                     </div>
-                    <div className="space-y-2">
+                    <div className="flex flex-col gap-2">
                         {selectedProducts.map((product, index) => (
                             <div
                                 key={product._id}
@@ -213,24 +214,24 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
                                 onDragStart={() => handleDragStart(index)}
                                 onDragOver={(e) => handleDragOver(e, index)}
                                 onDragEnd={handleDragEnd}
-                                className={`flex items-center gap-3 p-3 bg-baseColor border border-borderColor rounded-lg cursor-move hover:border-textColor/30 transition-all ${draggedIndex === index ? 'opacity-50' : ''
+                                className={`dash-hoverable flex items-center gap-3 p-3 bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] cursor-move ${draggedIndex === index ? 'opacity-50' : ''
                                     }`}
                             >
-                                <MdDragIndicator className="text-lightColor flex-shrink-0" size={20} />
+                                <MdDragIndicator className="text-[var(--dash-ink-soft)] flex-shrink-0" size={20} />
 
                                 {product.images?.[0] && (
                                     <img
                                         src={`/api/proxy?key=${encodeURIComponent(product.images[0])}`}
                                         alt={product.name}
-                                        className="w-12 h-12 object-cover rounded border border-borderColor"
+                                        className="w-12 h-12 object-cover rounded-[8px] border border-[var(--dash-line)]"
                                     />
                                 )}
 
                                 <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-textColor truncate">
+                                    <div className="text-[13px] font-medium text-[var(--dash-ink)] truncate">
                                         {product.name}
                                     </div>
-                                    <div className="text-xs text-lightColor">
+                                    <div className="text-[13px] dash-soft">
                                         {product.productCategory || 'Uncategorized'}
                                     </div>
                                 </div>
@@ -238,10 +239,10 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
                                 <button
                                     type="button"
                                     onClick={() => removeProduct(product._id)}
-                                    className="flex-shrink-0 p-1.5 hover:bg-red-50 rounded-full transition-colors group"
+                                    className="dash-hoverable flex-shrink-0 p-1.5 hover:bg-[var(--dash-bad-bg)] rounded-full group cursor-pointer"
                                     title="Remove product"
                                 >
-                                    <FiX className="text-lightColor group-hover:text-red-600" size={18} />
+                                    <FiX className="text-[var(--dash-ink-soft)] group-hover:text-[var(--dash-bad)]" size={18} />
                                 </button>
                             </div>
                         ))}

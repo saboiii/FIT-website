@@ -525,9 +525,10 @@ function AdminDashboard() {
                                 onOpenWizard={() => setWizardOpen(true)}
                             />
                         ) : (
-                            <div className="bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-card)] shadow-[var(--dash-shadow-card)]">
-                                <ActivePanel />
-                            </div>
+                            // Panels render on the canvas and own their cards —
+                            // wrapping them in a Tier-1 card nests cards (§4.8 #1;
+                            // WP2 flag).
+                            <ActivePanel />
                         )}
                     </main>
                 </div>

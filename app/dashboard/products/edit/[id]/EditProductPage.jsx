@@ -3,13 +3,20 @@
 import EditProduct from "./EditProduct";
 import Fallback from "@/app/dashboard/Fallback";
 import useAccess from "@/utils/useAccess";
+import { DashProvider, SkeletonRow } from '@/components/dashboard-ui';
 
 function EditProductPage() {
     const { loading, canAccess } = useAccess();
 
-    if (loading) return <div className='flex items-center justify-center h-[92vh] w-full border-b border-borderColor'>
-        <div className='loader' />
-    </div>;
+    if (loading) return (
+        <DashProvider>
+            <div className='mx-auto w-full max-w-[720px] px-6 py-12 flex flex-col gap-3'>
+                <SkeletonRow />
+                <SkeletonRow />
+                <SkeletonRow />
+            </div>
+        </DashProvider>
+    );
 
     if (!canAccess) return <Fallback />;
     return <EditProduct />;

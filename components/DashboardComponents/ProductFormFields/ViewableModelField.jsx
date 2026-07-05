@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo } from 'react'
 import { RxCross1 } from 'react-icons/rx'
+import { InfoStrip, dropZoneCls, labelCls } from './dashFormUi'
 
 export default function ViewableModelField({
     viewableValidationErrors,
@@ -61,20 +62,18 @@ export default function ViewableModelField({
     )
     return (
         <div className='flex flex-col gap-2 w-full'>
-            <label className="formLabel">Viewable Model</label>
+            <label className={labelCls}>Viewable Model</label>
             {viewableValidationErrors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                    <div className="text-sm text-red-800 font-medium mb-1">Viewable Model Errors:</div>
-                    <ul className="text-xs text-red-700 space-y-1">
+                <InfoStrip tone="error" title="Viewable Model Errors:">
+                    <ul className="space-y-1">
                         {viewableValidationErrors.map((error, index) => (
                             <li key={index}>• {error}</li>
                         ))}
                     </ul>
-                </div>
+                </InfoStrip>
             )}
             <div
-                className={`formDrag ${dragViewableModelActive ? "bg-borderColor/30" : ""}`
-                }
+                className={dropZoneCls(dragViewableModelActive)}
                 onClick={() => viewableModelInputRef.current && viewableModelInputRef.current.click()}
                 onDragOver={e => {
                     e.preventDefault();
@@ -106,7 +105,7 @@ export default function ViewableModelField({
                     ref={viewableModelInputRef}
                 />
             </div>
-            <ul className="flex flex-col text-sm w-fit">
+            <ul className="flex flex-col text-[13px] w-fit">
                 {pendingViewableModel ? (
                     <div className='gap-4 flex flex-row items-center justify-between'>
                         <li className='flex truncate' title={pendingViewableModel.name}>

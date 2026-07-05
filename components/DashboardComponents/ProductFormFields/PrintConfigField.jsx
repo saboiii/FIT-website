@@ -1,4 +1,6 @@
 import React from 'react'
+import { DottedRow } from '@/components/dashboard-ui'
+import { inputCls } from './dashFormUi'
 
 /**
  * Fixed print configuration for a print-delivery product (productType:"print").
@@ -7,7 +9,8 @@ import React from 'react'
  * variant (Variant Types section). See openspec change
  * `migrate-print-delivery-to-custom-requests`.
  *
- * Styling mirrors the Stock Management block for consistency.
+ * Rendered as dotted-leader spec rows (blueprint §5.5 wireframe):
+ * `Layer height ……………… [0.2] mm`.
  */
 const DEFAULT_CONFIG = {
   layerHeight: 0.2,
@@ -19,11 +22,13 @@ const DEFAULT_CONFIG = {
 }
 
 const NUMERIC = [
-  ['layerHeight', 'Layer height (mm)', 0.05, 5, 0.01],
-  ['wallLoops', 'Wall loops', 0, 20, 1],
-  ['sparseInfillDensity', 'Infill density (%)', 0, 100, 1],
-  ['nozzleDiameter', 'Nozzle (mm)', 0.1, 5, 0.1],
+  ['layerHeight', 'Layer height', 'mm', 0.05, 5, 0.01],
+  ['wallLoops', 'Wall loops', '', 0, 20, 1],
+  ['sparseInfillDensity', 'Infill density', '%', 0, 100, 1],
+  ['nozzleDiameter', 'Nozzle', 'mm', 0.1, 5, 0.1],
 ]
+
+const rowInputCls = `${inputCls()} w-24 text-right py-1`
 
 export default function PrintConfigField({ form, setForm }) {
   const config = { ...DEFAULT_CONFIG, ...(form.printConfig || {}) }
@@ -32,48 +37,49 @@ export default function PrintConfigField({ form, setForm }) {
     setForm((f) => ({ ...f, printConfig: { ...DEFAULT_CONFIG, ...(f.printConfig || {}), [key]: value } }))
 
   return (
-    <div className="w-full space-y-3">
-      <p className="text-xs text-extraLight">
+    <div className="w-full space-y-2">
+      <p className="text-[13px] text-[var(--dash-ink-soft)]">
         These settings are fixed for the customer and determine the quote. The customer chooses a
-        colour via a Colour variant under Pricing.
+        colour via a Colour variant under Variants.
       </p>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        {NUMERIC.map(([key, label, min, max, step]) => (
-          <div key={key} className="space-y-1">
-            <label className="text-xs font-medium text-lightColor">{label}</label>
+      <div className="flex flex-col">
+        {NUMERIC.map(([key, label, unit, min, max, step]) => (
+          <DottedRow key={key} label={label}>
             <input
               type="number"
               min={min}
               max={max}
               step={step}
+              aria-label={label}
               value={config[key]}
               onChange={(e) => setConfig(key, e.target.value === '' ? '' : Number(e.target.value))}
-              className="formInput text-sm w-full"
+              className={rowInputCls}
             />
-          </div>
+            {unit && <span className="text-[var(--dash-ink-soft)]">{unit}</span>}
+          </DottedRow>
         ))}
 
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-lightColor">Material</label>
+        <DottedRow label="Material">
           <select
             value={config.materialType}
+            aria-label="Material"
             onChange={(e) => setConfig('materialType', e.target.value)}
-            className="formInput text-sm w-full"
+            className={`${inputCls()} w-32 py-1 cursor-pointer`}
           >
             {['plastic', 'resin', 'metal', 'sandstone'].map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
           </select>
-        </div>
+        </DottedRow>
       </div>
 
-      <label className="flex items-center gap-2 text-sm cursor-pointer">
+      <label className="flex items-center gap-2 text-[13px] cursor-pointer">
         <input
           type="checkbox"
           checked={!!config.enableSupport}
           onChange={(e) => setConfig('enableSupport', e.target.checked)}
-          className="rounded"
+          className="rounded accent-[var(--dash-ink)]"
         />
         Enable support
       </label>

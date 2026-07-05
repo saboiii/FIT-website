@@ -1,10 +1,10 @@
 import React from 'react'
-import SelectField from '../SelectField'
+import { DashSelect } from './dashFormUi'
 
 export default function ProductTypeCategory({ form, setForm, isAdmin, categories, subcategories }) {
     return (
         <>
-            <SelectField
+            <DashSelect
                 onChangeFunction={e => {
                     const val = e.target.value;
                     if (val === "shop" && !isAdmin) return; // Prevent non-admin from selecting shop
@@ -24,7 +24,7 @@ export default function ProductTypeCategory({ form, setForm, isAdmin, categories
                 ]}
             />
 
-            <SelectField
+            <DashSelect
                 onChangeFunction={e =>
                     setForm(f => ({
                         ...f,
@@ -40,7 +40,7 @@ export default function ProductTypeCategory({ form, setForm, isAdmin, categories
                 ]}
             />
 
-            <SelectField
+            <DashSelect
                 onChangeFunction={e =>
                     setForm(f => ({
                         ...f,

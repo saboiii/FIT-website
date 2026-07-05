@@ -1,12 +1,21 @@
 'use client'
+// The product document (blueprint §5.5): one continuous sheet at reading
+// width — GlassBar (breadcrumb · title echo · save state · CTA), a 720px
+// document column of flowing sections, and a sticky side rail with
+// completeness dots + scroll-spy. State management, two-phase validation,
+// upload/rollback and payload building are unchanged from the legacy form.
 import { useUser } from "@clerk/nextjs";
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link";
-import { GoChevronDown, GoChevronLeft, GoChevronRight } from "react-icons/go";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { GoChevronLeft } from "react-icons/go";
 import { supportedCountries } from '@/lib/supportedCountries'
 import { useToast } from "../General/ToastProvider";
 import { uploadImages, uploadModels, uploadViewable } from "@/utils/uploadHelpers";
 import useAccess from "@/utils/useAccess";
+import { ConfirmDialog, GlassBar, StatusPill } from '@/components/dashboard-ui';
+import { swap } from '@/lib/motion/tokens';
 import BasicInfo from './ProductFormFields/BasicInfo';
 import ImagesField from './ProductFormFields/ImagesField';
 import ProductTypeCategory from './ProductFormFields/ProductTypeCategory';
@@ -17,6 +26,7 @@ import ShippingFields from './ProductFormFields/ShippingFields';
 import PricingFields from './ProductFormFields/PricingFields';
 import VariantTypesField from './ProductFormFields/VariantTypesField';
 import DiscountsField from "./ProductFormFields/DiscountsField";
+import { inputCls, labelCls, quietBtnCls, badTextBtnCls } from './ProductFormFields/dashFormUi';
 import { useAdminSettings } from '@/utils/AdminSettingsContext';
 import {
     mapProductToForm,
@@ -32,8 +42,72 @@ import {
     handleRemoveViewableModel as handleRemoveViewableModelHelper,
 } from '@/utils/formHelpers';
 
+// Document order of the sheet's sections (§5.5). `print` only renders for
+// print products but keeps its slot in the order.
+const SECTION_ORDER = ['basics', 'photos', 'model', 'digital', 'print', 'delivery', 'pricing', 'variants', 'discounts', 'stock']
+
+const SECTION_LABELS = {
+    basics: 'Basics',
+    photos: 'Photos',
+    model: '3D model',
+    digital: 'Digital files',
+    print: 'Print settings',
+    delivery: 'Delivery',
+    pricing: 'Pricing',
+    variants: 'Variants',
+    discounts: 'Discounts',
+    stock: 'Stock',
+}
+
+// Which section owns each required-field key (rail dot turns bad + scroll target).
+const FIELD_TO_SECTION = {
+    name: 'basics',
+    description: 'basics',
+    productType: 'basics',
+    images: 'photos',
+    deliveryTypes: 'delivery',
+    basePrice: 'pricing',
+    priceCredits: 'pricing',
+}
+
+const DOT_CLS = {
+    ink: 'bg-[var(--dash-ink)]',
+    hatch: 'dash-hatch bg-[var(--dash-card)] border border-[var(--dash-line)]',
+    bad: 'bg-[var(--dash-bad)]',
+}
+
+// Completeness dot: ink = required-complete, hatch = optional/empty, bad = error.
+function RailDot({ tone }) {
+    return (
+        <span
+            aria-hidden="true"
+            data-dot={tone}
+            className={`inline-block h-2 w-2 rounded-full shrink-0 ${DOT_CLS[tone] || DOT_CLS.hatch}`}
+        />
+    )
+}
+
+function FormSection({ id, title, anchorRef, first = false, children }) {
+    return (
+        <section
+            ref={anchorRef}
+            data-section-anchor={id}
+            className={`w-full flex flex-col gap-4 scroll-mt-24 pb-8 ${first ? '' : 'border-t border-[var(--dash-line)] pt-8'}`}
+        >
+            <h2 className="dash-section">{title}</h2>
+            {children}
+        </section>
+    )
+}
+
+const prefersReducedMotion = () =>
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 function ProductForm({ mode = "Create", product = null }) {
     const { user, isLoaded } = useUser()
+    const router = useRouter()
     const [events, setEvents] = useState([])
     const formattedMode = mode
         .trim()
@@ -52,11 +126,9 @@ function ProductForm({ mode = "Create", product = null }) {
     const imageInputRef = useRef(null);
     const modelInputRef = useRef(null);
     const viewableModelInputRef = useRef(null);
-    
-    // Refs for scrolling to sections with errors
-    const detailsSectionRef = useRef(null);
-    const shippingSectionRef = useRef(null);
-    const pricingSectionRef = useRef(null);
+
+    // Section anchors for rail navigation, error scrolling, and scroll-spy.
+    const sectionRefs = useRef({});
     const [pendingImages, setPendingImages] = useState([]);
     const [pendingModels, setPendingModels] = useState([]);
     const [pendingViewableModel, setPendingViewableModel] = useState(null);
@@ -66,14 +138,17 @@ function ProductForm({ mode = "Create", product = null }) {
 
     const [isLoading, setIsLoading] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
-    const [openSection, setOpenSection] = useState({
-        details: true,
-        printConfig: false,
-        shipping: false,
-        pricing: false,
-        stock: false,
-    });
+    // GlassBar save state ("Editing…" → "● Saved HH:MM"), derived from the
+    // submit flow: any user edit marks the sheet dirty again.
+    const [lastSavedAt, setLastSavedAt] = useState(null);
+    const [dirtySinceSave, setDirtySinceSave] = useState(false);
+
+    // Sections with phase-2 (value) validation errors; missing-field sections
+    // are derived from missingFields below.
+    const [errorSections, setErrorSections] = useState([]);
+    const [activeSection, setActiveSection] = useState('basics');
 
     const defaultForm = {
         name: "",
@@ -88,7 +163,7 @@ function ProductForm({ mode = "Create", product = null }) {
         subcategoryId: "",
         stock: 1,
         infiniteStock: false,
-            hidden: false,
+        hidden: false,
 
         basePrice: {
             presentmentAmount: 0,
@@ -130,14 +205,20 @@ function ProductForm({ mode = "Create", product = null }) {
         discounts: [],
     };
 
-    const [form, setForm] = useState(product ? { ...defaultForm, ...product } : defaultForm);
+    const [form, setFormRaw] = useState(product ? { ...defaultForm, ...product } : defaultForm);
 
-    // (Debug log removed)
+    // Every user-driven form change flows through this wrapper so the GlassBar
+    // save state can flip back to "Editing…". System writes (product load,
+    // post-save merge) use setFormRaw directly.
+    const setForm = useCallback((updater) => {
+        setDirtySinceSave(true)
+        setFormRaw(updater)
+    }, [])
 
     // If not admin, force productType to 'print' and reset category/subcategory if needed
     useEffect(() => {
         if (!isAdmin && form.productType !== "print") {
-            setForm(f => ({
+            setFormRaw(f => ({
                 ...f,
                 productType: "print",
                 category: 0,
@@ -218,7 +299,7 @@ function ProductForm({ mode = "Create", product = null }) {
 
     useEffect(() => {
         if (product) {
-            setForm(mapProductToForm(product, defaultForm));
+            setFormRaw(mapProductToForm(product, defaultForm));
         }
     }, [product]);
 
@@ -257,7 +338,7 @@ function ProductForm({ mode = "Create", product = null }) {
     );
     const handleRemoveImage = useCallback(
         (idx) => handleRemoveImageHelper(idx, form, setForm, pendingImages, setPendingImages, imageInputRef, setImageValidationErrors),
-        [form, pendingImages],
+        [form, pendingImages, setForm],
     );
 
     const handleModelChange = useCallback(
@@ -270,7 +351,7 @@ function ProductForm({ mode = "Create", product = null }) {
     );
     const handleRemoveModel = useCallback(
         (idx) => handleRemoveModelHelper(idx, form, setForm, pendingModels, setPendingModels, modelInputRef, setModelValidationErrors),
-        [form, pendingModels],
+        [form, pendingModels, setForm],
     );
 
     const handleViewableModelChange = useCallback(
@@ -279,8 +360,78 @@ function ProductForm({ mode = "Create", product = null }) {
     );
     const handleRemoveViewableModel = useCallback(
         () => handleRemoveViewableModelHelper(pendingViewableModel, setPendingViewableModel, setForm, viewableModelInputRef, setViewableValidationErrors),
-        [pendingViewableModel],
+        [pendingViewableModel, setForm],
     );
+
+    // ---- Rail helpers -----------------------------------------------------
+
+    const visibleSections = SECTION_ORDER
+        .filter((key) => key !== 'print' || form.productType === 'print')
+        .map((key) => ({ key, label: SECTION_LABELS[key] }))
+
+    const scrollToSection = useCallback((key) => {
+        const el = sectionRefs.current[key]
+        if (el && typeof el.scrollIntoView === 'function') {
+            el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' })
+        }
+    }, [])
+
+    const firstBadSection = (keys) => SECTION_ORDER.find((k) => keys.includes(k))
+
+    // Scroll-spy: highlight the section currently under the GlassBar.
+    useEffect(() => {
+        if (typeof IntersectionObserver === 'undefined') return undefined
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const visible = entries
+                    .filter((e) => e.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+                if (visible[0]) {
+                    const key = visible[0].target.getAttribute('data-section-anchor')
+                    if (key) setActiveSection(key)
+                }
+            },
+            { rootMargin: '-96px 0px -55% 0px', threshold: 0 },
+        )
+        Object.values(sectionRefs.current).filter(Boolean).forEach((el) => observer.observe(el))
+        return () => observer.disconnect()
+    }, [form.productType])
+
+    const totalImages = (form.images?.length || 0) + pendingImages.length;
+    const missingSections = missingFields.map((f) => FIELD_TO_SECTION[f]).filter(Boolean)
+    const badSections = new Set([...missingSections, ...errorSections])
+
+    // Completeness dots (§5.5): bad = validation error, ink = required fields
+    // of the section are filled, hatch = optional/empty.
+    const sectionTone = (key) => {
+        if (badSections.has(key)) return 'bad'
+        switch (key) {
+            case 'basics':
+                return form.name?.trim() && form.description?.trim() ? 'ink' : 'hatch'
+            case 'photos':
+                return totalImages > 0 ? 'ink' : 'hatch'
+            case 'model':
+                return (pendingViewableModel || form.viewableModel) ? 'ink' : 'hatch'
+            case 'digital':
+                return ((form.paidAssets?.length || 0) + pendingModels.length) > 0 ? 'ink' : 'hatch'
+            case 'print':
+                return form.printConfig ? 'ink' : 'hatch'
+            case 'delivery':
+                return (form.delivery?.deliveryTypes?.length || 0) > 0 ? 'ink' : 'hatch'
+            case 'pricing': {
+                const amt = form.basePrice?.presentmentAmount
+                return amt !== '' && amt !== undefined && amt !== null ? 'ink' : 'hatch'
+            }
+            case 'variants':
+                return (form.variantTypes?.length || 0) > 0 ? 'ink' : 'hatch'
+            case 'discounts':
+                return form.showDiscount && ((form.discounts?.length || 0) > 0) ? 'ink' : 'hatch'
+            case 'stock':
+                return form.infiniteStock || (form.stock !== '' && form.stock !== undefined && form.stock !== null) ? 'ink' : 'hatch'
+            default:
+                return 'hatch'
+        }
+    }
 
     // Submit handler
     const handleSubmit = async (e) => {
@@ -289,11 +440,11 @@ function ProductForm({ mode = "Create", product = null }) {
 
         // Clear previous validation errors
         setMissingFields([]);
+        setErrorSections([]);
 
         // Validate required fields (matching backend requirements)
-        const totalImages = (form.images?.length || 0) + pendingImages.length;
         const requiredFieldsCheck = [];
-        
+
         if (!form.name || form.name.trim() === '') requiredFieldsCheck.push('name');
         if (!form.description || form.description.trim() === '') requiredFieldsCheck.push('description');
         if (totalImages === 0) requiredFieldsCheck.push('images');
@@ -306,22 +457,12 @@ function ProductForm({ mode = "Create", product = null }) {
         if (requiredFieldsCheck.length > 0) {
             setMissingFields(requiredFieldsCheck);
 
-            // Ensure relevant sections are open
-            setOpenSection(prev => ({
-                ...prev,
-                details: prev.details || requiredFieldsCheck.some(f => ['name', 'description', 'images', 'productType'].includes(f)),
-                shipping: prev.shipping || requiredFieldsCheck.includes('deliveryTypes'),
-                pricing: prev.pricing || requiredFieldsCheck.some(f => ['basePrice', 'priceCredits'].includes(f)),
-            }));
-
-            // Scroll to first missing field
-            if (requiredFieldsCheck.some(f => ['name', 'description', 'images', 'productType'].includes(f))) {
-                detailsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else if (requiredFieldsCheck.includes('deliveryTypes')) {
-                shippingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else if (requiredFieldsCheck.some(f => ['basePrice', 'priceCredits'].includes(f))) {
-                pricingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            // Rail dots turn bad (derived from missingFields); scroll to the
+            // first offending section in document order (§5.5 — nothing is
+            // collapsed anymore, so no section auto-open).
+            const badKeys = requiredFieldsCheck.map((f) => FIELD_TO_SECTION[f]).filter(Boolean)
+            const first = firstBadSection(badKeys)
+            if (first) scrollToSection(first)
 
             const fieldNames = requiredFieldsCheck.map(f => {
                 switch(f) {
@@ -335,31 +476,36 @@ function ProductForm({ mode = "Create", product = null }) {
                     default: return f;
                 }
             }).join(', ');
-            
+
             showToast(`Missing required fields: ${fieldNames}`, "error");
             return;
         }
 
         // Additional validation for invalid values (beyond just missing fields)
         const validationErrors = [];
+        const errSecs = new Set();
+        const addError = (msg, section) => {
+            validationErrors.push(msg);
+            errSecs.add(section);
+        };
 
         // Numeric validations
         const baseAmount = typeof form.basePrice?.presentmentAmount === 'number'
             ? form.basePrice.presentmentAmount
             : Number(form.basePrice?.presentmentAmount);
         if (!Number.isNaN(baseAmount) && baseAmount < 0) {
-            validationErrors.push('Base price cannot be negative.');
+            addError('Base price cannot be negative.', 'pricing');
         }
 
         const creditsAmount = typeof form.priceCredits === 'number'
             ? form.priceCredits
             : Number(form.priceCredits);
         if (!Number.isNaN(creditsAmount) && creditsAmount < 0) {
-            validationErrors.push('Credit price cannot be negative.');
+            addError('Credit price cannot be negative.', 'pricing');
         }
 
         if (typeof form.stock === 'number' && form.stock < 0) {
-            validationErrors.push('Stock cannot be negative.');
+            addError('Stock cannot be negative.', 'stock');
         }
 
         const dims = form.dimensions || {};
@@ -369,7 +515,7 @@ function ProductForm({ mode = "Create", product = null }) {
             (typeof dims.height === 'number' && dims.height < 0) ||
             (typeof dims.weight === 'number' && dims.weight < 0)
         ) {
-            validationErrors.push('Dimensions must be zero or positive values.');
+            addError('Dimensions must be zero or positive values.', 'delivery');
         }
 
         // Discount validations (support stacked discounts)
@@ -386,15 +532,15 @@ function ProductForm({ mode = "Create", product = null }) {
                 const endDate = rule.endDate ? new Date(rule.endDate) : null;
 
                 if (!hasEvent && (Number.isNaN(percentage) || percentage <= 0 || percentage > 100)) {
-                    validationErrors.push('Each discount needs a percentage between 1 and 100%, or be linked to an event.');
+                    addError('Each discount needs a percentage between 1 and 100%, or be linked to an event.', 'discounts');
                 }
 
                 if (!hasEvent && !Number.isNaN(minimumPrice) && minimumPrice < 0) {
-                    validationErrors.push('Minimum amount for any discount cannot be negative.');
+                    addError('Minimum amount for any discount cannot be negative.', 'discounts');
                 }
 
                 if (!hasEvent && startDate && endDate && startDate > endDate) {
-                    validationErrors.push('For each discount, the start date must be before the end date.');
+                    addError('For each discount, the start date must be before the end date.', 'discounts');
                 }
             }
         }
@@ -404,36 +550,30 @@ function ProductForm({ mode = "Create", product = null }) {
         const hasDigitalDelivery = form.delivery?.deliveryTypes?.some(dt => dt.type === 'digital' || dt === 'digital');
 
         if (!hasDeliveryTypes) {
-            validationErrors.push('Select at least one delivery type.');
+            addError('Select at least one delivery type.', 'delivery');
         }
 
         if (hasPaidAssets && !hasDigitalDelivery) {
-            validationErrors.push('Products with downloadable files must include digital delivery.');
+            addError('Products with downloadable files must include digital delivery.', 'delivery');
         }
 
         // If digital delivery is selected, enforce a single variant configuration
         if (hasDigitalDelivery) {
             if (form.variantTypes?.length > 1) {
-                validationErrors.push('Digital products support only one variant type.');
+                addError('Digital products support only one variant type.', 'variants');
             }
             if (form.variantTypes?.[0]?.options && form.variantTypes[0].options.length > 1) {
-                validationErrors.push('Digital products support only one variant option.');
+                addError('Digital products support only one variant option.', 'variants');
             }
         }
 
         if (validationErrors.length > 0) {
-            // Open relevant sections and scroll to the first problem area
-            setOpenSection(prev => ({
-                ...prev,
-                shipping: true,
-                pricing: true,
-            }));
-
-            if (!hasDeliveryTypes || (hasPaidAssets && !hasDigitalDelivery)) {
-                shippingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else if (validationErrors.some(msg => msg.toLowerCase().includes('price'))) {
-                pricingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
+            // Rail dots turn bad + first offending section scrolled to + ONE
+            // summarizing toast.
+            const secKeys = [...errSecs]
+            setErrorSections(secKeys);
+            const first = firstBadSection(secKeys)
+            if (first) scrollToSection(first)
 
             showToast(`Validation errors: ${validationErrors.join(' ')}`, 'error');
             return;
@@ -511,19 +651,10 @@ function ProductForm({ mode = "Create", product = null }) {
 
                     const missing = data.missingFields;
 
-                    // Ensure the relevant sections are open
-                    setOpenSection(prev => ({
-                        ...prev,
-                        details: prev.details || missing.some(f => ["name", "description", "images", "productType"].includes(f)),
-                        pricing: prev.pricing || missing.some(f => ["basePrice", "priceCredits"].includes(f)),
-                    }));
-
-                    // Scroll to the most relevant section
-                    if (missing.some(f => ["name", "description", "images", "productType"].includes(f))) {
-                        detailsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    } else if (missing.some(f => ["basePrice", "priceCredits"].includes(f))) {
-                        pricingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
+                    // Rail dots + scroll to the most relevant section
+                    const badKeys = missing.map((f) => FIELD_TO_SECTION[f]).filter(Boolean)
+                    const first = firstBadSection(badKeys)
+                    if (first) scrollToSection(first)
 
                     const fieldNames = missing.map(f => {
                         switch (f) {
@@ -551,15 +682,17 @@ function ProductForm({ mode = "Create", product = null }) {
             setPendingModels([]);
             setPendingViewableModel(null);
             setIsLoading(false);
+            setLastSavedAt(new Date());
+            setDirtySinceSave(false);
             if (imageInputRef.current) imageInputRef.current.value = "";
             if (modelInputRef.current) modelInputRef.current.value = "";
             if (viewableModelInputRef.current) viewableModelInputRef.current.value = "";
             showToast(isEditing ? "Product updated successfully!" : "Product created successfully!", 'success');
             if (!isEditing) {
-                setForm({ ...defaultForm });
+                setFormRaw({ ...defaultForm });
             } else {
                 // Update form state with newly uploaded files so subsequent saves don't lose them
-                setForm(prev => ({
+                setFormRaw(prev => ({
                     ...prev,
                     images: [...prev.images, ...uploadedImages],
                     paidAssets: [...prev.paidAssets, ...uploadedModels],
@@ -589,7 +722,7 @@ function ProductForm({ mode = "Create", product = null }) {
                 }]
                 : [];
 
-            setForm(prev => ({
+            setFormRaw(prev => ({
                 ...prev,
                 delivery: {
                     ...(prev.delivery || {}),
@@ -598,15 +731,15 @@ function ProductForm({ mode = "Create", product = null }) {
                 variantTypes: trimmedVariantTypes
             }));
         }
-        
+
         // Remove digital delivery when all paid assets are removed
         if (!hasPaidAssets && hasDigital) {
             // Only remove digital if it was auto-added (i.e., it's the only delivery type)
-            const onlyDigital = form.delivery?.deliveryTypes?.length === 1 && 
+            const onlyDigital = form.delivery?.deliveryTypes?.length === 1 &&
                                form.delivery?.deliveryTypes[0]?.type === 'digital';
-            
+
             if (onlyDigital) {
-                setForm(prev => ({
+                setFormRaw(prev => ({
                     ...prev,
                     delivery: {
                         ...(prev.delivery || {}),
@@ -618,8 +751,9 @@ function ProductForm({ mode = "Create", product = null }) {
     }, [form.paidAssets, pendingModels]);
 
 
+    // Delete flows through ConfirmDialog (window.confirm is banned in
+    // dashboards — §4.10); on success we navigate back to the products list.
     const handleDelete = async () => {
-        if (!window.confirm("Are you sure you want to delete this product?")) return;
         try {
             setDeleting(true);
             const res = await fetch(`/api/product?productId=${product._id}`, {
@@ -630,264 +764,274 @@ function ProductForm({ mode = "Create", product = null }) {
                 showToast(data.error || "Failed to delete product", "error");
             } else {
                 showToast("Product deleted successfully!", "success");
+                setConfirmDeleteOpen(false);
+                router.push('/dashboard/products');
+                return;
             }
         } catch (err) {
             showToast("Network error: " + err.message, "error");
         }
         setDeleting(false);
+        setConfirmDeleteOpen(false);
     }
+
+    const isEditMode = !!(product && product._id);
+    const ctaLabel = formattedMode === 'Create' ? 'Create Product' : 'Save Product';
+    const saveStateLabel = isLoading
+        ? 'Saving…'
+        : lastSavedAt && !dirtySinceSave
+            ? `● Saved ${lastSavedAt.toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+            : 'Editing…';
+
+    const railLink = (s, compact = false) => (
+        <button
+            type="button"
+            key={s.key}
+            data-section={s.key}
+            onClick={() => scrollToSection(s.key)}
+            className={`dash-hoverable flex items-center gap-2 text-left text-[13px] rounded-full cursor-pointer whitespace-nowrap ${compact ? 'px-3 py-1' : 'px-2.5 py-1'} ${
+                activeSection === s.key
+                    ? 'bg-[var(--dash-sun-soft)] text-[var(--dash-ink)] font-medium'
+                    : 'text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)]'
+            }`}
+        >
+            <RailDot tone={sectionTone(s.key)} />
+            {s.label}
+        </button>
+    )
+
+    const statusRow = (
+        <div className="flex items-center justify-between gap-2">
+            <span className={labelCls}>Status</span>
+            <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, hidden: !f.hidden }))}
+                title={form.hidden ? 'Unhide product (takes effect on save)' : 'Hide product from store (takes effect on save)'}
+                className="cursor-pointer"
+            >
+                <StatusPill tone={form.hidden ? 'hatch' : 'ok'}>{form.hidden ? 'Hidden' : 'Live'}</StatusPill>
+            </button>
+        </div>
+    )
+
     return (
-        <form onSubmit={handleSubmit} className='flex flex-col w-full items-center justify-center gap-4'>
-            <Link href='/dashboard/products' className='flex w-full items-center text-sm font-normal gap-2 toggleXbutton'>
-                <GoChevronLeft /> Back to Products
-            </Link>
-            <h1 className="flex w-full mb-4">{formattedMode} Product</h1>
+        <>
+            <form onSubmit={handleSubmit} className="w-full">
+                <GlassBar className="justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Link
+                            href='/dashboard/products'
+                            className="flex items-center gap-1 text-[13px] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] shrink-0"
+                        >
+                            <GoChevronLeft aria-hidden="true" /> Products
+                        </Link>
+                        <span aria-hidden="true" className="text-[var(--dash-line)]">/</span>
+                        <span className="dash-section truncate">{form.name?.trim() || 'Untitled product'}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                        <motion.span
+                            key={saveStateLabel}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={swap}
+                            className="dash-data text-[var(--dash-ink-soft)] hidden sm:block"
+                        >
+                            {saveStateLabel}
+                        </motion.span>
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="dash-hoverable rounded-full px-4 py-2 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] cursor-pointer hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] disabled:opacity-60"
+                        >
+                            {isLoading ? 'Saving…' : ctaLabel}
+                        </button>
+                    </div>
+                </GlassBar>
 
-            <div ref={detailsSectionRef} className="flex flex-col w-full border border-borderColor rounded-sm">
-                <button
-                    type="button"
-                    className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
-                    onClick={() => setOpenSection(s => ({ ...s, details: !s.details }))}
-                >
-                    Product Details
-                    {openSection.details ? <GoChevronDown /> : <GoChevronRight />}
-                </button>
-                <div
-                    className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-6"
-                    style={{
-                        maxHeight: openSection.details ? 5000 : 0,
-                        overflow: openSection.details ? 'visible' : 'hidden',
-                        opacity: openSection.details ? 1 : 0,
-                        pointerEvents: openSection.details ? 'auto' : 'none'
-                    }}
-                >
-                    <BasicInfo form={form} handleChange={handleChange} missingFields={missingFields} />
-
-                    <ImagesField
-                        images={form.images}
-                        imageValidationErrors={imageValidationErrors}
-                        dragImagesActive={dragImagesActive}
-                        setDragImagesActive={setDragImagesActive}
-                        imageInputRef={imageInputRef}
-                        handleImageChange={handleImageChange}
-                        handleImageDrop={handleImageDrop}
-                        handleRemoveImage={handleRemoveImage}
-                        pendingImages={pendingImages}
-                        setImageValidationErrors={setImageValidationErrors}
-                        missingFields={missingFields}
-                    />
-
-                    <ProductTypeCategory
-                        form={form}
-                        setForm={setForm}
-                        isAdmin={isAdmin}
-                        categories={categories}
-                        subcategories={subcategories}
-                    />
-
-                    <ViewableModelField
-                        viewableValidationErrors={viewableValidationErrors}
-                        dragViewableModelActive={dragViewableModelActive}
-                        setDragViewableModelActive={setDragViewableModelActive}
-                        viewableModelInputRef={viewableModelInputRef}
-                        pendingViewableModel={pendingViewableModel}
-                        handleViewableModelChange={handleViewableModelChange}
-                        handleRemoveViewableModel={handleRemoveViewableModel}
-                        form={form}
-                    />
-
-                    <PaidAssetsField
-                        form={form}
-                        modelValidationErrors={modelValidationErrors}
-                        dragActive={dragActive}
-                        setDragActive={setDragActive}
-                        modelInputRef={modelInputRef}
-                        handleModelChange={handleModelChange}
-                        handleModelDrop={handleModelDrop}
-                        handleRemoveModel={handleRemoveModel}
-                        pendingModels={pendingModels}
-                    />
-                </div>
-            </div>
-
-
-            {form.productType === 'print' && (
-                <div className="flex flex-col w-full border border-borderColor rounded-sm">
-                    <button
-                        type="button"
-                        className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
-                        onClick={() => setOpenSection(s => ({ ...s, printConfig: !s.printConfig }))}
-                    >
-                        Print Configuration
-                        {openSection.printConfig ? <GoChevronDown /> : <GoChevronRight />}
-                    </button>
-                    <div
-                        className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-6"
-                        style={{
-                            maxHeight: openSection.printConfig ? 5000 : 0,
-                            overflow: openSection.printConfig ? 'visible' : 'hidden',
-                            opacity: openSection.printConfig ? 1 : 0,
-                            pointerEvents: openSection.printConfig ? 'auto' : 'none'
-                        }}
-                    >
-                        <PrintConfigField form={form} setForm={setForm} />
+                {/* Rail as a horizontal pill strip below the GlassBar (<1280px) */}
+                <div className="xl:hidden sticky top-14 z-10 -mx-2 px-2 py-2 bg-[var(--dash-canvas)] border-b border-[var(--dash-line)] overflow-x-auto">
+                    <div className="flex items-center gap-1 w-max">
+                        {visibleSections.map((s) => railLink(s, true))}
                     </div>
                 </div>
-            )}
 
-
-            <div ref={shippingSectionRef} className="flex flex-col w-full border border-borderColor rounded-sm">
-                <button
-                    type="button"
-                    className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
-                    onClick={() => setOpenSection(s => ({ ...s, shipping: !s.shipping }))}
-                >
-                    Shipping Details
-                    {openSection.shipping ? <GoChevronDown /> : <GoChevronRight />}
-                </button>
-                <div
-                    className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-6"
-                    style={{
-                        maxHeight: openSection.shipping ? 5000 : 0,
-                        overflow: openSection.shipping ? 'visible' : 'hidden',
-                        opacity: openSection.shipping ? 1 : 0,
-                        pointerEvents: openSection.shipping ? 'auto' : 'none'
-                    }}
-                >
-                    <ShippingFields form={form} handleChange={handleChange} setForm={setForm} missingFields={missingFields} />
-                </div>
-            </div>
-
-
-            <div ref={pricingSectionRef} className="flex flex-col w-full border border-borderColor rounded-sm">
-                <button
-                    type="button"
-                    className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
-                    onClick={() => setOpenSection(s => ({ ...s, pricing: !s.pricing }))}
-                >
-                    Pricing Details
-                    {openSection.pricing ? <GoChevronDown /> : <GoChevronRight />}
-                </button>
-                <div
-                    className="formDrawer flex flex-col w-full items-center justify-center p-4 gap-3"
-                    style={{
-                        maxHeight: openSection.pricing ? 5000 : 0,
-                        overflow: openSection.pricing ? 'visible' : 'hidden',
-                        opacity: openSection.pricing ? 1 : 0,
-                        pointerEvents: openSection.pricing ? 'auto' : 'none'
-                    }}
-                >
-                    <PricingFields form={form} setForm={setForm} allCurrencies={allCurrencies} missingFields={missingFields} />
-
-                    <VariantTypesField
-                        form={form}
-                        setForm={setForm}
-                        productType={form.productType}
-                        printColours={adminSettings?.printColours || []}
-                        isDigitalDelivery={form.delivery?.deliveryTypes?.some(dt => dt.type === 'digital' || dt === 'digital')}
-                        onVariantImageUpload={async (file) => {
-                            const formData = new FormData();
-                            formData.append('files', file);
-                            const res = await fetch('/api/upload/images', { method: 'POST', body: formData });
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data.error || 'Upload failed');
-                            return data.files[0];
-                        }}
-                    />
-
-                    <DiscountsField form={form} setForm={setForm} events={events} />
-                </div>
-            </div>
-
-
-            <div className="flex flex-col w-full border border-borderColor rounded-sm">
-                <button
-                    type="button"
-                    className="flex font-medium justify-between bg-borderColor/40 hover:bg-borderColor/70 w-full px-4 py-2 border-b border-borderColor items-center cursor-pointer text-sm transition-colors"
-                    onClick={() => setOpenSection(s => ({ ...s, stock: !s.stock }))}
-                >
-                    Stock
-                    {openSection.stock ? <GoChevronDown /> : <GoChevronRight />}
-                </button>
-                <div
-                    className="formDrawer flex flex-col w-full p-4 gap-3"
-                    style={{
-                        maxHeight: openSection.stock ? 5000 : 0,
-                        overflow: openSection.stock ? 'visible' : 'hidden',
-                        opacity: openSection.stock ? 1 : 0,
-                        pointerEvents: openSection.stock ? 'auto' : 'none'
-                    }}
-                >
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={form.infiniteStock || false}
-                            onChange={(e) => setForm(f => ({ ...f, infiniteStock: e.target.checked }))}
-                            className="rounded"
-                        />
-                        Infinite Stock (never runs out)
-                    </label>
-                    {!form.infiniteStock && (
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-lightColor">Total Stock</label>
-                            <input
-                                type="number"
-                                name="stock"
-                                min="0"
-                                value={form.stock ?? ''}
-                                onChange={(e) => setForm(f => ({ ...f, stock: e.target.value === '' ? '' : Number(e.target.value) }))}
-                                className="formInput text-sm w-32"
-                                placeholder="Stock quantity"
+                <div className="flex justify-center gap-10 mt-8 w-full">
+                    {/* Document column */}
+                    <div className="w-full max-w-[720px] min-w-0">
+                        <FormSection id="basics" title="Basics" first anchorRef={(el) => { sectionRefs.current.basics = el }}>
+                            <BasicInfo form={form} handleChange={handleChange} missingFields={missingFields} />
+                            <ProductTypeCategory
+                                form={form}
+                                setForm={setForm}
+                                isAdmin={isAdmin}
+                                categories={categories}
+                                subcategories={subcategories}
                             />
-                            <p className="text-xs text-extraLight">Per-variant stock can be set in the Variant Types section under Pricing.</p>
+                        </FormSection>
+
+                        <FormSection id="photos" title="Photos" anchorRef={(el) => { sectionRefs.current.photos = el }}>
+                            <ImagesField
+                                images={form.images}
+                                imageValidationErrors={imageValidationErrors}
+                                dragImagesActive={dragImagesActive}
+                                setDragImagesActive={setDragImagesActive}
+                                imageInputRef={imageInputRef}
+                                handleImageChange={handleImageChange}
+                                handleImageDrop={handleImageDrop}
+                                handleRemoveImage={handleRemoveImage}
+                                pendingImages={pendingImages}
+                                setImageValidationErrors={setImageValidationErrors}
+                                missingFields={missingFields}
+                            />
+                        </FormSection>
+
+                        <FormSection id="model" title="3D model" anchorRef={(el) => { sectionRefs.current.model = el }}>
+                            <ViewableModelField
+                                viewableValidationErrors={viewableValidationErrors}
+                                dragViewableModelActive={dragViewableModelActive}
+                                setDragViewableModelActive={setDragViewableModelActive}
+                                viewableModelInputRef={viewableModelInputRef}
+                                pendingViewableModel={pendingViewableModel}
+                                handleViewableModelChange={handleViewableModelChange}
+                                handleRemoveViewableModel={handleRemoveViewableModel}
+                                form={form}
+                            />
+                        </FormSection>
+
+                        <FormSection id="digital" title="Digital files" anchorRef={(el) => { sectionRefs.current.digital = el }}>
+                            <PaidAssetsField
+                                form={form}
+                                modelValidationErrors={modelValidationErrors}
+                                dragActive={dragActive}
+                                setDragActive={setDragActive}
+                                modelInputRef={modelInputRef}
+                                handleModelChange={handleModelChange}
+                                handleModelDrop={handleModelDrop}
+                                handleRemoveModel={handleRemoveModel}
+                                pendingModels={pendingModels}
+                            />
+                        </FormSection>
+
+                        {form.productType === 'print' && (
+                            <FormSection id="print" title="Print settings" anchorRef={(el) => { sectionRefs.current.print = el }}>
+                                <PrintConfigField form={form} setForm={setForm} />
+                            </FormSection>
+                        )}
+
+                        <FormSection id="delivery" title="Delivery" anchorRef={(el) => { sectionRefs.current.delivery = el }}>
+                            <ShippingFields form={form} handleChange={handleChange} setForm={setForm} missingFields={missingFields} />
+                        </FormSection>
+
+                        <FormSection id="pricing" title="Pricing" anchorRef={(el) => { sectionRefs.current.pricing = el }}>
+                            <PricingFields form={form} setForm={setForm} allCurrencies={allCurrencies} missingFields={missingFields} />
+                        </FormSection>
+
+                        <FormSection id="variants" title="Variants" anchorRef={(el) => { sectionRefs.current.variants = el }}>
+                            <VariantTypesField
+                                form={form}
+                                setForm={setForm}
+                                productType={form.productType}
+                                printColours={adminSettings?.printColours || []}
+                                isDigitalDelivery={form.delivery?.deliveryTypes?.some(dt => dt.type === 'digital' || dt === 'digital')}
+                                onVariantImageUpload={async (file) => {
+                                    const formData = new FormData();
+                                    formData.append('files', file);
+                                    const res = await fetch('/api/upload/images', { method: 'POST', body: formData });
+                                    const data = await res.json();
+                                    if (!res.ok) throw new Error(data.error || 'Upload failed');
+                                    return data.files[0];
+                                }}
+                            />
+                        </FormSection>
+
+                        <FormSection id="discounts" title="Discounts" anchorRef={(el) => { sectionRefs.current.discounts = el }}>
+                            <DiscountsField form={form} setForm={setForm} events={events} />
+                        </FormSection>
+
+                        <FormSection id="stock" title="Stock" anchorRef={(el) => { sectionRefs.current.stock = el }}>
+                            <label className="flex items-center gap-2 text-[13px] cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={form.infiniteStock || false}
+                                    onChange={(e) => setForm(f => ({ ...f, infiniteStock: e.target.checked }))}
+                                    className="rounded accent-[var(--dash-ink)]"
+                                />
+                                Infinite Stock (never runs out)
+                            </label>
+                            {!form.infiniteStock && (
+                                <div className="space-y-1.5">
+                                    <label htmlFor="stock" className={labelCls}>Total Stock</label>
+                                    <input
+                                        id="stock"
+                                        type="number"
+                                        name="stock"
+                                        min="0"
+                                        value={form.stock ?? ''}
+                                        onChange={(e) => setForm(f => ({ ...f, stock: e.target.value === '' ? '' : Number(e.target.value) }))}
+                                        className={`${inputCls()} dash-data w-32`}
+                                        placeholder="Stock quantity"
+                                    />
+                                    <p className="text-[13px] text-[var(--dash-ink-soft)]">Per-variant stock can be set in the Variants section.</p>
+                                </div>
+                            )}
+                        </FormSection>
+                    </div>
+
+                    {/* Sticky side rail (≥1280px) */}
+                    <aside className="hidden xl:block w-[220px] shrink-0">
+                        <div className="sticky top-16 flex flex-col gap-4">
+                            <span className={labelCls}>On this sheet</span>
+                            <nav aria-label="Sections" className="flex flex-col gap-1 items-start">
+                                {visibleSections.map((s) => railLink(s))}
+                            </nav>
+                            <div className="border-t border-[var(--dash-line)] pt-4 flex flex-col gap-3">
+                                {statusRow}
+                                <p className="text-[11px] text-[var(--dash-ink-soft)]">Status changes take effect on save.</p>
+                                <button type="submit" disabled={isLoading} className={`${quietBtnCls} w-full`}>
+                                    {isLoading ? 'Saving…' : ctaLabel}
+                                </button>
+                                {isEditMode && (
+                                    <button
+                                        type="button"
+                                        className={`${badTextBtnCls} text-left w-fit`}
+                                        disabled={deleting}
+                                        onClick={() => setConfirmDeleteOpen(true)}
+                                    >
+                                        {deleting ? 'Deleting…' : 'Delete product'}
+                                    </button>
+                                )}
+                            </div>
                         </div>
+                    </aside>
+                </div>
+
+                {/* Status / delete cluster for smaller screens (rail hidden) */}
+                <div className="xl:hidden mt-4 mx-auto w-full max-w-[720px] flex items-center justify-between gap-4 border-t border-[var(--dash-line)] pt-4">
+                    {statusRow}
+                    {isEditMode && (
+                        <button
+                            type="button"
+                            className={badTextBtnCls}
+                            disabled={deleting}
+                            onClick={() => setConfirmDeleteOpen(true)}
+                        >
+                            {deleting ? 'Deleting…' : 'Delete product'}
+                        </button>
                     )}
                 </div>
-            </div>
+            </form>
 
-            <div className="flex flex-col gap-1 w-full mt-4">
-
-                <button
-                    type="submit"
-                    className="formBlackButton w-full"
-                >
-                    {isLoading ? (
-                        <>
-                            Saving Product
-                            <div className='animate-spin ml-3 border border-t-transparent h-3 w-3 rounded-full' />
-                        </>
-                    ) :
-                        'Save Product'
-                    }
-                </button>
-
-                {product && product._id && (
-                    <div className="flex flex-col gap-2 w-full">
-                        <button
-                            type="button"
-                            className="formRedButton w-full"
-                            onClick={handleDelete}
-                        >
-                            {deleting ? (
-                                <>
-                                    Deleting Product
-                                    <div className='animate-spin ml-3 border border-t-transparent h-3 w-3 rounded-full' />
-                                </>
-                            ) :
-                                'Delete Product'
-                            }
-                        </button>
-                        <button
-                            type="button"
-                            className="formButton2 w-full"
-                            onClick={() => setForm(f => ({ ...f, hidden: !f.hidden }))}
-                        >
-                            {form.hidden ? 'Unhide Product (requires Save)' : 'Hide Product from Store (requires Save)'}
-                        </button>
-                    </div>
-                )}
-            </div>
-        </form>
+            <ConfirmDialog
+                open={confirmDeleteOpen}
+                onClose={() => setConfirmDeleteOpen(false)}
+                onConfirm={handleDelete}
+                title="Delete this product?"
+                body="This permanently removes the product from your store. This action cannot be undone."
+                confirmLabel="Delete Product"
+                tone="bad"
+                busy={deleting}
+            />
+        </>
     )
 }
 

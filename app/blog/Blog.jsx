@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { IoArrowForward } from 'react-icons/io5'
+import SubscribeForm from '@/components/General/SubscribeForm'
 
 function FeaturedCarousel({ posts }) {
     const [index, setIndex] = useState(0)
@@ -267,6 +268,14 @@ function Blog() {
                 <>
                     <FeaturedCarousel posts={featured.length > 0 ? featured : allPosts.slice(0, 3)} />
                     <BlogList posts={allPosts} />
+
+                    <section className="w-full max-w-5xl mt-16 px-6 md:px-0 flex flex-col items-center text-center gap-3">
+                        <h2 className="text-sm font-medium text-textColor uppercase tracking-wide">Stay in the loop</h2>
+                        <p className="text-xs text-lightColor max-w-md">
+                            Get new articles and updates from the FIT team in your inbox.
+                        </p>
+                        <SubscribeForm />
+                    </section>
                 </>
             )}
         </div>

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import useAccess from '@/utils/useAccess'
 import ContentManagement from '@/components/Admin/DynamicContentManagement'
 import BlogManagement from '@/components/Admin/BlogManagement'
+import NewsletterManagement from '@/components/Admin/NewsletterManagement'
 import CreatorPayments from '@/components/Admin/CreatorPayments'
 import CategoryManagement from '@/components/Admin/CategoryManagement'
 import DeliveryTypeManagement from '@/components/Admin/DeliveryTypeManagement'
@@ -43,6 +44,7 @@ const NAV_GROUPS = [
         items: [
             { key: 'content', label: 'Site Content' },
             { key: 'blog', label: 'Blog' },
+            { key: 'newsletter', label: 'Newsletter' },
         ],
     },
     {
@@ -62,6 +64,7 @@ const PANELS = {
     delivery: DeliveryTypeManagement,
     orders: OrderStatusManagement,
     blog: BlogManagement,
+    newsletter: NewsletterManagement,
     customPrint: CustomPrintProductManagement,
     customPrintRequests: CustomPrintRequests,
     quoting: QuotingPricingManagement,
@@ -146,7 +149,7 @@ function AdminDashboard() {
             <div className="flex items-center justify-center min-h-screen">
                 <div className="text-center">
                     <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
-                    <p>You don't have permission to access this page.</p>
+                    <p>You don&apos;t have permission to access this page.</p>
                 </div>
             </div>
         )

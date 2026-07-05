@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import ImageUpload from '@/components/Admin/CMSFields/ImageUpload'
 import TiptapEditor from '@/components/Admin/BlogEditor/TiptapEditor'
 import { useToast } from '@/components/General/ToastProvider'
+import { toDatetimeLocal } from '@/utils/datetimeLocal'
 import { IoRefresh } from 'react-icons/io5'
 import { MdOpenInNew } from 'react-icons/md'
 import { BsPlusLg } from 'react-icons/bs'
@@ -78,7 +79,7 @@ function postToForm(post) {
         tags: post.tags || [],
         categories: post.categories || [],
         status: post.status || (post.published ? 'published' : 'draft'),
-        scheduledFor: post.scheduledFor ? new Date(post.scheduledFor).toISOString().slice(0, 16) : '',
+        scheduledFor: post.scheduledFor ? toDatetimeLocal(post.scheduledFor) : '',
         featured: !!post.featured,
         _id: post._id,
     }

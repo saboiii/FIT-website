@@ -1,126 +1,228 @@
-"use client"
-import { useEffect, useState } from "react"
-import { useUser } from "@clerk/nextjs"
-import Link from "next/link"
-
-const statusLabel = {
-  pending_upload: "Awaiting model upload",
-  pending_config: "Awaiting configuration",
-  configured: "Configured - Awaiting quote",
-  quoted: "Quote received",
-  payment_pending: "Awaiting payment",
-  paid: "Paid",
-  printing: "Printing",
-  printed: "Printed",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-}
+'use client'
+// Custom print requests as a customer job-tracking view: one job card per
+// request (StatusPill vocabulary), the quote breakdown as dotted-leader rows
+// when quoted, and a progress Timeline from statusHistory. The customer-facing
+// mirror of the admin job queue. Endpoints and action links are unchanged
+// (/api/account/custom-print, /editor?requestId=, /cart?addCustomRequest=).
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useUser } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
+import { IoCopyOutline } from 'react-icons/io5'
+import AccountShell from '@/components/Account/AccountShell'
+import { printRequestTone, printStatusLabel, money } from '@/components/Account/accountUi'
+import { useToast } from '@/components/General/ToastProvider'
+import { DashCard, DottedRow, EmptyState, StatusPill, Timeline, SkeletonTile } from '@/components/dashboard-ui'
 
 export default function AccountPrintRequestsPage() {
-  const { user, isLoaded } = useUser()
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
+    const { user, isLoaded } = useUser()
+    const router = useRouter()
+    const { showToast } = useToast()
+    const [requests, setRequests] = useState([])
+    const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!isLoaded) return
+    useEffect(() => {
+        if (!isLoaded) return
+        if (!user) {
+            setLoading(false)
+            return
+        }
+
+        const load = async () => {
+            try {
+                const res = await fetch('/api/account/custom-print')
+                if (!res.ok) throw new Error('Failed to load requests')
+                const data = await res.json()
+                setRequests(data.requests || [])
+            } catch (e) {
+                console.error(e)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        load()
+    }, [isLoaded, user])
+
+    const copyToClipboard = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text)
+            showToast('Copied to clipboard!', 'success')
+        } catch (err) {
+            showToast('Failed to copy', 'error')
+        }
+    }
+
+    const header = (
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+            <div>
+                <p className="dash-label">Custom prints</p>
+                <h1 className="dash-title mt-1">Print requests</h1>
+                <p className="dash-data dash-soft mt-1">
+                    Track each job from upload to delivery, and pay once a quote is ready.
+                </p>
+            </div>
+            <Link
+                href="/prints/request"
+                className="dash-hoverable inline-flex w-fit items-center rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-4 py-2 text-[13px] font-medium"
+            >
+                New request
+            </Link>
+        </div>
+    )
+
+    if (!isLoaded || loading) {
+        return (
+            <AccountShell active="prints" header={header}>
+                <div className="flex flex-col gap-4">
+                    <SkeletonTile />
+                    <SkeletonTile />
+                </div>
+            </AccountShell>
+        )
+    }
+
     if (!user) {
-      setLoading(false)
-      return
+        return (
+            <AccountShell active="prints" header={header}>
+                <div className="bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-card)]">
+                    <EmptyState
+                        title="Sign In to View Requests"
+                        body="Please sign in to view your custom print requests."
+                        cta="Sign In"
+                        onCta={() => router.push('/sign-in?redirect=/account/prints')}
+                    />
+                </div>
+            </AccountShell>
+        )
     }
 
-    const load = async () => {
-      try {
-        const res = await fetch("/api/account/custom-print")
-        if (!res.ok) throw new Error("Failed to load requests")
-        const data = await res.json()
-        setRequests(data.requests || [])
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    load()
-  }, [isLoaded, user])
-
-  if (!isLoaded) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="loader" />
-      </div>
+        <AccountShell active="prints" header={header}>
+            {requests.length === 0 ? (
+                <div className="bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-card)]">
+                    <EmptyState
+                        title="No Print Requests Yet"
+                        body="Upload a model and we will quote and print it for you."
+                        cta="Start a Request"
+                        onCta={() => router.push('/prints/request')}
+                    />
+                </div>
+            ) : (
+                <div className="flex flex-col gap-4">
+                    {requests.map((r) => {
+                        const base = Number(r.basePrice || 0)
+                        const fee = Number(r.printFee || 0)
+                        const quoted = base + fee
+                        const currency = (r.currency || 'SGD').toUpperCase()
+                        const canAddToCart =
+                            (r.status === 'quoted' || r.status === 'payment_pending') && quoted > 0
+                        const quoteLines = r.quote?.lines || []
+                        const history = r.statusHistory || []
+
+                        return (
+                            <DashCard key={r.requestId}>
+                                <div className="flex flex-col gap-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="dash-section min-w-0 truncate">
+                                            {r.modelFile?.originalName || 'Custom print'}
+                                        </p>
+                                        <StatusPill tone={printRequestTone(r.status)}>
+                                            {printStatusLabel[r.status] || r.status}
+                                        </StatusPill>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="dash-data dash-soft">Request ID:</span>
+                                        <span className="dash-data font-mono truncate">{r.requestId}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => copyToClipboard(r.requestId)}
+                                            title="Copy request ID"
+                                            aria-label="Copy request ID"
+                                            className="dash-hoverable rounded-full h-6 w-6 grid place-items-center border border-[var(--dash-line)] bg-[var(--dash-card)] cursor-pointer hover:bg-[var(--dash-canvas)] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)]"
+                                        >
+                                            <IoCopyOutline size={12} />
+                                        </button>
+                                    </div>
+
+                                    {/* Quote breakdown, when a quote exists. */}
+                                    {(r.status === 'quoted' || r.status === 'payment_pending') && quoted > 0 && (
+                                        <section className="max-w-md">
+                                            <h4 className="dash-label mb-1">Quote</h4>
+                                            {quoteLines.length > 0 ? (
+                                                <>
+                                                    {quoteLines.map((line) => (
+                                                        <DottedRow key={line.key || line.label} label={line.label}>
+                                                            {currency} {money(line.amount)}
+                                                        </DottedRow>
+                                                    ))}
+                                                    {r.quote?.expedite?.applied && (
+                                                        <DottedRow label="Expedite">
+                                                            {currency} {money(r.quote.expedite.amount)}
+                                                        </DottedRow>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <DottedRow label="Base price">
+                                                        {currency} {money(base)}
+                                                    </DottedRow>
+                                                    <DottedRow label="Print fee">
+                                                        {currency} {money(fee)}
+                                                    </DottedRow>
+                                                </>
+                                            )}
+                                            <div className="mt-1 pt-1 border-t border-[var(--dash-line)]">
+                                                <DottedRow label="Total">
+                                                    <span className="font-medium">
+                                                        {currency} {money(r.quote?.total ?? quoted)}
+                                                    </span>
+                                                </DottedRow>
+                                            </div>
+                                            <p className="dash-data dash-soft mt-1.5">
+                                                Delivery is chosen at checkout.
+                                            </p>
+                                        </section>
+                                    )}
+
+                                    {/* Progress timeline from statusHistory. */}
+                                    {history.length > 0 && (
+                                        <section>
+                                            <h4 className="dash-label">Progress</h4>
+                                            <Timeline
+                                                items={[...history].reverse().map((h, i) => ({
+                                                    id: i,
+                                                    title: printStatusLabel[h.status] || h.status,
+                                                    at: h.updatedAt,
+                                                    note: h.note,
+                                                }))}
+                                            />
+                                        </section>
+                                    )}
+
+                                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                                        <Link
+                                            href={`/editor?requestId=${encodeURIComponent(r.requestId)}`}
+                                            className="dash-hoverable inline-flex items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                        >
+                                            Open in editor
+                                        </Link>
+                                        {canAddToCart && (
+                                            <Link
+                                                href={`/cart?addCustomRequest=${encodeURIComponent(r.requestId)}`}
+                                                className="dash-hoverable inline-flex items-center rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3.5 py-1.5 text-[12px] font-medium"
+                                            >
+                                                {r.status === 'quoted' ? 'Add quoted print to cart' : 'Add to cart'}
+                                            </Link>
+                                        )}
+                                    </div>
+                                </div>
+                            </DashCard>
+                        )
+                    })}
+                </div>
+            )}
+        </AccountShell>
     )
-  }
-
-  if (!user) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <p className="text-sm text-gray-600">Please sign in to view your custom print requests.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Custom print requests</h1>
-        <Link href="/prints/request" className="text-sm underline">
-          New request
-        </Link>
-      </div>
-
-      {loading ? (
-        <div className="loader" />
-      ) : requests.length === 0 ? (
-        <p className="text-sm text-gray-600">You have no custom print requests yet.</p>
-      ) : (
-        <ul className="space-y-3">
-          {requests.map((r) => (
-            <li key={r.requestId} className="border rounded px-4 py-3 text-sm flex flex-col gap-1">
-              {(() => {
-                const base = Number(r.basePrice || 0)
-                const fee = Number(r.printFee || 0)
-                const quoted = base + fee
-                const currency = (r.currency || "SGD").toUpperCase()
-
-                return (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium">{r.modelFile?.originalName || "Custom print"}</div>
-                      <span className="text-xs px-2 py-0.5 rounded bg-gray-100">
-                        {statusLabel[r.status] || r.status}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-500">Request ID: {r.requestId}</div>
-                    <div className="flex gap-3 mt-1 text-xs">
-                      <Link
-                        href={`/editor?requestId=${encodeURIComponent(r.requestId)}`}
-                        className="underline"
-                      >
-                        Open in editor
-                      </Link>
-                      {(r.status === "quoted" || r.status === "payment_pending") && quoted > 0 && (
-                        <Link
-                          href={`/cart?addCustomRequest=${encodeURIComponent(r.requestId)}`}
-                          className="underline"
-                        >
-                          {r.status === "quoted" ? "Add quoted print to cart" : "Add to cart"}
-                        </Link>
-                      )}
-                    </div>
-                    {r.status === "quoted" && quoted > 0 && (
-                      <div className="text-xs text-green-600 font-medium mt-1">
-                        Quote: {currency} {quoted.toFixed(2)} (Base: {base.toFixed(2)} + Print fee: {fee.toFixed(2)}; delivery chosen at checkout)
-                      </div>
-                    )}
-                  </>
-                )
-              })()}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
 }

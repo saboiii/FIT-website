@@ -1,206 +1,241 @@
-import { useClerk } from "@clerk/nextjs";
-import { useState } from "react";
-import { AiOutlineEdit } from "react-icons/ai";
-import { RiSaveLine } from "react-icons/ri";
+'use client'
+// Security section as rate-card rows (blueprint §9.5): password row with an
+// inline edit, device sessions as quiet rows, account deletion behind a
+// ConfirmDialog (window.confirm is banned, §4.10). Clerk/fetch semantics are
+// unchanged from the legacy section.
+import { useClerk } from '@clerk/nextjs'
+import { useState } from 'react'
+import { AiOutlineEdit } from 'react-icons/ai'
+import { RiSaveLine } from 'react-icons/ri'
+import { IoLaptopOutline } from 'react-icons/io5'
+import { ConfirmDialog, DashCard, StatusPill } from '@/components/dashboard-ui'
+import { useToast } from '../General/ToastProvider'
 
-function SecuritySettings({
-    devices = [],
-    currentSession,
-    user,
-}) {
-    const [password, setPassword] = useState("");
-    const [passwordConfirm, setPasswordConfirm] = useState("");
-    const [passwordMsg, setPasswordMsg] = useState("");
-    const [deleteMsg, setDeleteMsg] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [editMode, setEditMode] = useState(false);
-    const { signOut } = useClerk();
+const inputCls =
+    'rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 py-1.5 text-[13px] min-w-0 w-full'
+
+function SecuritySettings({ devices = [], currentSession, user }) {
+    const [password, setPassword] = useState('')
+    const [passwordConfirm, setPasswordConfirm] = useState('')
+    const [passwordMsg, setPasswordMsg] = useState('')
+    const [deleteMsg, setDeleteMsg] = useState('')
+    const [loading, setLoading] = useState(false)
+    const [editMode, setEditMode] = useState(false)
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+    const { signOut } = useClerk()
+    const { showToast } = useToast()
 
     const handlePasswordSave = async () => {
-        setPasswordMsg("");
+        setPasswordMsg('')
         if (password !== passwordConfirm) {
-            setPasswordMsg("Passwords do not match.");
-            return;
+            setPasswordMsg('Passwords do not match.')
+            return
         }
-        setLoading(true);
+        setLoading(true)
         try {
             // Clerk v5: password update is done on the user object
-            if (user && typeof user.updatePassword === "function") {
-                await user.updatePassword({ newPassword: password });
+            if (user && typeof user.updatePassword === 'function') {
+                await user.updatePassword({ newPassword: password })
             }
-            setPasswordMsg("Password updated!");
-            setEditMode(false);
-            setPassword("");
-            setPasswordConfirm("");
+            setPasswordMsg('Password updated!')
+            setEditMode(false)
+            setPassword('')
+            setPasswordConfirm('')
         } catch (err) {
-            setPasswordMsg("Failed to update password.");
+            setPasswordMsg('Failed to update password.')
         }
-        setLoading(false);
-    };
+        setLoading(false)
+    }
 
     const handleSignOutSession = async (sessionId) => {
-        setLoading(true);
+        setLoading(true)
         try {
             // If this is the current session, sign out via Clerk helper
             if (currentSession && sessionId === currentSession.id) {
-                await signOut();
-                return;
+                await signOut()
+                return
             }
 
-            const res = await fetch("/api/user/sessions", {
-                method: "DELETE",
+            const res = await fetch('/api/user/sessions', {
+                method: 'DELETE',
                 headers: {
-                    "Content-Type": "application/json",
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ sessionId }),
-            });
+            })
 
             if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.error || "Failed to sign out device.");
+                const data = await res.json().catch(() => ({}))
+                throw new Error(data.error || 'Failed to sign out device.')
             }
-
-            // Optionally: you could trigger a refresh of devices here
         } catch (err) {
-            alert(err.message || "Failed to sign out device.");
+            showToast(err.message || 'Failed to sign out device.', 'error')
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
 
     const handleDeleteAccount = async () => {
-        if (!window.confirm("Are you sure you want to delete your account? This cannot be undone.")) return;
-        setDeleteMsg("");
-        setLoading(true);
+        setDeleteMsg('')
+        setLoading(true)
         try {
-            const res = await fetch("/api/user/delete", {
-                method: "DELETE",
-            });
+            const res = await fetch('/api/user/delete', {
+                method: 'DELETE',
+            })
 
             if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.error || "Failed to delete account.");
+                const data = await res.json().catch(() => ({}))
+                throw new Error(data.error || 'Failed to delete account.')
             }
 
-            setDeleteMsg("Account deleted.");
-            await signOut();
+            setDeleteMsg('Account deleted.')
+            await signOut()
         } catch (err) {
-            setDeleteMsg(err.message || "Failed to delete account.");
+            setDeleteMsg(err.message || 'Failed to delete account.')
         } finally {
-            setLoading(false);
+            setLoading(false)
+            setConfirmDeleteOpen(false)
         }
-    };
+    }
 
     return (
-        <div className='flex w-full flex-col overflow-auto'>
-            <h2 className="flex font-semibold text-lg mb-2">Password</h2>
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 rounded border border-borderColor/60 p-4 md:p-6 w-full max-w-xl">
-                <div className="flex flex-col w-full">
-                    {editMode ? (
-                        <>
-                            {passwordMsg && (
-                                <div className={`text-xs font-medium mb-2 ${passwordMsg.includes("updated") ? "text-green-400" : "text-red-400"}`}>
-                                    {passwordMsg}
-                                </div>
-                            )}
-                            <input
-                                type="password"
-                                placeholder="New password"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                className="border rounded-sm border-borderColor px-3 py-1 text-sm mb-1 outline-none min-w-0 overflow-x-auto"
-                                disabled={loading}
-                                style={{ wordBreak: 'break-all' }}
-                            />
-                            <input
-                                type="password"
-                                placeholder="Confirm password"
-                                value={passwordConfirm}
-                                onChange={e => setPasswordConfirm(e.target.value)}
-                                className="border rounded-sm border-borderColor px-3 py-1 text-sm outline-none w-full min-w-0 overflow-x-auto"
-                                disabled={loading}
-                                style={{ wordBreak: 'break-all' }}
-                            />
-                        </>
-                    ) : (
-                        <p className="flex w-full break-words tracking-wider select-none">
-                            •••••••••••
-                        </p>
-                    )}
-
-                </div>
-                <div
-                    className='accountSaveButton'
-                    onClick={() => {
-                        if (editMode) {
-                            handlePasswordSave();
-                        } else {
-                            setEditMode(true);
-                            setPassword("");
-                            setPasswordConfirm("");
-                            setPasswordMsg("");
-                        }
-                    }}
-                >
-                    {editMode ? "Save" : "Edit"}
-                    {editMode ? <RiSaveLine className='flex' /> : <AiOutlineEdit className='flex' />}
-                </div>
+        <div className="flex flex-col gap-6">
+            <div>
+                <h2 className="dash-title">Security</h2>
+                <p className="text-[13px] dash-soft mt-1">Password, signed-in devices and account removal.</p>
             </div>
 
-            <h2 className="flex font-semibold text-lg mb-2 mt-8">Active Devices</h2>
-            {devices.length === 0 && <div>No active devices.</div>}
-            <div className="flex flex-col gap-4">
-                {devices.map((device) => {
-                    const isCurrent = currentSession && device.id === currentSession.id;
-                    const activity = device.latestActivity || {};
-                    return (
-                        <div
-                            key={device.id}
-                            className={`border border-borderColor/60 rounded flex flex-col md:flex-row items-start md:items-center gap-8 p-4 md:p-6 w-full bg-white`}
-                        >
-                            <div
-                                className="flex items-center justify-center rounded-full bg-gray-200 text-gray-500 text-2xl select-none aspect-square min-w-12 min-h-12"
-
-                            >
-                                <span role="img" aria-label="device">💻</span>
-                            </div>
-                            <div className="flex flex-col w-full min-w-0">
-                                <div className="flex flex-row items-center gap-2 mb-2">
-                                    <span className="font-semibold text-base text-textColor break-words">{activity.deviceType || "Device"}</span>
-                                    {isCurrent && (
-                                        <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs border border-borderColor/60">
-                                            This device
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-xs text-gray-500 break-words">
-                                    {activity.browserName} {activity.browserVersion}
-                                    {activity.browserName && (activity.city || activity.country) && " — "}
-                                    {activity.city}{activity.city && activity.country && ", "}{activity.country}
-                                </div>
-                                <div className="text-xs text-gray-400 break-words">
-                                    IP: {activity.ipAddress}
-                                </div>
-                                {device.lastActiveAt && (
-                                    <div className="text-xs text-gray-400 break-words">
-                                        Last active: {new Date(device.lastActiveAt).toLocaleString()}
-                                    </div>
-                                )}
-                                <button
-                                    onClick={() => handleSignOutSession(device.id)}
-                                    className="mt-2 text-xs underline text-gray-500 hover:text-gray-700 transition-colors duration-200 w-fit"
+            <DashCard title="Password">
+                {passwordMsg && (
+                    <p
+                        className={`text-[12px] font-medium mb-2 ${
+                            passwordMsg.includes('updated')
+                                ? 'text-[var(--dash-ok)]'
+                                : 'text-[var(--dash-bad)]'
+                        }`}
+                    >
+                        {passwordMsg}
+                    </p>
+                )}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+                    <div className="flex flex-col gap-1.5 w-full sm:max-w-sm">
+                        {editMode ? (
+                            <>
+                                <input
+                                    type="password"
+                                    placeholder="New password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className={inputCls}
                                     disabled={loading}
-                                >
-                                    Sign out of device
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
+                                />
+                                <input
+                                    type="password"
+                                    placeholder="Confirm password"
+                                    value={passwordConfirm}
+                                    onChange={(e) => setPasswordConfirm(e.target.value)}
+                                    className={inputCls}
+                                    disabled={loading}
+                                />
+                            </>
+                        ) : (
+                            <p className="text-[13px] tracking-wider select-none">•••••••••••</p>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            if (editMode) {
+                                handlePasswordSave()
+                            } else {
+                                setEditMode(true)
+                                setPassword('')
+                                setPasswordConfirm('')
+                                setPasswordMsg('')
+                            }
+                        }}
+                        disabled={loading}
+                        className="dash-hoverable inline-flex items-center gap-2 self-start rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-4 py-2 text-[13px] font-medium cursor-pointer disabled:opacity-50 active:scale-[0.97]"
+                    >
+                        {editMode ? 'Save' : 'Edit'}
+                        {editMode ? <RiSaveLine /> : <AiOutlineEdit />}
+                    </button>
+                </div>
+            </DashCard>
 
-            <button onClick={handleDeleteAccount} className="mt-12 formBlackButton" disabled={loading}>Delete Account</button>
-            {deleteMsg && <div className="text-xs mt-1">{deleteMsg}</div>}
+            <DashCard title="Active devices">
+                {devices.length === 0 && <p className="text-[13px] dash-soft">No active devices.</p>}
+                <ul className="divide-y divide-[var(--dash-line)]">
+                    {devices.map((device) => {
+                        const isCurrent = currentSession && device.id === currentSession.id
+                        const activity = device.latestActivity || {}
+                        return (
+                            <li key={device.id} className="flex items-start gap-3.5 py-3 first:pt-0 last:pb-0">
+                                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)] text-[var(--dash-ink-soft)]">
+                                    <IoLaptopOutline size={16} aria-hidden="true" />
+                                </span>
+                                <div className="flex min-w-0 flex-col gap-0.5">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[13px] font-medium break-words">
+                                            {activity.deviceType || 'Device'}
+                                        </span>
+                                        {isCurrent && <StatusPill tone="sun">This device</StatusPill>}
+                                    </div>
+                                    <p className="dash-data dash-soft break-words">
+                                        {[
+                                            [activity.browserName, activity.browserVersion].filter(Boolean).join(' '),
+                                            [activity.city, activity.country].filter(Boolean).join(', '),
+                                        ]
+                                            .filter(Boolean)
+                                            .join(', ')}
+                                    </p>
+                                    <p className="dash-data dash-soft break-words">IP: {activity.ipAddress}</p>
+                                    {device.lastActiveAt && (
+                                        <p className="dash-data dash-soft break-words">
+                                            Last active: {new Date(device.lastActiveAt).toLocaleString()}
+                                        </p>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSignOutSession(device.id)}
+                                        className="mt-1 w-fit text-[12px] font-medium underline dash-soft hover:text-[var(--dash-ink)] cursor-pointer disabled:opacity-50"
+                                        disabled={loading}
+                                    >
+                                        Sign out of device
+                                    </button>
+                                </div>
+                            </li>
+                        )
+                    })}
+                </ul>
+            </DashCard>
+
+            <DashCard title="Delete account">
+                <p className="text-[13px] dash-soft">
+                    Deleting your account removes your profile and signs you out everywhere. This cannot be
+                    undone.
+                </p>
+                <button
+                    type="button"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    className="dash-hoverable mt-3 inline-flex items-center rounded-full bg-[var(--dash-bad)] text-[var(--dash-canvas)] px-4 py-2 text-[13px] font-medium cursor-pointer disabled:opacity-50 active:scale-[0.97]"
+                    disabled={loading}
+                >
+                    Delete account
+                </button>
+                {deleteMsg && <p className="text-[12px] font-medium mt-2 dash-soft">{deleteMsg}</p>}
+            </DashCard>
+
+            <ConfirmDialog
+                open={confirmDeleteOpen}
+                onClose={() => setConfirmDeleteOpen(false)}
+                onConfirm={handleDeleteAccount}
+                title="Delete your account?"
+                body="This permanently removes your account and cannot be undone."
+                confirmLabel="Delete account"
+                tone="bad"
+                busy={loading}
+            />
         </div>
     )
 }

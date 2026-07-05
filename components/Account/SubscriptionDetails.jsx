@@ -1,4 +1,7 @@
 'use client'
+// Tier selection + payment step for subscription changes. Restyled onto the
+// account design tokens; the Stripe/Clerk flow is unchanged (card token into
+// unsafeMetadata, then POST /api/user/subscription/edit).
 import { useUser } from '@clerk/nextjs'
 import { CardElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import { useRouter } from 'next/navigation'
@@ -9,7 +12,6 @@ import { useToast } from '../General/ToastProvider'
 import Tier from '../AuthComponents/Tier'
 import { IoMdLock } from 'react-icons/io'
 import { GoChevronLeft } from 'react-icons/go'
-
 
 function SubscriptionDetailsInner() {
     const stripe = useStripe();
@@ -83,14 +85,14 @@ function SubscriptionDetailsInner() {
         }
     }
 
-    if (priceIdsLoading) return <div className="text-center py-8">Loading subscription tiers...</div>;
-    if (priceIdsError) return <div className="text-center py-8 text-red-600">Failed to load subscription tiers.</div>;
-    if (!stripePriceIds) return <div className="text-center py-8">No subscription tiers found.</div>;
+    if (priceIdsLoading) return <p className="text-[13px] dash-soft text-center py-8">Loading subscription tiers...</p>;
+    if (priceIdsError) return <p className="text-[13px] font-medium text-[var(--dash-bad)] text-center py-8">Failed to load subscription tiers.</p>;
+    if (!stripePriceIds) return <p className="text-[13px] dash-soft text-center py-8">No subscription tiers found.</p>;
 
     return (
-        <div className="flex flex-col items-center w-full max-w-lg mx-auto py-8">
-            <h2 className="text-2xl font-bold mb-2 text-textColor">Choose Your Subscription Tier</h2>
-            <p className="text-xs text-lightColor mb-6 text-center">
+        <div className="flex flex-col items-center w-full max-w-lg mx-auto py-6">
+            <h2 className="dash-section mb-1">Choose your subscription tier</h2>
+            <p className="text-[13px] dash-soft mb-6 text-center">
                 Select a new tier to update your subscription.
             </p>
             <form className="flex flex-col gap-4 w-full" onSubmit={updateSubscription}>
@@ -104,7 +106,7 @@ function SubscriptionDetailsInner() {
                             <Tier value="" priceId={priceId} setPriceId={setPriceId} />
                         </div>
                         <button
-                            className="formBlackButton w-full mt-3"
+                            className="dash-hoverable inline-flex items-center justify-center rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-4 py-2.5 text-[13px] font-medium w-full mt-2 cursor-pointer disabled:opacity-50 active:scale-[0.97]"
                             type="button"
                             onClick={() => setStep('payment')}
                             disabled={!priceId}
@@ -115,31 +117,33 @@ function SubscriptionDetailsInner() {
                 )}
                 {step === 'payment' && (
                     <>
-                        <div className='flex flex-col w-full gap-2 py-8 px-8 border border-borderColor rounded-2xl bg-white text-black items-center'>
-                            <label className='flex items-center font-medium w-full'>
-                                <IoMdLock className='mr-2' size={16} />
-                                Card Details
+                        <div className="flex flex-col w-full gap-2 py-6 px-5 border border-[var(--dash-line)] rounded-[var(--dash-r-card)] bg-[var(--dash-card)] items-center">
+                            <label className="flex items-center text-[13px] font-medium w-full">
+                                <IoMdLock className="mr-2" size={16} />
+                                Card details
                             </label>
-                            <p className='text-sm text-textColor w-full'>
+                            <p className="text-[13px] dash-soft w-full">
                                 This card will be used for automatic billing of your subscription.
                             </p>
-                            <CardElement className='w-full mt-4 px-4 py-2 border border-borderColor rounded-lg' required={priceId !== ''} />
-                            <p className='text-xs w-full mt-2 text-center text-lightColor '>
+                            <CardElement
+                                className="w-full mt-3 px-4 py-2.5 border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] bg-[var(--dash-card)]"
+                                required={priceId !== ''}
+                            />
+                            <p className="text-[12px] font-medium dash-soft w-full mt-2 text-center">
                                 You can cancel or change your payment method at anytime.
                             </p>
                         </div>
-                        <div className='flex flex-col items-center justify-between w-full gap-4'>
-
+                        <div className="flex flex-col items-center justify-between w-full gap-3">
                             <button
                                 type="submit"
-                                className="formBlackButton w-full"
+                                className="dash-hoverable inline-flex items-center justify-center rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-4 py-2.5 text-[13px] font-medium w-full cursor-pointer disabled:opacity-50 active:scale-[0.97]"
                                 disabled={loading}
                             >
                                 {loading ? 'Signing Up...' : 'Sign Up'}
                             </button>
                             <button
                                 type="button"
-                                className='toggleXbutton items-center gap-2 text-sm font-medium'
+                                className="dash-hoverable inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium dash-soft hover:text-[var(--dash-ink)] cursor-pointer"
                                 onClick={() => setStep('tier_selection')}
                             >
                                 <GoChevronLeft size={16} /> Go Back

@@ -7,7 +7,7 @@ import Lenis from 'lenis'
 // Routes where Lenis must NOT hijack the wheel: the dashboards rely on
 // natively scrolling inner containers (sheets, peeks, rails) and Lenis
 // scrolls the page behind them instead (dashboard blueprint §9.8).
-const NATIVE_SCROLL_PREFIXES = ['/dashboard', '/admin']
+const NATIVE_SCROLL_PREFIXES = ['/dashboard', '/admin', '/account']
 
 export default function Smooth({ children }) {
     const lenisRef = useRef(null)

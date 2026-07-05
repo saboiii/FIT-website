@@ -365,8 +365,8 @@ export default function DiscountsField({ form, setForm, events }) {
                                     <p className="text-[11px] text-lightColor/80">
                                         Example: general discount 5% with minimum S$25, plus tiers
                                         like 10-20 items 20% off. Orders within a tier use that
-                                        tier's percentage; other quantities that meet the minimum
-                                        still get the card's general discount.
+                                        tier&apos;s percentage; other quantities that meet the minimum
+                                        still get the card&apos;s general discount.
                                     </p>
                                 </div>
                             </div>

@@ -92,7 +92,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                     disabled={(isDigitalProduct && form.variantTypes?.length >= 1) || form.variantTypes?.length >= 5}
                                 />
                                 <p className="text-xs text-extraLight">
-                                    Example: "Color" for options like Red, Blue, Green
+                                    Example: &quot;Color&quot; for options like Red, Blue, Green
                                 </p>
                             </div>
 

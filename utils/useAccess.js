@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getEntitlements } from "./entitlements";
 import { useAccessContext } from "./AccessContext";
 import { useUserRole } from "./UserRoleContext";
@@ -6,26 +6,19 @@ import { useUserSubscription } from "./UserSubscriptionContext";
 import { useStripePriceIds } from "./StripePriceIdsContext";
 
 export default function useAccess() {
-    const context = useAccessContext && useAccessContext();
-    if (context && typeof context.loading !== 'undefined') {
-        return {
-            loading: context.loading,
-            canAccess: context.canAccess,
-            isAdmin: context.isAdmin,
-        };
-    }
-
-    // Use shared contexts for role and subscription
-    const userRoleCtx = useUserRole() || {};
-    const userSubCtx = useUserSubscription() || {};
-    const { role, loading: roleLoading } = userRoleCtx;
-    const { subscription, loading: subLoading } = userSubCtx;
+    // Every hook runs unconditionally (rules of hooks); the optional
+    // AccessContext override only decides which result is returned.
+    const context = useAccessContext();
+    const { role, loading: roleLoading } = useUserRole() || {};
+    const { subscription, loading: subLoading } = useUserSubscription() || {};
+    const { stripePriceIds, loading: priceIdsLoading } = useStripePriceIds() || {};
     const [canAccess, setCanAccess] = useState(null);
     const [isAdmin, setIsAdmin] = useState(false);
     const [loading, setLoading] = useState(true);
-    const { stripePriceIds, loading: priceIdsLoading } = useStripePriceIds();
+    const hasOverride = !!(context && typeof context.loading !== "undefined");
 
     useEffect(() => {
+        if (hasOverride) return;
         if (roleLoading || subLoading || priceIdsLoading) {
             setLoading(true);
             return;
@@ -38,7 +31,14 @@ export default function useAccess() {
             setLoading(false);
         }
         checkAccess();
-    }, [role, roleLoading, subscription, subLoading, stripePriceIds, priceIdsLoading]);
+    }, [hasOverride, role, roleLoading, subscription, subLoading, stripePriceIds, priceIdsLoading]);
 
+    if (hasOverride) {
+        return {
+            loading: context.loading,
+            canAccess: context.canAccess,
+            isAdmin: context.isAdmin,
+        };
+    }
     return { loading, canAccess, isAdmin };
 }

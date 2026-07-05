@@ -85,7 +85,6 @@ const useStore = create((set, get) => ({
 
                   child.castShadow = true
                   child.receiveShadow = true
-                  console.log('OBJ Mesh found:', child.name, 'Material type:', child.material.type) // Debug log
                 }
               })
               scene.add(objGroup)

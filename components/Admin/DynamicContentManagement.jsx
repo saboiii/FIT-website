@@ -477,10 +477,10 @@ export default function ContentManagement() {
 
                     <div>
                         <h3 className='mb-1 text-base sm:text-lg'>
-                            You're editing <span className='text-textColor'>"{currentSection.name}"</span>
+                            You&apos;re editing <span className='text-textColor'>&quot;{currentSection.name}&quot;</span>
                         </h3>
                         <p className="text-xs text-gray-600">
-                            Make changes to the fields below and click "Save Changes" to update the content.
+                            Make changes to the fields below and click &quot;Save Changes&quot; to update the content.
                         </p>
                     </div>
 

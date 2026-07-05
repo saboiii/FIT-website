@@ -78,7 +78,6 @@ export async function GET(req) {
         });
     } catch (err) {
         // Only log essential error info
-        // eslint-disable-next-line no-console
         console.error('Proxy fetch error:', {
             key,
             bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME,

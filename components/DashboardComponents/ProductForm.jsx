@@ -460,12 +460,9 @@ function ProductForm({ mode = "Create", product = null }) {
             }
 
             // Log S3 URLs for reference
-            // eslint-disable-next-line no-console
             console.log('[ProductForm] Uploaded model S3 keys:', uploadedModels);
-            // eslint-disable-next-line no-console
             console.log('[ProductForm] Uploaded viewable model S3 key:', uploadedViewable);
         } catch (error) {
-            // eslint-disable-next-line no-console
             console.error("Error uploading files:", error, error?.stack || '');
 
             // Cleanup any uploaded files
@@ -474,7 +471,6 @@ function ProductForm({ mode = "Create", product = null }) {
                 try {
                     await cleanupUploadedFiles(allUploadedFiles);
                 } catch (cleanupError) {
-                    // eslint-disable-next-line no-console
                     console.error("Cleanup failed:", cleanupError, cleanupError?.stack || '');
                 }
             }

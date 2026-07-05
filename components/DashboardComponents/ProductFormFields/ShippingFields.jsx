@@ -364,7 +364,7 @@ export default function ShippingFields({ form, handleChange, setForm, hideDimens
                                 {searchQuery && (
                                     <div className="text-xs text-lightColor">
                                         {filteredDeliveryTypes.length === 0 ? (
-                                            <p>No delivery types found matching "{searchQuery}"</p>
+                                            <p>No delivery types found matching &quot;{searchQuery}&quot;</p>
                                         ) : (
                                             <p>
                                                 Found {filteredDeliveryTypes.length} delivery {filteredDeliveryTypes.length === 1 ? 'type' : 'types'}

@@ -18,10 +18,10 @@ const COOLDOWN_DAYS = Number(process.env.CUSTOM_PRINT_NUDGE_COOLDOWN_DAYS) || 7
 const MAX_PER_RUN = 200
 
 /**
- * GET /api/cron/custom-print-nudges — scheduled (Vercel Cron) job that emails a
- * gentle reminder to customers whose custom-print request has sat idle in a
- * pre-payment state. Auth: requires `Authorization: Bearer $CRON_SECRET`
- * (Vercel Cron sends this header when CRON_SECRET is set). Returns a summary.
+ * GET /api/cron/custom-print-nudges — scheduled job (GitHub Actions,
+ * `.github/workflows/custom-print-nudges.yml`) that emails a gentle reminder to
+ * customers whose custom-print request has sat idle in a pre-payment state.
+ * Auth: requires `Authorization: Bearer $CRON_SECRET`. Returns a summary.
  *
  * The selection rule is pure (`selectIdleRequests`); this route is the
  * side-effecty edge: query candidates → send → stamp `idleNudgeSentAt`.

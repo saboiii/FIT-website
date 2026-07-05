@@ -35,7 +35,6 @@ function SubscriptionDetailsInner() {
         if (subLoading) return;
         if (subscription?.priceId) return;
         setPriceId(incoming);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams, subLoading, subscription?.priceId]);
 
     // Set priceId from subscription context when loaded

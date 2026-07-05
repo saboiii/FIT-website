@@ -11,7 +11,6 @@ export function safeInternalPath(path) {
   if (/^\/[\\]/.test(path)) return null
   if (path.includes('\\')) return null
   // Reject control chars / whitespace that could smuggle a second URL.
-  // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1f\s]/.test(path)) return null
   return path
 }

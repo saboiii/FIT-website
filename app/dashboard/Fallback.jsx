@@ -1,25 +1,26 @@
-import Link from 'next/link'
+'use client'
+// Access fallback (blueprint §5.16): an EmptyState guide — what the creator
+// space unlocks and one sun CTA to subscribe, instead of a dead-end denial.
+// Self-wraps in DashProvider because product create/edit pages render it
+// standalone.
+import { useRouter } from 'next/navigation'
+import { IoStorefrontOutline } from 'react-icons/io5'
+import { DashProvider, EmptyState } from '@/components/dashboard-ui'
 
 function Fallback() {
+    const router = useRouter()
     return (
-        <div className="min-h-[92vh] flex flex-col items-center p-12 border-b border-borderColor justify-center">
-            <h1 className="text-3xl font-bold mb-4 text-textColor">
-                Access Denied
-            </h1>
-            <div className="text-xs text-lightColor mb-8 w-xs text-center">
-                You do not have permission to access this dashboard. Please ensure you have an active subscription or contact support for assistance.
-            </div>
-            <div className="w-full max-w-md flex flex-col">
-                <div className="border border-borderColor rounded p-6 flex flex-col items-center">
-                    <span className="text-xs font-medium text-lightColor  ">
-                        Return to{' '}
-                        <Link href="/" className="text-textColor hover:underline">
-                            home page
-                        </Link>
-                    </span>
-                </div>
-            </div>
-        </div>
+        <DashProvider className="flex items-center justify-center">
+            <EmptyState
+                icon={<IoStorefrontOutline />}
+                title="Your Creator Space"
+                body="An active subscription unlocks your shop — sell products, message customers, and manage orders from one place."
+                cta="View Subscriptions"
+                onCta={() => router.push('/account/subscription')}
+                secondary="Return home"
+                onSecondary={() => router.push('/')}
+            />
+        </DashProvider>
     )
 }
 

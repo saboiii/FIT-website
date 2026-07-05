@@ -1,33 +1,36 @@
 'use client'
 
-import Dashboard from "./Dashboard"
-import Fallback from "./Fallback";
-import useAccess from "@/utils/useAccess";
-import useSubscription from "@/utils/useSubscription";
-
+import Dashboard from './Dashboard'
+import Fallback from './Fallback'
+import useAccess from '@/utils/useAccess'
+import useSubscription from '@/utils/useSubscription'
+import { DashProvider, SkeletonTile } from '@/components/dashboard-ui'
 
 function DashboardPage() {
-    const { loading: accessLoading, canAccess, isAdmin } = useAccess();
-    const { loading: subLoading, subscription } = useSubscription();
+    const { loading: accessLoading, isAdmin } = useAccess()
+    const { loading: subLoading, subscription } = useSubscription()
 
-    const loading = accessLoading || subLoading;
+    const loading = accessLoading || subLoading
 
-    const hasSubscription = !!subscription?.priceId;
-    const shouldAllowAccess = isAdmin || hasSubscription;
+    const hasSubscription = !!subscription?.priceId
+    const shouldAllowAccess = isAdmin || hasSubscription
 
     return (
-        <>
+        <DashProvider>
             {loading ? (
-                <div className='flex items-center justify-center h-[92vh] w-full border-b border-borderColor'>
-                    <div className='loader' />
+                <div className="mx-auto w-full max-w-[1200px] px-6 py-12 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <SkeletonTile className="md:col-span-2" />
+                    <SkeletonTile />
+                    <SkeletonTile className="md:col-span-2" />
+                    <SkeletonTile />
                 </div>
             ) : shouldAllowAccess ? (
                 <Dashboard />
             ) : (
                 <Fallback />
             )}
-        </>
-    );
+        </DashProvider>
+    )
 }
 
-export default DashboardPage;
+export default DashboardPage

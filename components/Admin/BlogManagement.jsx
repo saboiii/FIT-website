@@ -1,13 +1,25 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import ImageUpload from '@/components/Admin/CMSFields/ImageUpload'
+import { motion } from 'framer-motion'
 import TiptapEditor from '@/components/Admin/BlogEditor/TiptapEditor'
+import MetaRail from '@/components/Admin/BlogEditor/MetaRail'
 import { useToast } from '@/components/General/ToastProvider'
 import { toDatetimeLocal } from '@/utils/datetimeLocal'
-import { IoRefresh } from 'react-icons/io5'
-import { MdOpenInNew } from 'react-icons/md'
-import { BsPlusLg } from 'react-icons/bs'
+import { settle } from '@/lib/motion/tokens'
+import {
+    ViewTabs,
+    StatusPill,
+    GlassBar,
+    EmptyState,
+    ConfirmDialog,
+    Sheet,
+    SkeletonRow,
+} from '@/components/dashboard-ui'
+import {
+    IoArrowBackOutline, IoArrowUndoOutline, IoArrowRedoOutline,
+    IoOptionsOutline, IoRefreshOutline, IoOpenOutline, IoNewspaperOutline,
+} from 'react-icons/io5'
 
 const MDEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false })
 
@@ -40,19 +52,15 @@ const EMPTY_FORM = {
     featured: false,
 }
 
-const STATUS_STYLES = {
-    published: 'bg-green-50 text-green-700 border-green-200',
-    draft: 'bg-amber-50 text-amber-700 border-amber-200',
-    hidden: 'bg-gray-100 text-gray-500 border-gray-200',
+// Status vocabulary (§4.1): ok = live, hatch = pending, paper = neutral.
+const STATUS_TONES = {
+    published: 'ok',
+    draft: 'hatch',
+    hidden: 'paper',
 }
 
-function StatusBadge({ status }) {
-    return (
-        <span className={`text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full border ${STATUS_STYLES[status] || STATUS_STYLES.draft}`}>
-            {status}
-        </span>
-    )
-}
+const QUIET_ICON =
+    'dash-hoverable flex items-center justify-center w-8 h-8 rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] hover:bg-[var(--dash-sun-soft)] cursor-pointer disabled:opacity-40 disabled:cursor-default'
 
 function hasImage(form) {
     if (form.heroImage) return true
@@ -85,18 +93,74 @@ function postToForm(post) {
     }
 }
 
+// GlassBar undo/redo (§5.12) — tracks the live editor's history.
+function UndoRedo({ editor }) {
+    const [, setTick] = useState(0)
+    useEffect(() => {
+        if (!editor) return undefined
+        const update = () => setTick((n) => n + 1)
+        editor.on('transaction', update)
+        return () => { editor.off('transaction', update) }
+    }, [editor])
+    return (
+        <div className="flex items-center gap-0.5">
+            <button
+                type="button"
+                aria-label="Undo"
+                title="Undo"
+                disabled={!editor || !editor.can().undo()}
+                onClick={() => editor?.chain().focus().undo().run()}
+                className={QUIET_ICON}
+            >
+                <IoArrowUndoOutline size={15} aria-hidden />
+            </button>
+            <button
+                type="button"
+                aria-label="Redo"
+                title="Redo"
+                disabled={!editor || !editor.can().redo()}
+                onClick={() => editor?.chain().focus().redo().run()}
+                className={QUIET_ICON}
+            >
+                <IoArrowRedoOutline size={15} aria-hidden />
+            </button>
+        </div>
+    )
+}
+
+// Quiet informational strip (restore banner, legacy-markdown note — §5.12).
+function InfoStrip({ children, actions }) {
+    return (
+        <div className="flex items-center justify-between gap-3 border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-2.5">
+            <p className="text-[13px] dash-soft min-w-0">{children}</p>
+            {actions && <div className="flex items-center gap-3 shrink-0">{actions}</div>}
+        </div>
+    )
+}
+
+/**
+ * Admin blog — paper mode (§5.12). List rail of posts (ViewTabs + StatusPill
+ * vocabulary) ⇄ focus mode: the page IS the writing surface — 680 px column,
+ * borderless display title, TipTap directly on paper, GlassBar chrome and a
+ * MetaRail (sticky right / Sheet under 1280 px) for everything else.
+ */
 export default function BlogManagement() {
     const [posts, setPosts] = useState([])
     const [selected, setSelected] = useState(null)
     const [loading, setLoading] = useState(false)
     const [statusFilter, setStatusFilter] = useState('all')
     const [previewKey, setPreviewKey] = useState(0)
+    const [previewOpen, setPreviewOpen] = useState(false)
+    const [metaOpen, setMetaOpen] = useState(false)
+    const [confirmDelete, setConfirmDelete] = useState(false)
     const [form, setForm] = useState(EMPTY_FORM)
     const [tagsInput, setTagsInput] = useState('')
     const [categoriesInput, setCategoriesInput] = useState('')
     const [slugTaken, setSlugTaken] = useState(false)
     const [restorableDraft, setRestorableDraft] = useState(null)
+    const [restoreNonce, setRestoreNonce] = useState(0)
     const [autosavedAt, setAutosavedAt] = useState(null)
+    const [editorInst, setEditorInst] = useState(null)
     const { showToast } = useToast()
     const autosaveTimer = useRef(null)
     const formRef = useRef(form)
@@ -123,6 +187,8 @@ export default function BlogManagement() {
         setSlugTaken(false)
         setAutosavedAt(null)
         setRestorableDraft(null)
+        setPreviewOpen(false)
+        setMetaOpen(false)
         // Autosave restore: newer snapshot than the saved post?
         try {
             const res = await fetch(`/api/admin/blog/${post._id}/draft`)
@@ -131,6 +197,19 @@ export default function BlogManagement() {
                 setRestorableDraft(data.draft)
             }
         } catch { /* non-fatal */ }
+    }
+
+    const backToList = () => {
+        setSelected(null)
+        setForm(EMPTY_FORM)
+        setTagsInput('')
+        setCategoriesInput('')
+        setRestorableDraft(null)
+        setAutosavedAt(null)
+        setEditorInst(null)
+        setPreviewOpen(false)
+        setMetaOpen(false)
+        setConfirmDelete(false)
     }
 
     const handleNew = async () => {
@@ -207,7 +286,6 @@ export default function BlogManagement() {
 
     const handleDelete = async () => {
         if (!selected) return
-        if (!confirm('Delete this post?')) return
         try {
             const res = await fetch('/api/admin/blog', {
                 method: 'DELETE',
@@ -217,10 +295,8 @@ export default function BlogManagement() {
             const data = await res.json()
             if (!data.ok) throw new Error(data.error || 'Delete failed')
             showToast('Deleted', 'success')
-            setSelected(null)
-            setForm(EMPTY_FORM)
-            setTagsInput('')
-            setCategoriesInput('')
+            setConfirmDelete(false)
+            backToList()
             fetchList()
         } catch (err) {
             console.error(err)
@@ -276,6 +352,7 @@ export default function BlogManagement() {
         setTagsInput((f.tags || []).join(', '))
         setCategoriesInput((f.categories || []).join(', '))
         setRestorableDraft(null)
+        setRestoreNonce((n) => n + 1) // remount the editor with restored content
         showToast('Draft restored — save to keep it', 'success')
     }
 
@@ -283,207 +360,305 @@ export default function BlogManagement() {
     const previewUrl = form.slug ? `/blog/${encodeURIComponent(form.slug)}?previewKey=${previewKey}` : null
     const isTiptap = form.contentFormat === 'tiptap'
 
-    return (
-        <div className='flex gap-4 flex-col p-6 md:p-12 bg-borderColor/60'>
-            <div className='flex flex-col lg:flex-row gap-4 sm:gap-6 min-h-[70vh]'>
-                <div className="w-full lg:w-1/3 adminDashboardContainer overflow-auto">
-                    <div className="flex justify-between items-center mb-3">
-                        <h3 className="text-base sm:text-lg">Blog Posts</h3>
-                        <button onClick={handleNew} className="px-2.5 sm:px-3 py-1.5 sm:py-2 border border-borderColor rounded text-xs hover:bg-baseColor transition flex items-center gap-1 cursor-pointer" title="New post">
-                            <BsPlusLg />
+    const counts = posts.reduce((acc, p) => {
+        const s = p.status || 'draft'
+        acc[s] = (acc[s] || 0) + 1
+        return acc
+    }, {})
+    const tabs = [
+        { key: 'all', label: 'All', count: posts.length },
+        { key: 'published', label: 'Published', count: counts.published || 0 },
+        { key: 'draft', label: 'Draft', count: counts.draft || 0 },
+        { key: 'hidden', label: 'Hidden', count: counts.hidden || 0 },
+    ]
+
+    const publishBlocked = form.status === 'published' && !hasImage(form)
+    const saveDisabled = slugTaken || publishBlocked
+    const saveDisabledReason = publishBlocked
+        ? 'Add a hero or inline image before publishing'
+        : slugTaken ? 'This slug is already in use' : undefined
+    const ctaLabel = form.status === 'published' ? 'Publish' : 'Save'
+
+    const metaRailProps = {
+        form,
+        updateForm,
+        tagsInput,
+        onTagsInput: setTagsInput,
+        categoriesInput,
+        onCategoriesInput: setCategoriesInput,
+        slugTaken,
+        publishBlocked,
+        canDelete: Boolean(selected),
+        onDelete: () => setConfirmDelete(true),
+    }
+
+    // ---- List rail ---------------------------------------------------------
+    if (!selected) {
+        return (
+            <motion.div
+                key="list"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={settle}
+                className="p-5 md:p-8"
+            >
+                <div className="flex items-center justify-between gap-4">
+                    <h2 className="dash-title">Blog posts</h2>
+                    {posts.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleNew}
+                            className="dash-hoverable rounded-full px-4 py-2 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] cursor-pointer"
+                        >
+                            New Post
                         </button>
+                    )}
+                </div>
+                <ViewTabs className="mt-5" tabs={tabs} active={statusFilter} onChange={setStatusFilter} />
+
+                {loading && posts.length === 0 ? (
+                    <div className="mt-6 flex flex-col gap-2">
+                        <SkeletonRow />
+                        <SkeletonRow />
+                        <SkeletonRow />
                     </div>
-                    <div className="flex gap-1 mb-3">
-                        {['all', 'published', 'draft', 'hidden'].map((s) => (
-                            <button
-                                key={s}
-                                onClick={() => setStatusFilter(s)}
-                                className={`px-2 py-1 rounded-full text-[10px] uppercase tracking-wide border border-borderColor cursor-pointer ${statusFilter === s ? 'bg-textColor text-background' : 'text-lightColor hover:bg-borderColor/20'}`}
-                            >
-                                {s}
-                            </button>
-                        ))}
-                    </div>
-                    {loading && <div className="text-sm">Loading...</div>}
-                    <ul className="flex gap-2 flex-col w-full max-h-[48vh] overflow-y-auto">
-                        {filteredPosts.map(p => (
-                            <li key={p._id} className={`p-3 sm:p-4 border border-borderColor w-full rounded cursor-pointer hover:text-textColor/80 transition-colors duration-100 ease-in-out ${selected && selected._id === p._id ? '' : 'bg-borderColor/40 text-lightColor'}`} onClick={() => handleSelect(p)}>
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="font-medium text-xs sm:text-sm truncate">{p.title}</div>
-                                    <StatusBadge status={p.status || 'draft'} />
-                                </div>
-                                <div className="flex items-center justify-between gap-2 mt-1">
-                                    <div className="text-xs text-lightColor truncate">{p.slug}</div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleClone(p) }}
-                                        className="text-[10px] text-lightColor hover:text-textColor underline cursor-pointer"
+                ) : posts.length === 0 ? (
+                    <EmptyState
+                        icon={<IoNewspaperOutline />}
+                        title="Write Your First Post"
+                        body="Posts you publish appear on the site's blog and can feed the newsletter."
+                        cta="New Post"
+                        onCta={handleNew}
+                    />
+                ) : filteredPosts.length === 0 ? (
+                    <EmptyState
+                        icon={<IoNewspaperOutline />}
+                        title="No Posts Here"
+                        body={`There are no ${statusFilter} posts right now.`}
+                    />
+                ) : (
+                    <ul className="mt-4">
+                        {filteredPosts.map((p) => {
+                            const status = p.status || 'draft'
+                            return (
+                                <li key={p._id} className="border-b border-[var(--dash-line)] last:border-0">
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => handleSelect(p)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleSelect(p) }}
+                                        className="dash-hoverable flex items-center justify-between gap-4 rounded-[var(--dash-r-inner)] px-3 py-3 cursor-pointer hover:bg-[var(--dash-sun-soft)]"
                                     >
-                                        Clone
-                                    </button>
-                                </div>
-                                {p.scheduledFor && (p.status || 'draft') === 'draft' && (
-                                    <div className="text-[10px] text-amber-600 mt-1">
-                                        Scheduled: {new Date(p.scheduledFor).toLocaleString()}
+                                        <div className="min-w-0">
+                                            <p className="text-[14px] font-medium truncate">{p.title}</p>
+                                            <p className="dash-data dash-soft truncate">/{p.slug}</p>
+                                            {p.scheduledFor && status === 'draft' && (
+                                                <p className="dash-data dash-soft">
+                                                    Scheduled {new Date(p.scheduledFor).toLocaleString()}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); handleClone(p) }}
+                                                className="text-[13px] font-medium text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] cursor-pointer"
+                                            >
+                                                Clone
+                                            </button>
+                                            <StatusPill tone={STATUS_TONES[status] || 'hatch'}>{status}</StatusPill>
+                                        </div>
                                     </div>
-                                )}
-                            </li>
-                        ))}
+                                </li>
+                            )
+                        })}
                     </ul>
-                </div>
+                )}
+            </motion.div>
+        )
+    }
 
-                <div className="adminDashboardContainer w-full flex flex-col gap-4">
-                    {restorableDraft && (
-                        <div className="flex items-center justify-between border border-amber-300 bg-amber-50 rounded-md px-3 py-2">
-                            <p className="text-xs text-amber-800">
-                                An unsaved autosave from {new Date(restorableDraft.updatedAt).toLocaleString()} exists.
-                            </p>
-                            <div className="flex gap-2">
-                                <button onClick={restoreDraft} className="text-xs underline text-amber-800 cursor-pointer">Restore</button>
-                                <button onClick={() => setRestorableDraft(null)} className="text-xs text-amber-800/70 cursor-pointer">Dismiss</button>
-                            </div>
-                        </div>
-                    )}
+    // ---- Focus mode: the page being written --------------------------------
+    return (
+        <motion.div
+            key="focus"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={settle}
+            className="p-3 md:p-4"
+        >
+            <GlassBar className="flex-wrap">
+                <button
+                    type="button"
+                    onClick={backToList}
+                    className="dash-hoverable flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[13px] font-medium text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] hover:bg-[var(--dash-sun-soft)] cursor-pointer"
+                >
+                    <IoArrowBackOutline size={14} aria-hidden />
+                    Posts
+                </button>
+                <span className="text-[13px] font-medium truncate max-w-[140px] md:max-w-[240px]">
+                    {form.title || 'Untitled post'}
+                </span>
+                <span className="flex-1" />
+                {autosavedAt && (
+                    <span className="dash-data dash-soft whitespace-nowrap">
+                        Autosaved {new Date(autosavedAt).toLocaleTimeString()}
+                    </span>
+                )}
+                <UndoRedo editor={isTiptap ? editorInst : null} />
+                <button
+                    type="button"
+                    onClick={() => setPreviewOpen(true)}
+                    className="dash-hoverable rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium hover:bg-[var(--dash-canvas)] cursor-pointer"
+                >
+                    Preview
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMetaOpen(true)}
+                    aria-label="Post details"
+                    title="Post details"
+                    className={`${QUIET_ICON} xl:hidden`}
+                >
+                    <IoOptionsOutline size={15} aria-hidden />
+                </button>
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saveDisabled}
+                    title={saveDisabledReason}
+                    className="dash-hoverable rounded-full px-4 py-1.5 text-[13px] font-semibold bg-[var(--dash-sun)] text-[var(--dash-ink)] hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] cursor-pointer disabled:opacity-50 disabled:cursor-default"
+                >
+                    {ctaLabel}
+                </button>
+            </GlassBar>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">Title</label>
-                            <input className="formInput" value={form.title} onChange={e => updateForm({ title: e.target.value })} />
-                        </div>
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">Slug</label>
-                            <input className={`formInput ${slugTaken ? 'border-red-400' : ''}`} value={form.slug} onChange={e => updateForm({ slug: e.target.value })} placeholder="auto-generated from title" />
-                            {slugTaken && <p className="text-[11px] text-red-500">This slug is already in use.</p>}
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                        <label className="formLabel">Excerpt</label>
-                        <input className="formInput" value={form.excerpt} onChange={e => updateForm({ excerpt: e.target.value })} />
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                        <ImageUpload label="Hero Image" value={form.heroImage} onChange={(v) => updateForm({ heroImage: v })} uploadPath={'blog'} uploadEndpoint={'/api/admin/upload/images'} />
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                        <label className="formLabel">Content</label>
-                        {isTiptap ? (
-                            <TiptapEditor value={form.contentJson} onChange={(json) => updateForm({ contentJson: json })} />
-                        ) : (
-                            <>
-                                <p className="text-[11px] text-lightColor">Legacy markdown post — edited in Markdown.</p>
-                                <div data-color-mode="light">
-                                    <MDEditor value={form.content} onChange={(v) => updateForm({ content: v })} height={300} />
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">CTA Tag</label>
-                            <input className="formInput" value={form.cta.tag} onChange={e => updateForm({ cta: { ...form.cta, tag: e.target.value } })} />
-                        </div>
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">CTA Text</label>
-                            <input className="formInput" value={form.cta.text} onChange={e => updateForm({ cta: { ...form.cta, text: e.target.value } })} />
-                        </div>
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">CTA URL</label>
-                            <input className="formInput" value={form.cta.url} onChange={e => updateForm({ cta: { ...form.cta, url: e.target.value } })} />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">Meta Title</label>
-                            <input className="formInput" value={form.metaTitle} onChange={e => updateForm({ metaTitle: e.target.value })} placeholder="Optional SEO title" />
-                        </div>
-                        <div className='flex flex-col gap-2'>
-                            <label className="formLabel">Meta Description</label>
-                            <input className="formInput" value={form.metaDescription} onChange={e => updateForm({ metaDescription: e.target.value })} placeholder="Optional SEO description" />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                        <div className="flex flex-col gap-2">
-                            <label className="formLabel">Tags (comma separated)</label>
-                            <input
-                                className="formInput"
-                                value={tagsInput}
-                                onChange={e => setTagsInput(e.target.value)}
-                                placeholder="e.g. design, tutorial, printing"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="formLabel">Categories (comma separated)</label>
-                            <input
-                                className="formInput"
-                                value={categoriesInput}
-                                onChange={e => setCategoriesInput(e.target.value)}
-                                placeholder="e.g. guides, news"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                        <div className="flex flex-col gap-2">
-                            <label className="formLabel">Status</label>
-                            <select
-                                className="formInput"
-                                value={form.status}
-                                onChange={e => updateForm({ status: e.target.value })}
+            <div className="flex items-start gap-8 px-2 md:px-4 pt-6 md:pt-8 pb-8">
+                <div className="flex-1 min-w-0">
+                    <div className="mx-auto max-w-[680px] flex flex-col gap-5">
+                        {restorableDraft && (
+                            <InfoStrip
+                                actions={
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={restoreDraft}
+                                            className="text-[13px] font-medium text-[var(--dash-ink)] hover:underline cursor-pointer"
+                                        >
+                                            Restore
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRestorableDraft(null)}
+                                            className="text-[13px] dash-soft hover:text-[var(--dash-ink)] cursor-pointer"
+                                        >
+                                            Dismiss
+                                        </button>
+                                    </>
+                                }
                             >
-                                <option value="draft">Draft</option>
-                                <option value="published">Published</option>
-                                <option value="hidden">Hidden</option>
-                            </select>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                            <label className="formLabel">Schedule publish (drafts)</label>
-                            <input
-                                type="datetime-local"
-                                className="formInput"
-                                value={form.scheduledFor}
-                                onChange={e => updateForm({ scheduledFor: e.target.value })}
-                                disabled={form.status === 'published'}
-                            />
-                        </div>
-                        <label className="flex items-end gap-2 font-normal text-xs sm:text-sm pb-2">
-                            <input type="checkbox" checked={form.featured} onChange={e => updateForm({ featured: e.target.checked })} /> Featured
-                        </label>
-                    </div>
+                                An unsaved autosave from {new Date(restorableDraft.updatedAt).toLocaleString()} exists.
+                            </InfoStrip>
+                        )}
+                        {!isTiptap && (
+                            <InfoStrip>Legacy markdown post — new posts use the rich editor.</InfoStrip>
+                        )}
 
-                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 items-center">
-                        <button onClick={handleSave} disabled={slugTaken} className="formBlackButton w-full sm:w-auto disabled:opacity-50">{loading ? 'Saving...' : 'Save'}</button>
-                        {selected && <button onClick={handleDelete} className="formRedButton w-full sm:w-auto">Delete</button>}
-                        {autosavedAt && (
-                            <span className="text-[11px] text-lightColor">Autosaved {new Date(autosavedAt).toLocaleTimeString()}</span>
+                        <input
+                            aria-label="Title"
+                            placeholder="Untitled post"
+                            value={form.title}
+                            onChange={(e) => updateForm({ title: e.target.value })}
+                            className="w-full bg-transparent border-0 outline-none text-[36px] leading-tight font-semibold tracking-[-0.02em]"
+                        />
+
+                        {isTiptap ? (
+                            <TiptapEditor
+                                key={`${form._id || 'new'}:${restoreNonce}`}
+                                value={form.contentJson}
+                                onChange={(json) => updateForm({ contentJson: json })}
+                                onEditor={setEditorInst}
+                            />
+                        ) : (
+                            <div data-color-mode="light">
+                                <MDEditor value={form.content} onChange={(v) => updateForm({ content: v })} height={400} />
+                            </div>
                         )}
                     </div>
                 </div>
+
+                <aside className="hidden xl:block w-[260px] shrink-0 sticky top-16">
+                    <MetaRail idPrefix="rail" {...metaRailProps} />
+                </aside>
             </div>
 
-            <div className="adminDashboardContainer mt-2">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                    <div>
-                        <h3 className="font-semibold text-base sm:text-lg">Preview</h3>
-                        <p className="text-xs text-gray-600">This shows how the blog post will look on the site. Save changes, then refresh the preview.</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setPreviewKey((k) => k + 1)} className="formButton" type="button"><IoRefresh /></button>
-                        <a href={previewUrl || '#'} target="_blank" rel="noreferrer" className="formBlackButton"><MdOpenInNew /></a>
-                    </div>
+            {/* MetaRail as a Sheet under 1280 px (§5.12). */}
+            <Sheet open={metaOpen} onClose={() => setMetaOpen(false)} side="right" label="Post details" widthClass="max-w-[320px]">
+                <div className="p-5">
+                    <h3 className="dash-section mb-4">Post details</h3>
+                    <MetaRail idPrefix="sheet" {...metaRailProps} />
                 </div>
-                <div className="relative w-full border border-dashed border-borderColor rounded-md overflow-hidden bg-gray-50">
+            </Sheet>
+
+            {/* Preview in a full Sheet (was inline — §5.12). */}
+            <Sheet open={previewOpen} onClose={() => setPreviewOpen(false)} label="Post preview" widthClass="max-w-4xl">
+                <div className="p-5 flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h3 className="dash-section">Preview</h3>
+                            <p className="text-[13px] dash-soft">
+                                This shows how the post will look on the site. Save changes, then refresh the preview.
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setPreviewKey((k) => k + 1)}
+                                aria-label="Refresh preview"
+                                title="Refresh preview"
+                                className={QUIET_ICON}
+                            >
+                                <IoRefreshOutline size={15} aria-hidden />
+                            </button>
+                            {previewUrl && (
+                                <a
+                                    href={previewUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-label="Open preview in new tab"
+                                    title="Open preview in new tab"
+                                    className={QUIET_ICON}
+                                >
+                                    <IoOpenOutline size={15} aria-hidden />
+                                </a>
+                            )}
+                        </div>
+                    </div>
                     {previewUrl ? (
-                        <iframe key={previewKey} src={previewUrl} title="Blog Preview" className="w-full" style={{ height: '400px', border: '0' }} />
+                        <iframe
+                            key={previewKey}
+                            src={previewUrl}
+                            title="Blog Preview"
+                            className="w-full rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)]"
+                            style={{ height: '70vh' }}
+                        />
                     ) : (
-                        <div className="p-6 text-xs font-medium text-lightColor">Enter a slug (or save the post) to preview.</div>
+                        <p className="text-[13px] dash-soft py-6 text-center">
+                            Enter a slug (or save the post) to preview.
+                        </p>
                     )}
                 </div>
-            </div>
+            </Sheet>
 
-        </div>
+            <ConfirmDialog
+                open={confirmDelete}
+                onClose={() => setConfirmDelete(false)}
+                onConfirm={handleDelete}
+                title="Delete this post?"
+                body="This permanently removes the post. This can't be undone."
+                tone="bad"
+                confirmLabel="Delete"
+            />
+        </motion.div>
     )
 }

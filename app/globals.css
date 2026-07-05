@@ -255,3 +255,80 @@
 .wmde-markdown li::marker {
   color: var(--textColor) !important;
 }
+/* Blog article body (.prose): the Tailwind typography plugin is NOT installed,
+   so without these rules preflight zeroes every margin and TipTap paragraphs,
+   blank lines and headings all fuse into one block. Covers exactly the node
+   set produced by lib/blog/renderTiptap.js. */
+.prose p {
+  margin: 1em 0;
+}
+.prose p:empty::before {
+  /* Blank lines the writer typed are empty <p></p>; keep their height. */
+  content: '\00a0';
+}
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 1.5em 0 0.6em;
+}
+.prose h1 { font-size: 1.9em; }
+.prose h2 { font-size: 1.5em; }
+.prose h3 { font-size: 1.25em; }
+.prose h4 { font-size: 1.1em; }
+.prose ul,
+.prose ol {
+  margin: 1em 0;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+  list-style-position: outside;
+}
+.prose ol { list-style-type: decimal; }
+.prose li { margin: 0.35em 0; }
+.prose blockquote {
+  margin: 1.25em 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--borderColor);
+  color: var(--light);
+}
+.prose a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+  margin: 1.5em 0;
+}
+.prose hr {
+  border: 0;
+  border-top: 1px solid var(--borderColor);
+  margin: 2em 0;
+}
+.prose code {
+  background: var(--baseColor);
+  border: 1px solid var(--borderColor);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+.prose pre {
+  background: var(--baseColor);
+  border: 1px solid var(--borderColor);
+  border-radius: 0.375rem;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  margin: 1.25em 0;
+}
+.prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.prose mark {
+  padding: 0.05em 0.15em;
+  border-radius: 0.2rem;
+}

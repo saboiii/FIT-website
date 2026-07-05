@@ -153,7 +153,12 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
         onUpdate: ({ editor: e }) => onChange?.(e.getJSON()),
         editorProps: {
             attributes: {
-                class: 'prose max-w-none focus:outline-none min-h-[320px] py-4 text-sm',
+                // The page IS the surface (client directive): no focus ring, and a
+                // min-height that reaches the bottom of the viewport so clicking
+                // anywhere low starts writing. The inline outline:none beats the
+                // `.dash :focus-visible` ring on the contenteditable.
+                class: 'prose max-w-none focus:outline-none min-h-[calc(100dvh-300px)] py-4 text-sm',
+                style: 'outline: none',
             },
             handleDrop: (view, event) => {
                 const file = event.dataTransfer?.files?.[0]
@@ -324,7 +329,10 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <MenuButton title="Insert image" onClick={() => fileInputRef.current?.click()}><LuImage /></MenuButton>
             </FloatingMenu>
 
-            <EditorContent editor={editor} />
+            {/* Grows with the page until very long, then scrolls internally. */}
+            <div className="max-h-[300vh] dash-scroll">
+                <EditorContent editor={editor} />
+            </div>
             <input
                 ref={fileInputRef}
                 type="file"

@@ -246,7 +246,7 @@ export default function BlogManagement() {
         const payload = buildPayload()
         if (payload.status === 'published' && !hasImage(payload)) {
             showToast('Add a hero or inline image before publishing', 'error')
-            return
+            return false
         }
         try {
             const res = await fetch('/api/admin/blog', {
@@ -266,9 +266,11 @@ export default function BlogManagement() {
                 setRestorableDraft(null)
             }
             setPreviewKey((k) => k + 1)
+            return true
         } catch (err) {
             console.error(err)
             showToast('Save failed', 'error')
+            return false
         }
     }
 
@@ -355,7 +357,7 @@ export default function BlogManagement() {
         setCategoriesInput((f.categories || []).join(', '))
         setRestorableDraft(null)
         setRestoreNonce((n) => n + 1) // remount the editor with restored content
-        showToast('Draft restored — save to keep it', 'success')
+        showToast('Draft restored. Save to keep it', 'success')
     }
 
     const filteredPosts = statusFilter === 'all' ? posts : posts.filter((p) => (p.status || 'draft') === statusFilter)
@@ -392,6 +394,13 @@ export default function BlogManagement() {
         publishBlocked,
         canDelete: Boolean(selected),
         onDelete: () => setConfirmDelete(true),
+        onSave: async () => {
+            const ok = await handleSave()
+            if (ok) setMetaOpen(false)
+        },
+        saveDisabled,
+        saveDisabledReason,
+        saveLabel: form.status === 'published' ? 'Publish post' : 'Save post',
     }
 
     // ---- List rail ---------------------------------------------------------
@@ -510,7 +519,10 @@ export default function BlogManagement() {
                 <UndoRedo editor={isTiptap ? editorInst : null} />
                 <button
                     type="button"
-                    onClick={() => setPreviewOpen(true)}
+                    onClick={() => {
+                        setPreviewKey((k) => k + 1) // always show the latest saved version
+                        setPreviewOpen(true)
+                    }}
                     className="dash-hoverable rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium hover:bg-[var(--dash-canvas)] cursor-pointer"
                 >
                     Preview
@@ -518,11 +530,11 @@ export default function BlogManagement() {
                 <button
                     type="button"
                     onClick={() => setMetaOpen(true)}
-                    aria-label="Post details"
-                    title="Post details"
-                    className={`${QUIET_ICON} xl:hidden`}
+                    title="Slug, cover, tags, SEO and scheduling"
+                    className="dash-hoverable flex items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[13px] font-medium hover:bg-[var(--dash-canvas)] cursor-pointer"
                 >
-                    <IoOptionsOutline size={15} aria-hidden />
+                    <IoOptionsOutline size={14} aria-hidden />
+                    Publish details
                 </button>
                 <button
                     type="button"
@@ -535,8 +547,8 @@ export default function BlogManagement() {
                 </button>
             </GlassBar>
 
-            <div className="flex items-start gap-8 px-2 md:px-4 pt-6 md:pt-8 pb-8">
-                <div className="flex-1 min-w-0">
+            <div className="px-2 md:px-4 pt-6 md:pt-8 pb-4">
+                <div className="min-w-0">
                     <div className="mx-auto max-w-[680px] flex flex-col gap-5">
                         {restorableDraft && (
                             <InfoStrip
@@ -563,7 +575,7 @@ export default function BlogManagement() {
                             </InfoStrip>
                         )}
                         {!isTiptap && (
-                            <InfoStrip>Legacy markdown post — new posts use the rich editor.</InfoStrip>
+                            <InfoStrip>Legacy markdown post. New posts use the rich editor.</InfoStrip>
                         )}
 
                         <input
@@ -571,6 +583,9 @@ export default function BlogManagement() {
                             placeholder="Untitled post"
                             value={form.title}
                             onChange={(e) => updateForm({ title: e.target.value })}
+                            // Inline outline:none beats `.dash :focus-visible` — the page,
+                            // not a ring, is the writing surface (client directive).
+                            style={{ outline: 'none' }}
                             className="w-full bg-transparent border-0 outline-none text-[36px] leading-tight font-semibold tracking-[-0.02em]"
                         />
 
@@ -588,28 +603,30 @@ export default function BlogManagement() {
                         )}
                     </div>
                 </div>
-
-                <aside className="hidden xl:block w-[260px] shrink-0 sticky top-16">
-                    <MetaRail idPrefix="rail" {...metaRailProps} />
-                </aside>
             </div>
 
-            {/* MetaRail as a Sheet under 1280 px (§5.12). */}
-            <Sheet open={metaOpen} onClose={() => setMetaOpen(false)} side="right" label="Post details" widthClass="max-w-[320px]">
+            {/* Publish details: guided, stepped flow in a Sheet (client directive,
+                amends §5.12) — the writing surface stays clean; everything else is
+                filled in through four small steps. */}
+            <Sheet open={metaOpen} onClose={() => setMetaOpen(false)} side="right" label="Publish details" widthClass="max-w-[400px]">
                 <div className="p-5">
-                    <h3 className="dash-section mb-4">Post details</h3>
+                    <h3 className="dash-section mb-1">Publish details</h3>
+                    <p className="text-[13px] dash-soft mb-4">
+                        Four quick steps. Anything already filled in can be skipped.
+                    </p>
                     <MetaRail idPrefix="sheet" {...metaRailProps} />
                 </div>
             </Sheet>
 
-            {/* Preview in a full Sheet (was inline — §5.12). */}
-            <Sheet open={previewOpen} onClose={() => setPreviewOpen(false)} label="Post preview" widthClass="max-w-4xl">
-                <div className="p-5 flex flex-col gap-3">
-                    <div className="flex items-center justify-between gap-3">
+            {/* Live preview: the REAL blog page (`/blog/<slug>` renders drafts for
+                admins) in a full-height iframe Sheet (§5.12). */}
+            <Sheet open={previewOpen} onClose={() => setPreviewOpen(false)} side="right" label="Post preview" widthClass="max-w-[min(96vw,1100px)]">
+                <div className="h-full flex flex-col gap-3 p-5">
+                    <div className="flex items-center justify-between gap-3 shrink-0">
                         <div>
-                            <h3 className="dash-section">Preview</h3>
+                            <h3 className="dash-section">Live preview</h3>
                             <p className="text-[13px] dash-soft">
-                                This shows how the post will look on the site. Save changes, then refresh the preview.
+                                This is the real blog page as readers will see it. It shows the last save, so save first, then refresh.
                             </p>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
@@ -641,8 +658,7 @@ export default function BlogManagement() {
                             key={previewKey}
                             src={previewUrl}
                             title="Blog Preview"
-                            className="w-full rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)]"
-                            style={{ height: '70vh' }}
+                            className="w-full flex-1 min-h-0 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)]"
                         />
                     ) : (
                         <p className="text-[13px] dash-soft py-6 text-center">

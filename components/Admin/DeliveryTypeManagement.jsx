@@ -1,12 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { IoAddOutline, IoTrashOutline, IoChevronDownOutline, IoChevronForwardOutline, IoCarOutline } from 'react-icons/io5'
-import { DashCard, Sheet, ConfirmDialog, StatusPill, GlassBar, EmptyState, DottedRow, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
-import { inputCls, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
-
-const sunBtnCls =
-    'dash-hoverable rounded-full px-4 py-2 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] cursor-pointer hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed'
+import { IoAddOutline, IoTrashOutline } from 'react-icons/io5'
+import { TbTruck } from 'react-icons/tb'
+import { DashCard, ConfirmDialog, StatusPill, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
+import { quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import DeliveryTypeFormSheet from './DeliveryTypeFormSheet'
+import { DeliverySwitch, DeliveryTypeIcon, PricingStrip, sunBtnCls } from './deliveryTypeUi'
 
 const BLANK_FORM = {
     name: '',
@@ -26,37 +26,10 @@ const BLANK_FORM = {
 
 const TYPE_LABELS = { shop: 'Shop', print: 'Print' }
 
-// A delivery type with all formula fields zero is effectively free shipping.
-const isFreeFormula = (bp) =>
-    Number(bp.basePrice) === 0 && Number(bp.volumeFactor || 0) === 0 && Number(bp.weightFactor || 0) === 0
-
-const pricingLabel = (dt) => {
-    if (!dt.basePricing || dt.basePricing.basePrice == null) return 'Creator-defined'
-    return isFreeFormula(dt.basePricing) ? 'Free' : 'Formula'
-}
-
-const hasFormulaDetails = (dt) =>
-    dt.basePricing && dt.basePricing.basePrice != null && !isFreeFormula(dt.basePricing)
-
-// The three preset examples + the try-your-own row share one clamp.
-const clampPrice = (bp, volume, weight) => {
-    const raw = parseFloat(bp.basePrice) + (volume * parseFloat(bp.volumeFactor)) + (weight * parseFloat(bp.weightFactor))
-    const minPrice = parseFloat(bp.minPrice) || 0
-    const maxPrice = isNaN(parseFloat(bp.maxPrice)) ? Infinity : parseFloat(bp.maxPrice)
-    return Math.max(minPrice, Math.min(maxPrice, raw))
-}
-
-const PREVIEW_PRESETS = [
-    { volume: 1000, weight: 100, label: 'Small Item' },
-    { volume: 5000, weight: 500, label: 'Medium Item' },
-    { volume: 10000, weight: 1000, label: 'Large Item' }
-]
-
 export default function DeliveryTypeManagement() {
     const [deliveryTypes, setDeliveryTypes] = useState([])
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [expandedDeliveryTypes, setExpandedDeliveryTypes] = useState({})
     const [showDeliveryTypeForm, setShowDeliveryTypeForm] = useState(false)
     const [editingDeliveryType, setEditingDeliveryType] = useState(null)
     const [deleteTarget, setDeleteTarget] = useState(null)
@@ -66,14 +39,6 @@ export default function DeliveryTypeManagement() {
     const { showToast } = useToast()
 
     const [formData, setFormData] = useState(BLANK_FORM)
-    const [customExample, setCustomExample] = useState({ volume: '', weight: '' })
-
-    const toggleDeliveryType = (deliveryTypeName) => {
-        setExpandedDeliveryTypes(prev => ({
-            ...prev,
-            [deliveryTypeName]: !prev[deliveryTypeName]
-        }))
-    }
 
     useEffect(() => {
         fetchDeliveryTypes()
@@ -285,29 +250,6 @@ export default function DeliveryTypeManagement() {
         )
     }
 
-    const bpForm = formData.basePricing
-    const previewReady = bpForm.basePrice && bpForm.volumeFactor && bpForm.weightFactor
-
-    const numberField = (label, key, { placeholder, step, help }) => (
-        <div className="flex flex-col gap-1.5">
-            <label htmlFor={`bp-${key}`} className="text-[13px] font-medium text-[var(--dash-ink)]">{label}</label>
-            <input
-                id={`bp-${key}`}
-                type="number"
-                value={formData.basePricing[key]}
-                onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    basePricing: { ...prev.basePricing, [key]: e.target.value }
-                }))}
-                className={`${inputCls()} text-right dash-data`}
-                placeholder={placeholder}
-                min="0"
-                step={step}
-            />
-            <span className="text-[13px] dash-soft">{help}</span>
-        </div>
-    )
-
     return (
         <div className="flex flex-col gap-4 p-4 md:p-6">
             {/* Header */}
@@ -315,7 +257,7 @@ export default function DeliveryTypeManagement() {
                 <div>
                     <h2 className="dash-title">Delivery</h2>
                     <p className="text-[13px] dash-soft mt-1">
-                        Configure delivery options with custom pricing tiers for creators.
+                        The shipping options customers pick at checkout. Digital delivery is always available.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -336,54 +278,44 @@ export default function DeliveryTypeManagement() {
                 />
             )}
 
-            {/* Delivery types — list-first (§5.14) */}
+            {/* Delivery types — icon cards with a sentence-style pricing strip (§5.14) */}
             <DashCard
                 data-tour="delivery-list"
                 title="All delivery types"
-                action={<span className="text-[13px] dash-soft dash-data">{deliveryTypes.length} total · Digital delivery is always available</span>}
+                action={<span className="text-[13px] dash-soft"><span className="dash-data">{deliveryTypes.length}</span> total</span>}
             >
                 {deliveryTypes.length === 0 ? (
                     <EmptyState
-                        icon={<IoCarOutline />}
+                        icon={<TbTruck />}
                         title="No Delivery Types Yet"
                         body="Create delivery options for creators to use on their products."
                         cta="Add Delivery Type"
                         onCta={openCreate}
                     />
                 ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-3">
                         {deliveryTypes.map((dt, idx) => (
-                            <div key={dt.name || idx} className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)]">
-                                <div className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center">
-                                    <div className="flex items-start gap-2 flex-1 min-w-0">
-                                        {hasFormulaDetails(dt) && (
-                                            <button
-                                                onClick={() => toggleDeliveryType(dt.name)}
-                                                className="dash-hoverable p-1 mt-0.5 rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] hover:bg-[var(--dash-sun-soft)] cursor-pointer shrink-0"
-                                                aria-expanded={!!expandedDeliveryTypes[dt.name]}
-                                                aria-label={expandedDeliveryTypes[dt.name] ? 'Collapse pricing formula' : 'Expand pricing formula'}
-                                            >
-                                                {expandedDeliveryTypes[dt.name] ? (
-                                                    <IoChevronDownOutline size={14} aria-hidden="true" />
-                                                ) : (
-                                                    <IoChevronForwardOutline size={14} aria-hidden="true" />
-                                                )}
-                                            </button>
-                                        )}
-
+                            <div
+                                key={dt.name || idx}
+                                data-delivery-card="true"
+                                className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] p-4"
+                            >
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                                        <DeliveryTypeIcon dt={dt} />
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-[13px] font-medium text-[var(--dash-ink)]">{dt.displayName}</span>
+                                                <span className="text-[14px] font-semibold text-[var(--dash-ink)]">{dt.displayName}</span>
                                                 <span className="dash-data rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)] px-2 py-0.5 text-[var(--dash-ink-soft)]">
                                                     {dt.name}
                                                 </span>
-                                            </div>
-                                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                                {dt.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
                                                 {dt.applicableToProductTypes?.map(type => (
                                                     <StatusPill key={type} tone="paper">{TYPE_LABELS[type] || type}</StatusPill>
                                                 ))}
-                                                {dt.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
-                                                <span className="text-[13px] dash-soft">{pricingLabel(dt)}</span>
+                                            </div>
+                                            <div className="mt-2">
+                                                <PricingStrip basePricing={dt.basePricing} />
                                             </div>
                                             {dt.description && (
                                                 <p className="text-[13px] dash-soft mt-2">{dt.description}</p>
@@ -392,23 +324,12 @@ export default function DeliveryTypeManagement() {
                                     </div>
 
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <button
-                                            role="switch"
+                                        <DeliverySwitch
+                                            checked={dt.isActive}
+                                            onChange={() => handleToggleActive(dt.name, dt.isActive)}
+                                            label={`${dt.displayName} active`}
                                             data-tour="delivery-toggle"
-                                            aria-checked={dt.isActive}
-                                            aria-label={`${dt.displayName} active`}
-                                            onClick={() => handleToggleActive(dt.name, dt.isActive)}
-                                            className={`dash-hoverable relative h-5 w-9 rounded-full cursor-pointer ${
-                                                dt.isActive ? 'bg-[var(--dash-ink)]' : 'bg-[var(--dash-line)]'
-                                            }`}
-                                        >
-                                            <span
-                                                className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--dash-card)] transition-transform ${
-                                                    dt.isActive ? 'translate-x-[18px]' : 'translate-x-0.5'
-                                                }`}
-                                            />
-                                        </button>
-                                        <span className="text-[13px] dash-soft w-14">{dt.isActive ? 'Active' : 'Inactive'}</span>
+                                        />
                                         {!dt.isHardcoded && (
                                             <>
                                                 <button onClick={() => openEdit(dt)} className={quietBtnCls}>
@@ -425,195 +346,22 @@ export default function DeliveryTypeManagement() {
                                         )}
                                     </div>
                                 </div>
-
-                                {/* Pricing formula details — collapsible spec sheet */}
-                                {hasFormulaDetails(dt) && expandedDeliveryTypes[dt.name] && (
-                                    <div className="border-t border-[var(--dash-line)] px-4 py-3">
-                                        <p className="dash-label mb-2">Pricing Formula</p>
-                                        <div className="max-w-md flex flex-col">
-                                            <DottedRow label="Base price">${dt.basePricing.basePrice}</DottedRow>
-                                            <DottedRow label="Volume factor">${dt.basePricing.volumeFactor}/cm³</DottedRow>
-                                            <DottedRow label="Weight factor">${dt.basePricing.weightFactor}/g</DottedRow>
-                                            <DottedRow label="Min price">${dt.basePricing.minPrice}</DottedRow>
-                                            <DottedRow label="Max price">${dt.basePricing.maxPrice}</DottedRow>
-                                            {dt.basePricing.freeShippingThreshold && (
-                                                <DottedRow label="Free shipping over">${dt.basePricing.freeShippingThreshold}</DottedRow>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         ))}
                     </div>
                 )}
             </DashCard>
 
-            {/* Create / edit — a Sheet with a GlassBar header (§5.14) */}
-            <Sheet
+            {/* Create / edit — stepped sheet flow (§5.14 + client feedback) */}
+            <DeliveryTypeFormSheet
                 open={showDeliveryTypeForm}
                 onClose={closeForm}
-                label={editingDeliveryType ? 'Edit delivery type' : 'New delivery type'}
-                widthClass="max-w-4xl"
-            >
-                <form onSubmit={handleSubmit} className="p-4 flex flex-col gap-4">
-                    <GlassBar className="flex-wrap">
-                        <h3 className="dash-section">{editingDeliveryType ? 'Edit Delivery Type' : 'New Delivery Type'}</h3>
-                        <div className="ml-auto flex items-center gap-2">
-                            <button type="button" onClick={closeForm} className={quietBtnCls} disabled={saving}>
-                                Cancel
-                            </button>
-                            <button type="submit" disabled={saving} className={sunBtnCls}>
-                                {saving
-                                    ? (editingDeliveryType ? 'Saving…' : 'Adding…')
-                                    : (editingDeliveryType ? 'Save Changes' : 'Add Delivery Type')}
-                            </button>
-                        </div>
-                    </GlassBar>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                            <label htmlFor="dt-name" className="text-[13px] font-medium text-[var(--dash-ink)]">URL Name*</label>
-                            <input
-                                id="dt-name"
-                                type="text"
-                                value={formData.name}
-                                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-                                className={inputCls()}
-                                placeholder="premium-delivery"
-                                required
-                            />
-                            <span className="text-[13px] dash-soft">Lowercase, no spaces</span>
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label htmlFor="dt-displayName" className="text-[13px] font-medium text-[var(--dash-ink)]">Display Name*</label>
-                            <input
-                                id="dt-displayName"
-                                type="text"
-                                value={formData.displayName}
-                                onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                                className={inputCls()}
-                                placeholder="Premium Delivery"
-                                required
-                            />
-                            <span className="text-[13px] dash-soft">Shown to users</span>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                        <label htmlFor="dt-description" className="text-[13px] font-medium text-[var(--dash-ink)]">Description</label>
-                        <textarea
-                            id="dt-description"
-                            value={formData.description}
-                            onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                            className={`${inputCls()} resize-none`}
-                            placeholder="Optional instructions for creators (e.g., pickup location, estimated delivery time)"
-                            rows={2}
-                        />
-                        <span className="text-[13px] dash-soft">Creators can customize this per product</span>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                        <span className="text-[13px] font-medium text-[var(--dash-ink)]">Applicable To*</span>
-                        <div className="flex gap-4">
-                            {['shop', 'print'].map((type) => (
-                                <label key={type} className="flex items-center gap-2 text-[13px] dash-soft cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="accent-[var(--dash-ink)]"
-                                        checked={formData.applicableToProductTypes.includes(type)}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked
-                                            setFormData(prev => ({
-                                                ...prev,
-                                                applicableToProductTypes: checked
-                                                    ? [...prev.applicableToProductTypes, type]
-                                                    : prev.applicableToProductTypes.filter(t => t !== type)
-                                            }))
-                                        }}
-                                    />
-                                    {TYPE_LABELS[type]} Products
-                                </label>
-                            ))}
-                        </div>
-                        <span className="text-[13px] dash-soft">Select product types this delivery option applies to</span>
-                    </div>
-
-                    {/* Formula-based pricing + live preview, side by side on desktop
-                        so the preview is visible without scrolling (§9 directive). */}
-                    <div className="border-t border-[var(--dash-line)] pt-4">
-                        <h4 className="text-[13px] font-medium text-[var(--dash-ink)]">Automatic Pricing Formula</h4>
-                        <p className="text-[13px] dash-soft mt-0.5 mb-3">
-                            Price = Base Price + (Volume × Volume Factor) + (Weight × Weight Factor)
-                        </p>
-
-                        <div className={`grid grid-cols-1 gap-4 ${previewReady ? 'lg:grid-cols-[1fr_320px]' : ''}`}>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 content-start">
-                                {numberField('Base Price ($)', 'basePrice', { placeholder: '5.00', step: '0.01', help: 'Flat fee added to all deliveries' })}
-                                {numberField('Volume Factor ($/cm³)', 'volumeFactor', { placeholder: '0.001', step: '0.0001', help: 'Cost per cubic centimeter' })}
-                                {numberField('Weight Factor ($/g)', 'weightFactor', { placeholder: '0.01', step: '0.001', help: 'Cost per gram' })}
-                                {numberField('Minimum Price ($)', 'minPrice', { placeholder: '5.00', step: '0.01', help: 'Floor price (never go below)' })}
-                                {numberField('Maximum Price ($)', 'maxPrice', { placeholder: '50.00', step: '0.01', help: 'Ceiling price (never exceed)' })}
-                                {numberField('Free Shipping Threshold ($)', 'freeShippingThreshold', { placeholder: '100.00', step: '0.01', help: 'Free if product value exceeds (optional)' })}
-                            </div>
-
-                            {/* Live preview — DottedRow mini-table (§5.14) */}
-                            {previewReady && (
-                                <div className="rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)] p-4 self-start">
-                                    <p className="dash-label mb-2">Example Calculations</p>
-                                    <div className="flex flex-col">
-                                        {PREVIEW_PRESETS.map(example => (
-                                            <DottedRow key={example.label} label={`${example.label} · ${example.volume} cm³ · ${example.weight} g`}>
-                                                ${clampPrice(formData.basePricing, example.volume, example.weight).toFixed(2)}
-                                            </DottedRow>
-                                        ))}
-                                    </div>
-
-                                    <div className="mt-3 border-t border-[var(--dash-line)] pt-3">
-                                        <p className="dash-label mb-2">Test Your Own Example</p>
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="number"
-                                                value={customExample.volume}
-                                                onChange={(e) => setCustomExample(prev => ({ ...prev, volume: e.target.value }))}
-                                                className={`${inputCls()} text-right dash-data`}
-                                                placeholder="Volume (cm³)"
-                                                aria-label="Volume (cm³)"
-                                                min="0"
-                                                step="1"
-                                            />
-                                            <input
-                                                type="number"
-                                                value={customExample.weight}
-                                                onChange={(e) => setCustomExample(prev => ({ ...prev, weight: e.target.value }))}
-                                                className={`${inputCls()} text-right dash-data`}
-                                                placeholder="Weight (g)"
-                                                aria-label="Weight (g)"
-                                                min="0"
-                                                step="1"
-                                            />
-                                        </div>
-                                        <div className="mt-2">
-                                            {(() => {
-                                                const volume = parseFloat(customExample.volume)
-                                                const weight = parseFloat(customExample.weight)
-                                                if (isNaN(parseFloat(bpForm.basePrice)) || isNaN(parseFloat(bpForm.volumeFactor)) ||
-                                                    isNaN(parseFloat(bpForm.weightFactor)) || isNaN(volume) || isNaN(weight)) {
-                                                    return <p className="text-[13px] dash-soft">Enter volume and weight to preview</p>
-                                                }
-                                                return (
-                                                    <DottedRow label="Calculated price">
-                                                        ${clampPrice(formData.basePricing, volume, weight).toFixed(2)}
-                                                    </DottedRow>
-                                                )
-                                            })()}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </form>
-            </Sheet>
+                editing={!!editingDeliveryType}
+                formData={formData}
+                setFormData={setFormData}
+                saving={saving}
+                onSubmit={handleSubmit}
+            />
 
             {/* Delete confirmation — never window.confirm (§4.10) */}
             <ConfirmDialog

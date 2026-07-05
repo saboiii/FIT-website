@@ -403,12 +403,14 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
                 </div>
             )}
 
-            <GlassBar className="flex-wrap">
-                <ViewTabs tabs={TABS} active={tab} onChange={setTab} data-tour="quoting-tabs" />
-                <button onClick={handleSave} disabled={saving} data-tour="quoting-save" className={`${sunBtnCls} ml-auto`}>
-                    {saving ? 'Saving…' : 'Save Quoting Config'}
-                </button>
-                <TourHelpButton onClick={() => setTourOpen(true)} />
+            <GlassBar>
+                <ViewTabs tabs={TABS} active={tab} onChange={setTab} data-tour="quoting-tabs" className="flex-1 min-w-0" />
+                <div className="flex items-center gap-2 shrink-0 ml-auto">
+                    <button onClick={handleSave} disabled={saving} data-tour="quoting-save" className={sunBtnCls}>
+                        {saving ? 'Saving…' : 'Save Quoting Config'}
+                    </button>
+                    <TourHelpButton onClick={() => setTourOpen(true)} />
+                </div>
             </GlassBar>
 
             {tourOffer.offered && !tourOpen && (

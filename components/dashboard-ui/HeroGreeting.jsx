@@ -8,9 +8,7 @@ export default function HeroGreeting({ salutation, name, context }) {
     return (
         <div>
             <h1 className="dash-display">
-                {salutation}
-                <br />
-                <strong>{name}.</strong>
+                <strong>{salutation} {name}.</strong>
             </h1>
             {context && <p className="dash-data dash-soft mt-2">{context}</p>}
         </div>

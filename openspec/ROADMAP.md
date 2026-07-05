@@ -239,3 +239,16 @@ SignUpForm (paid sign-up stages crashed), `useAccess` conditional-hooks
 violation restructured, blog schedule-edit TZ shift (shared with newsletter),
 JSX entity escapes, stale docstrings (cron scheduler, geometry formats),
 debug log removed from `utils/store.js`.
+
+## Phase 9 — Dashboard redesign backlog (filed 2026-07-05)
+
+38. **redesign-dashboard-ui** — *(ACTIVE — WP0–WP7 + 6a/6b/6c shipped;
+    WP8 tours/job-sheets in flight; WP9 stubs + WP10 review remain)*.
+39. **Feature backlog spun from the redesign** (one change each, stubs/UI
+    seams shipped or specced in the blueprint §6): add-order-timeline-notes,
+    add-discount-codes, add-creator-payout-statements,
+    add-creator-product-analytics, add-listing-manager-extras,
+    add-refunds-ui, add-quote-review-state, add-fulfilment-evidence,
+    add-admin-customers-panel, add-print-farm-inventory,
+    add-dashboard-notification-centre, add-newsletter-test-send,
+    add-product-image-generation.

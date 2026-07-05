@@ -48,9 +48,12 @@ const EMPTY_FORM = {
 }
 
 /**
- * Orders & Statuses (§5.9): two DashCard columns (Regular / Print) of status
- * rows; add/edit in a Sheet (Appendix A relocation); delete via ConfirmDialog.
- * API payloads are unchanged.
+ * Orders & Statuses (§5.9): statuses are a WORKFLOW, so each order type
+ * renders as an ordered pipeline — numbered steps on a vertical hairline, in
+ * display order, each step one scannable line (colour swatch, name,
+ * description, mono key). Labels are StatusPills; controls are unmistakable
+ * buttons. Add/edit in a Sheet (Appendix A relocation); delete via
+ * ConfirmDialog. API payloads are unchanged.
  */
 export default function OrderStatusManagement() {
     const [orderStatuses, setOrderStatuses] = useState([])
@@ -177,25 +180,38 @@ export default function OrderStatusManagement() {
         printOrder: sortByDisplayOrder(orderStatuses.filter(s => s.orderType === 'printOrder'))
     }
 
-    const statusRow = (status) => {
+    // One pipeline step: numbered node on the connector, colour swatch, then
+    // name + description in one scannable line with the mono key beneath.
+    const statusStep = (status, index) => {
         const Icon = getIconComponent(status.icon)
         const isBuiltIn = status.isHardcoded
         return (
-            <div key={status._id || status.statusKey} className="flex items-center gap-3 py-2.5">
+            <li key={status._id || status.statusKey} className="relative flex items-center gap-3 py-2.5">
                 <span
                     aria-hidden="true"
-                    className="h-9 w-9 shrink-0 rounded-[var(--dash-r-inner)] grid place-items-center border border-[var(--dash-line)]"
+                    className="relative z-10 h-6 w-6 shrink-0 grid place-items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] dash-data"
+                >
+                    {index + 1}
+                </span>
+                <span
+                    aria-hidden="true"
+                    className="h-8 w-8 shrink-0 rounded-full grid place-items-center"
                     style={{ backgroundColor: `${status.color}20` }}
                 >
-                    <Icon size={16} style={{ color: status.color }} />
+                    <Icon size={15} style={{ color: status.color }} />
                 </span>
                 <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium truncate">{status.displayName}</p>
-                    <p className="dash-data dash-soft truncate">
-                        {status.statusKey} · #{typeof status.order === 'number' ? status.order : 0}
+                    <div className="flex items-baseline gap-2 min-w-0">
+                        <p className="text-[13px] font-medium truncate shrink-0 max-w-full">{status.displayName}</p>
+                        {status.description && (
+                            <p className="hidden sm:block text-[13px] dash-soft truncate">{status.description}</p>
+                        )}
+                    </div>
+                    <p className="font-mono text-[12px] font-medium dash-soft truncate">
+                        {status.statusKey} #{typeof status.order === 'number' ? status.order : 0}
                     </p>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                     {isBuiltIn && <StatusPill tone="hatch">Built-in</StatusPill>}
                     {status.isActive ? (
                         <StatusPill tone="paper">Active</StatusPill>
@@ -221,18 +237,25 @@ export default function OrderStatusManagement() {
                         </>
                     )}
                 </div>
-            </div>
+            </li>
         )
     }
 
-    const statusColumn = (title, list, emptyBody) => (
+    // A workflow column: ordered steps joined by a vertical hairline, top to
+    // bottom in display order — not a generic card list.
+    const statusPipeline = (title, list, emptyBody) => (
         <DashCard title={title}>
             {list.length === 0 ? (
                 <EmptyState title="No Custom Statuses" body={emptyBody} className="py-6" />
             ) : (
-                <div className="divide-y divide-[var(--dash-line)]">
-                    {list.map(statusRow)}
-                </div>
+                <>
+                    <p className="text-[13px] dash-soft mb-1">
+                        Orders move through these steps, top to bottom.
+                    </p>
+                    <ol className="relative before:absolute before:left-3 before:top-4 before:bottom-4 before:w-px before:bg-[var(--dash-line)]">
+                        {list.map(statusStep)}
+                    </ol>
+                </>
             )}
         </DashCard>
     )
@@ -241,8 +264,8 @@ export default function OrderStatusManagement() {
         <div className="p-4 md:p-6">
             <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
                 <p className="text-[13px] dash-soft max-w-md">
-                    The status sets creators can put on regular and print orders — key,
-                    name, order and icon. Built-in statuses are protected.
+                    The workflow creators move regular and print orders through, shown
+                    in display order. Built-in statuses are protected.
                 </p>
                 <button
                     type="button"
@@ -261,8 +284,8 @@ export default function OrderStatusManagement() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-                    {statusColumn('Regular orders', groupedStatuses.order, 'Statuses you add for regular orders appear here.')}
-                    {statusColumn('Print orders', groupedStatuses.printOrder, 'Statuses you add for print orders appear here.')}
+                    {statusPipeline('Regular orders', groupedStatuses.order, 'Statuses you add for regular orders appear here.')}
+                    {statusPipeline('Print orders', groupedStatuses.printOrder, 'Statuses you add for print orders appear here.')}
                 </div>
             )}
 

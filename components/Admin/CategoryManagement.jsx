@@ -16,10 +16,19 @@ import { inputCls, labelCls, DashSelect, quietBtnCls } from '@/components/Dashbo
 import { sunBtnCls, inkBtnCls } from './dashPanelUi'
 
 /**
- * Categories (§5.10): tree rows with type pill + active toggle; built-ins are
- * hatch-protected. New category / subcategory share ONE Sheet with a type
- * toggle. API payloads are unchanged.
+ * Categories (§5.10): tree rows where each trailing element has ONE visual
+ * role — scope (shop/print) is a flat muted tag, state (Active/Inactive) is a
+ * StatusPill, and the toggle is an obvious bordered pill button. Slugs render
+ * in the monospaced data style. Built-ins are hatch-protected. New category /
+ * subcategory share ONE Sheet with a type toggle. API payloads are unchanged.
  */
+
+// Monospaced slug (the URL variant of the display name, e.g. power-tools).
+const slugCls = 'font-mono text-[12px] font-medium dash-soft truncate'
+
+// Flat muted scope tag (shop/print) — deliberately NOT a pill so it cannot be
+// confused with the Active status pill or the Deactivate button.
+const scopeTagCls = 'dash-label shrink-0'
 export default function CategoryManagement() {
     const [categories, setCategories] = useState([])
     const [loading, setLoading] = useState(true)
@@ -290,7 +299,7 @@ export default function CategoryManagement() {
                 <EmptyState
                     icon={<IoPricetagsOutline />}
                     title="No Categories Yet"
-                    body="Categories organise the shop and print storefronts — create the first one."
+                    body="Categories organise the shop and print storefronts. Create the first one."
                     cta="Create Category"
                     onCta={() => openSheet('category')}
                 />
@@ -319,7 +328,7 @@ export default function CategoryManagement() {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-[13px] font-medium truncate">{cat.displayName}</span>
-                                                <span className="dash-data dash-soft">{cat.name}</span>
+                                                <span className={slugCls}>{cat.name}</span>
                                             </div>
                                             {hasSubs && (
                                                 <p className="dash-data dash-soft">
@@ -327,8 +336,8 @@ export default function CategoryManagement() {
                                                 </p>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-                                            <StatusPill tone="paper">{cat.type}</StatusPill>
+                                        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                                            <span className={scopeTagCls}>{cat.type}</span>
                                             {cat.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
                                             {activePill(cat.isActive)}
                                             {toggleBtn(cat.isActive, () => handleToggleActive(cat.name, cat.isActive))}
@@ -344,9 +353,9 @@ export default function CategoryManagement() {
                                                 >
                                                     <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
                                                         <span className="text-[13px] truncate">{sub.displayName}</span>
-                                                        <span className="dash-data dash-soft">{sub.name}</span>
+                                                        <span className={slugCls}>{sub.name}</span>
                                                     </div>
-                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                    <div className="flex items-center gap-2 shrink-0">
                                                         {activePill(sub.isActive)}
                                                         {toggleBtn(sub.isActive, () => handleToggleSubActive(cat.name, sub.name, sub.isActive))}
                                                         {!sub.isHardcoded && deleteBtn({ kind: 'subcategory', parentName: cat.name, name: sub.name, label: sub.displayName })}

@@ -8,7 +8,7 @@ import ProductSearch from './CMSFields/ProductSearch'
 import CategoryInput from './CMSFields/CategoryInput'
 import BooleanField from './CMSFields/BooleanField'
 import RangeField from './CMSFields/RangeField'
-import { DashCard, GlassBar, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
+import { DashCard, GlassBar, SkeletonRow, ViewTabs, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import { labelCls, quietBtnCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 import { IoRefresh } from 'react-icons/io5'
 import { MdOpenInNew } from 'react-icons/md'
@@ -89,12 +89,50 @@ const defaultContentSections = [
     }
 ]
 
-// Section picker groups (§9.3): one dash-label header per page prefix.
-const SECTION_GROUPS = [
-    { label: 'Home', prefixes: ['home/'] },
-    { label: 'About', prefixes: ['about/'] },
-    { label: 'Shop & Prints', prefixes: ['shop/', 'prints/'] },
-    { label: 'Legal', prefixes: ['terms/', 'privacy/'] },
+// Plain-language names, one-line hints and miniature block heights for the
+// page map. The admin thinks "change what the homepage says", so every region
+// is named for what it IS on the page, not its CMS id.
+const REGION_META = {
+    'home/ad-banner': { label: 'Announcement bar', hint: 'The thin message strip above everything else on the homepage.', h: 'h-8' },
+    'home/hero-banner': { label: 'Hero banner', hint: 'The big image and headline at the top of the homepage.', h: 'h-24' },
+    'home/featured-section': { label: 'Featured products', hint: 'The product showcase under the hero. Pick a category or hand-pick products.', h: 'h-16' },
+    'home/testimonials': { label: 'Testimonials', hint: 'Customer quotes shown lower on the homepage.', h: 'h-12' },
+    'about/introduction': { label: 'Introduction', hint: 'The heading and welcome text that opens the About page.', h: 'h-16' },
+    'about/services': { label: 'Services heading', hint: 'The title and blurb that sit above the list of services.', h: 'h-8' },
+    'about/services-list': { label: 'Services list', hint: 'Every service with its image, title and description.', h: 'h-16' },
+    'about/benefits': { label: 'Benefits', hint: 'The benefit cards near the bottom of the About page.', h: 'h-12' },
+    'shop/banner': { label: 'Shop banner', hint: 'The wide image across the top of the shop page.', h: 'h-16' },
+    'prints/banner': { label: 'Prints banner', hint: 'The wide image across the top of the prints page.', h: 'h-16' },
+    'terms/content': { label: 'Terms of service', hint: 'The full terms of service document.', h: 'h-24' },
+    'privacy/content': { label: 'Privacy policy', hint: 'The full privacy policy document.', h: 'h-24' },
+}
+
+// Page tabs (§9.3: grouped by page) and the miniature page maps: blocks in
+// the order they appear on the real page. Strings are editable region ids;
+// `{ fixed }` blocks are non-editable context so the map reads spatially.
+const PAGE_TABS = [
+    {
+        key: 'home', label: 'Home', pages: [
+            { title: 'Homepage', regions: ['home/ad-banner', 'home/hero-banner', 'home/featured-section', 'home/testimonials', { fixed: 'Footer', h: 'h-8' }] },
+        ],
+    },
+    {
+        key: 'about', label: 'About', pages: [
+            { title: 'About page', regions: ['about/introduction', 'about/services', 'about/services-list', 'about/benefits', { fixed: 'Footer', h: 'h-8' }] },
+        ],
+    },
+    {
+        key: 'shop', label: 'Shop & Prints', pages: [
+            { title: 'Shop page', regions: ['shop/banner', { fixed: 'Product grid', h: 'h-20' }] },
+            { title: 'Prints page', regions: ['prints/banner', { fixed: 'Product grid', h: 'h-20' }] },
+        ],
+    },
+    {
+        key: 'legal', label: 'Legal', pages: [
+            { title: 'Terms page', regions: ['terms/content'] },
+            { title: 'Privacy page', regions: ['privacy/content'] },
+        ],
+    },
 ]
 
 // Two-way selectable option card (display mode / product type pickers).
@@ -446,6 +484,19 @@ export default function ContentManagement() {
 
 
     const currentSection = contentSections.find(s => s.id === selectedSection)
+    const regionMeta = REGION_META[selectedSection] || { label: currentSection?.name, hint: currentSection?.description }
+
+    // The page tab that owns the selected region; tab clicks land on that
+    // page's first editable region. `?sub=` keeps carrying the region id.
+    const activeTab = PAGE_TABS.find((t) =>
+        t.pages.some((p) => p.regions.includes(selectedSection))
+    ) || PAGE_TABS[0]
+
+    const handleTabChange = (key) => {
+        const tab = PAGE_TABS.find((t) => t.key === key)
+        const firstRegion = tab?.pages.flatMap((p) => p.regions).find((r) => typeof r === 'string')
+        if (firstRegion) setSelectedSection(firstRegion)
+    }
 
     const getPreviewPath = (sectionId) => {
         if (!sectionId) return '/'
@@ -474,14 +525,14 @@ export default function ContentManagement() {
             <div>
                 <h2 className="dash-title">Site Content</h2>
                 <p className="text-[13px] dash-soft mt-1">
-                    Select a section to edit its content, then preview and save your changes.
+                    Pick a page, click the part you want to change on its map, then edit and save.
                 </p>
             </div>
 
             {/* Save / Reset — pinned in one consistent place (§5.11) */}
             <GlassBar className="justify-between" data-tour="cms-savebar">
                 <span className="text-[13px] dash-soft truncate">
-                    Editing <span className="font-medium text-[var(--dash-ink)]">{currentSection?.name}</span>
+                    Editing <span className="font-medium text-[var(--dash-ink)]">{regionMeta?.label}</span>
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
                     {showReset && (
@@ -511,67 +562,85 @@ export default function ContentManagement() {
                 />
             )}
 
-            {/* Section picker — two-column card grid grouped by page (§9.3) */}
-            <div className="flex flex-col gap-4" data-tour="cms-sections">
-                {SECTION_GROUPS.map((group) => {
-                    const sections = contentSections.filter((s) =>
-                        group.prefixes.some((p) => s.id.startsWith(p))
-                    )
-                    if (sections.length === 0) return null
-                    return (
-                        <div key={group.label} className="flex flex-col gap-2">
-                            <p className="dash-label">{group.label}</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                                {sections.map((section) => {
-                                    const selected = selectedSection === section.id
+            {/* Page tabs + miniature page maps beside the editor: the admin
+                clicks the REGION of the page they want to change (§9.3). */}
+            <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-4 items-start">
+                <div className="flex flex-col gap-3" data-tour="cms-sections">
+                    <ViewTabs
+                        tabs={PAGE_TABS.map(({ key, label }) => ({ key, label }))}
+                        active={activeTab.key}
+                        onChange={handleTabChange}
+                    />
+                    {activeTab.pages.map((page) => (
+                        <div
+                            key={page.title}
+                            className="rounded-[var(--dash-r-card)] border border-[var(--dash-line)] bg-[var(--dash-card)] p-3 flex flex-col gap-2"
+                        >
+                            <p className="dash-label">{page.title}</p>
+                            {page.regions.map((region) => {
+                                if (typeof region !== 'string') {
                                     return (
-                                        <button
-                                            key={section.id}
-                                            type="button"
-                                            onClick={() => setSelectedSection(section.id)}
-                                            aria-pressed={selected}
-                                            className={`dash-hoverable p-3 sm:p-4 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] text-left cursor-pointer ${selected
-                                                ? 'bg-[var(--dash-sun-soft)]'
-                                                : 'bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)]'
-                                                }`}
+                                        <div
+                                            key={region.fixed}
+                                            className={`w-full ${region.h} rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] dash-hatch bg-[var(--dash-card)] grid place-items-center`}
+                                            title="This part is fixed and not editable here"
                                         >
-                                            <div className="text-[13px] font-medium text-[var(--dash-ink)] mb-1">{section.name}</div>
-                                            <div className="text-[13px] dash-soft line-clamp-2">
-                                                {section.description}
-                                            </div>
-                                        </button>
+                                            <span className="dash-label">{region.fixed}</span>
+                                        </div>
                                     )
+                                }
+                                const meta = REGION_META[region]
+                                const selected = selectedSection === region
+                                return (
+                                    <button
+                                        key={region}
+                                        type="button"
+                                        onClick={() => setSelectedSection(region)}
+                                        aria-pressed={selected}
+                                        title={meta.hint}
+                                        className={`dash-hoverable w-full ${meta.h} rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] px-3 grid place-items-center text-center cursor-pointer ${selected
+                                            ? 'bg-[var(--dash-sun-soft)]'
+                                            : 'bg-[var(--dash-canvas)] hover:bg-[var(--dash-sun-soft)]'
+                                            }`}
+                                    >
+                                        <span className={`text-[12px] font-medium ${selected ? 'text-[var(--dash-ink)]' : 'text-[var(--dash-ink-soft)]'}`}>
+                                            {meta.label}
+                                        </span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    ))}
+                </div>
+
+                <div className="flex flex-col gap-4 min-w-0">
+                    {/* Editor */}
+                    {isLoading ? (
+                        <div className="flex flex-col gap-2" aria-label="Loading content">
+                            <SkeletonRow />
+                            <SkeletonRow />
+                            <SkeletonRow />
+                        </div>
+                    ) : content && currentSection ? (
+                        <DashCard title={regionMeta?.label} data-tour="cms-editor">
+                            <div className="flex flex-col gap-6">
+                                {regionMeta?.hint && (
+                                    <p className="text-[13px] dash-soft -mt-1">{regionMeta.hint}</p>
+                                )}
+                                {currentSection.fields.map((field) => {
+                                    const value = field === 'content' ? content.content : content.frontmatter[field]
+                                    const onChange = (newValue) => updateField(field, newValue)
+
+                                    return renderField(field, value, onChange)
                                 })}
                             </div>
-                        </div>
-                    )
-                })}
-            </div>
+                        </DashCard>
+                    ) : (
+                        <InfoStrip tone="error">Failed to load content. Please try again.</InfoStrip>
+                    )}
 
-            {/* Editor */}
-            {isLoading ? (
-                <div className="flex flex-col gap-2" aria-label="Loading content">
-                    <SkeletonRow />
-                    <SkeletonRow />
-                    <SkeletonRow />
-                </div>
-            ) : content && currentSection ? (
-                <DashCard title={`Editing "${currentSection.name}"`} data-tour="cms-editor">
-                    <div className="flex flex-col gap-6">
-                        {currentSection.fields.map((field) => {
-                            const value = field === 'content' ? content.content : content.frontmatter[field]
-                            const onChange = (newValue) => updateField(field, newValue)
-
-                            return renderField(field, value, onChange)
-                        })}
-                    </div>
-                </DashCard>
-            ) : (
-                <InfoStrip tone="error">Failed to load content. Please try again.</InfoStrip>
-            )}
-
-            {/* Preview */}
-            <DashCard data-tour="cms-preview">
+                    {/* Preview */}
+                    <DashCard data-tour="cms-preview">
                 <div className="flex flex-col gap-3">
                     <GlassBar className="justify-between">
                         <div className="min-w-0">
@@ -611,8 +680,10 @@ export default function ContentManagement() {
                             <div className="p-6 text-[13px] dash-soft">Preview unavailable.</div>
                         )}
                     </div>
+                        </div>
+                    </DashCard>
                 </div>
-            </DashCard>
+            </div>
 
             {/* Guided tour (§9.11) */}
             <CoachMarks steps={TOURS.content} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="content" />

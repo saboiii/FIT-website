@@ -111,6 +111,8 @@ describe('OrderStatusManagement — sheet form + built-in protection', () => {
         // Only the custom row carries Edit/Delete.
         expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1)
         expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1)
+        // Pipeline step meta: mono status key + display-order number, no middots.
+        expect(screen.getByText('awaiting_pickup #2')).toBeInTheDocument()
     })
 
     it('deletes through ConfirmDialog with the legacy payload', async () => {
@@ -146,6 +148,8 @@ describe('CategoryManagement — tree rows + ConfirmDialog delete', () => {
 
         expect(screen.getByText('Prints')).toBeInTheDocument()
         expect(screen.getByText('Built-in')).toBeInTheDocument()
+        // The slug (URL variant of the name) renders beside the display name.
+        expect(screen.getByText('gadgets')).toBeInTheDocument()
         // Only the non-built-in category is deletable.
         expect(screen.getAllByRole('button', { name: 'Delete category' })).toHaveLength(1)
     })

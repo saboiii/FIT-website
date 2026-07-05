@@ -97,7 +97,7 @@ describe('Admin customers panel stub (add-admin-customers-panel)', () => {
     it('renders the honest empty state and the ghost ledger', () => {
         render(<CustomersPanel />)
         expect(screen.getByText('Customers')).toBeInTheDocument()
-        expect(screen.getByText('Customers — Coming Soon')).toBeInTheDocument()
+        expect(screen.getByText('Customers: Coming Soon')).toBeInTheDocument()
         expect(screen.getByText('Coming soon')).toBeInTheDocument()
     })
 })
@@ -107,11 +107,11 @@ describe('Notification centre stub (add-dashboard-notification-centre)', () => {
         render(<NotificationsBell />)
         const bell = screen.getByRole('button', { name: 'Notifications' })
         expect(bell).toBeEnabled()
-        expect(screen.queryByText('Notifications — Coming Soon')).toBeNull()
+        expect(screen.queryByText('Notifications: Coming Soon')).toBeNull()
 
         fireEvent.click(bell)
         const popover = screen.getByRole('dialog', { name: 'Notifications' })
-        expect(within(popover).getByText('Notifications — Coming Soon')).toBeInTheDocument()
+        expect(within(popover).getByText('Notifications: Coming Soon')).toBeInTheDocument()
         expect(within(popover).getByText('Coming soon')).toBeInTheDocument()
 
         fireEvent.keyDown(window, { key: 'Escape' })
@@ -173,7 +173,7 @@ describe('Review replies stub (blueprint §6 — no openspec change filed)', () 
 
         const reply = await screen.findByRole('button', { name: 'Reply' })
         expect(reply).toBeDisabled()
-        expect(reply).toHaveAttribute('title', 'Reply to reviews — coming soon')
+        expect(reply).toHaveAttribute('title', 'Reply to reviews, coming soon')
     })
 })
 
@@ -211,7 +211,7 @@ describe('Refunds stub (add-refunds-ui)', () => {
         const dialog = await screen.findByRole('dialog')
         const refund = within(dialog).getByRole('button', { name: 'Refund…' })
         expect(refund).toBeDisabled()
-        expect(refund).toHaveAttribute('title', 'Refunds — coming soon')
+        expect(refund).toHaveAttribute('title', 'Refunds, coming soon')
         // The real processed action beside it stays live.
         expect(within(dialog).getByRole('button', { name: 'Mark as processed' })).toBeEnabled()
     })
@@ -231,7 +231,7 @@ describe('Newsletter test-send stub (add-newsletter-test-send)', () => {
 
         const testSend = await screen.findByRole('button', { name: 'Send test to me' })
         expect(testSend).toBeDisabled()
-        expect(testSend).toHaveAttribute('title', 'Send test to me — coming soon')
+        expect(testSend).toHaveAttribute('title', 'Send test to me, coming soon')
         expect(screen.getByRole('button', { name: /Save draft/ })).toBeEnabled()
     })
 })

@@ -21,7 +21,7 @@ export default function ComingSoon({ className = '' }) {
  * dimmed, non-interactive (pointer events off, hidden from the a11y tree) and
  * carry a title tooltip explaining why.
  */
-export function ComingSoonBlock({ title = 'Coming soon — needs backend', children, className = '' }) {
+export function ComingSoonBlock({ title = 'Coming soon: needs backend', children, className = '' }) {
     return (
         <div aria-hidden="true" title={title} className={`pointer-events-none select-none opacity-60 ${className}`}>
             {children}

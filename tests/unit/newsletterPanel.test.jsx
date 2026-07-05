@@ -110,7 +110,7 @@ describe('NewsletterManagement — campaigns', () => {
     expect(screen.getByText('draft')).toBeInTheDocument()
     expect(screen.getByText('sent')).toBeInTheDocument()
     expect(screen.getByText('scheduled')).toBeInTheDocument()
-    expect(screen.getByText(/120 sent · 40 opens · 9 clicks · 2 failed/)).toBeInTheDocument()
+    expect(screen.getByText(/120 sent, 40 opens, 9 clicks, 2 failed/)).toBeInTheDocument()
   })
 })
 

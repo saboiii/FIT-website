@@ -316,7 +316,7 @@ export default function MessagesInbox() {
                             <EmptyState
                                 icon={<IoMailOutline />}
                                 title="Messages From Your Customers"
-                                body="Conversations customers start with you land here — reply in real time from this inbox."
+                                body="Conversations customers start with you land here. Reply in real time from this inbox."
                             />
                         ) : (
                             <div className="dash-scroll flex-1">

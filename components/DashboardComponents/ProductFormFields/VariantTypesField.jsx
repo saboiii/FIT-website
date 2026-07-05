@@ -216,7 +216,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                         {productType === 'print' ? (
                                             printColours.length > 0 ? (
                                                 <div className="space-y-1.5">
-                                                    <p className="text-[13px] text-[var(--dash-ink-soft)]">Printing colours — must match available filament stock.</p>
+                                                    <p className="text-[13px] text-[var(--dash-ink-soft)]">Printing colours must match available filament stock.</p>
                                                     <div className="flex flex-wrap gap-2">
                                                         {printColours.map((c) => {
                                                             const selected = draft.hex === c.hex
@@ -237,12 +237,12 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                                                 </div>
                                             ) : (
                                                 <InfoStrip tone="warn">
-                                                    No printing colours configured yet — add them in your admin colour catalogue.
+                                                    No printing colours configured yet. Add them in your admin colour catalogue.
                                                 </InfoStrip>
                                             )
                                         ) : (
                                             <div className="space-y-1.5">
-                                                <p className="text-[13px] text-[var(--dash-ink-soft)]">Pick any colour — print filament colours are reserved for print products.</p>
+                                                <p className="text-[13px] text-[var(--dash-ink-soft)]">Pick any colour. Print filament colours are reserved for print products.</p>
                                                 <input
                                                     type="color"
                                                     value={draft.hex || '#000000'}
@@ -323,7 +323,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
                             )}
 
                             {variantType.options?.length === 0 && (
-                                <p className="text-[13px] text-[var(--dash-ink-soft)]">No options yet — add your first option above.</p>
+                                <p className="text-[13px] text-[var(--dash-ink-soft)]">No options yet. Add your first option above.</p>
                             )}
                         </div>
                     </div>
@@ -332,7 +332,7 @@ export default function VariantTypesField({ form, setForm, isDigitalDelivery, on
 
             {/* Empty state */}
             {form.variantTypes?.length === 0 && !isDigitalProduct && (
-                <p className="text-[13px] text-[var(--dash-ink-soft)]">No variant types yet — customers will buy the base configuration.</p>
+                <p className="text-[13px] text-[var(--dash-ink-soft)]">No variant types yet, so customers will buy the base configuration.</p>
             )}
         </div>
     )

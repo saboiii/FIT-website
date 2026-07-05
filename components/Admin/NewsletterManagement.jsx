@@ -135,7 +135,7 @@ function Campaigns({ showToast }) {
                     <button
                         type="button"
                         disabled
-                        title="Send test to me — coming soon"
+                        title="Send test to me, coming soon"
                         className={quietBtnCls}
                     >
                         Send test to me
@@ -246,7 +246,7 @@ function Campaigns({ showToast }) {
                     </div>
 
                     <div className="flex flex-col gap-1.5 max-w-xs">
-                        <label className={labelCls} htmlFor="newsletter-schedule">Schedule (optional — empty saves a draft)</label>
+                        <label className={labelCls} htmlFor="newsletter-schedule">Schedule (optional; empty saves a draft)</label>
                         <input
                             id="newsletter-schedule"
                             type="datetime-local"
@@ -270,10 +270,10 @@ function Campaigns({ showToast }) {
                                     <StatusPill tone={STATUS_TONES[c.status] || 'paper'}>{c.status}</StatusPill>
                                 </div>
                                 <p className="dash-data dash-soft mt-0.5">
-                                    {c.status === 'sent' && c.sentAt ? `Sent ${new Date(c.sentAt).toLocaleString()} · ` : ''}
-                                    {c.status === 'scheduled' && c.scheduledFor ? `Scheduled ${new Date(c.scheduledFor).toLocaleString()} · ` : ''}
-                                    {c.counts?.sent || 0} sent · {c.stats?.open || 0} opens · {c.stats?.click || 0} clicks
-                                    {c.counts?.failed ? ` · ${c.counts.failed} failed` : ''}
+                                    {c.status === 'sent' && c.sentAt ? `Sent ${new Date(c.sentAt).toLocaleString()}, ` : ''}
+                                    {c.status === 'scheduled' && c.scheduledFor ? `Scheduled ${new Date(c.scheduledFor).toLocaleString()}, ` : ''}
+                                    {c.counts?.sent || 0} sent, {c.stats?.open || 0} opens, {c.stats?.click || 0} clicks
+                                    {c.counts?.failed ? `, ${c.counts.failed} failed` : ''}
                                 </p>
                                 {c.lastError && <p className="text-[13px] text-[var(--dash-bad)] truncate">{c.lastError}</p>}
                             </div>
@@ -381,7 +381,7 @@ function Subscribers({ showToast }) {
                 {subscribers.map((s) => (
                     <div key={s.email} className="py-2 flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                            <p className="text-[13px] text-[var(--dash-ink)] truncate">{s.email}{s.fullName ? ` — ${s.fullName}` : ''}</p>
+                            <p className="text-[13px] text-[var(--dash-ink)] truncate">{s.email}{s.fullName ? ` (${s.fullName})` : ''}</p>
                             <p className="dash-data dash-soft truncate">
                                 {(s.interestIds || []).map((id) => interestName[id] || '').filter(Boolean).join(', ') || 'No topics'}
                             </p>
@@ -552,7 +552,7 @@ function Interests({ showToast }) {
                             </button>
                         </span>
                     ))}
-                    {interests.length === 0 && <p className="text-[13px] dash-soft">No interests yet — campaigns go to everyone.</p>}
+                    {interests.length === 0 && <p className="text-[13px] dash-soft">No interests yet, so campaigns go to everyone.</p>}
                 </div>
             </div>
             <ConfirmDialog

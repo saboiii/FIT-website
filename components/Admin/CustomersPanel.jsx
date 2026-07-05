@@ -16,12 +16,12 @@ export default function CustomersPanel() {
 
             <EmptyState
                 icon={<IoPeopleOutline />}
-                title="Customers — Coming Soon"
+                title="Customers: Coming Soon"
                 body="Every customer in one place: orders count, lifetime value, last order, linked print requests and internal notes. Needs an admin aggregation across users, orders and requests."
             />
 
             {/* Ghost of the intended ledger — dimmed, non-interactive. */}
-            <ComingSoonBlock title="Customer ledger — coming soon">
+            <ComingSoonBlock title="Customer ledger, coming soon">
                 <div className="grid grid-cols-[minmax(0,1fr)_80px_100px_110px] gap-4 px-1 pb-2">
                     <span className="dash-label">Customer</span>
                     <span className="dash-label text-right">Orders</span>

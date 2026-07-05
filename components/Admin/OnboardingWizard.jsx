@@ -12,7 +12,7 @@ import PrintTimeCalibration from '@/components/Admin/PrintTimeCalibration'
 // One-line "why this matters" per step (blueprint §9.12 — tour-style copy).
 const WHY = {
     welcome: 'Five short steps stand between a fresh install and a store that quotes and ships on its own.',
-    pricing: 'Every instant quote is computed from these rates — set them once and each request prices itself.',
+    pricing: 'Every instant quote is computed from these rates. Set them once and each request prices itself.',
     machines: 'Realistic print-time and build-size settings keep quotes honest and unprintable jobs out of your queue.',
     calibration: 'A couple of timed test prints teach the estimator how fast your machines really run.',
     colours: 'Customers can only pick from this catalogue, so it doubles as your quality gate.',
@@ -56,7 +56,7 @@ export default function OnboardingWizard({ adminEmailPresent, onClose }) {
                 <div className="px-6 py-4 border-b border-[var(--dash-line)] flex items-center justify-between gap-3">
                     <div>
                         <h2 className="dash-title">Store setup</h2>
-                        <p className="text-[13px] dash-soft">Six skippable steps — every one saves with the real Settings forms.</p>
+                        <p className="text-[13px] dash-soft">Six skippable steps, and every one saves with the real Settings forms.</p>
                     </div>
                     {/* Mobile journey — the rail collapses to a dot strip */}
                     <div className="flex md:hidden items-center gap-1.5" aria-label={`Step ${step + 1} of ${WIZARD_STEPS.length}`}>
@@ -117,15 +117,15 @@ export default function OnboardingWizard({ adminEmailPresent, onClose }) {
                                 <div className="flex flex-col gap-4 text-[14px] text-[var(--dash-ink)]">
                                     <p>
                                         Welcome! Before customers can get instant quotes and order prints,
-                                        a few things need to be configured. This wizard walks you through them —
+                                        a few things need to be configured. This wizard walks you through them, and
                                         every step saves with the same forms you&apos;ll find later under Settings.
                                     </p>
                                     <ul className="list-disc pl-5 text-[13px] dash-soft flex flex-col gap-1">
-                                        <li>Pricing — your material and machine-time rates, fees and minimum price.</li>
-                                        <li>Your machines — tune print-time estimates and build-size limits.</li>
-                                        <li>Print timing — calibrate estimates with a couple of timed test prints.</li>
-                                        <li>Colours &amp; materials — the catalogue customers pick from.</li>
-                                        <li>Delivery — at least one shipping option for printed orders.</li>
+                                        <li>Pricing: your material and machine-time rates, fees and minimum price.</li>
+                                        <li>Your machines: tune print-time estimates and build-size limits.</li>
+                                        <li>Print timing: calibrate estimates with a couple of timed test prints.</li>
+                                        <li>Colours &amp; materials: the catalogue customers pick from.</li>
+                                        <li>Delivery: at least one shipping option for printed orders.</li>
                                     </ul>
                                     <InfoStrip tone={adminEmailPresent ? 'info' : 'warn'}>
                                         <span className={adminEmailPresent ? 'text-[var(--dash-ok)]' : 'text-[var(--dash-ink)]'}>
@@ -134,12 +134,12 @@ export default function OnboardingWizard({ adminEmailPresent, onClose }) {
                                         <span className="font-medium text-[var(--dash-ink)]">Admin notification email</span>{' '}
                                         <span>
                                             {adminEmailPresent
-                                                ? '— configured; you’ll get an email when requests come in.'
-                                                : '— not set. Add ADMIN_EMAIL (or GMAIL_USER) to your environment to receive new-request emails.'}
+                                                ? 'is configured; you’ll get an email when requests come in.'
+                                                : 'is not set. Add ADMIN_EMAIL (or GMAIL_USER) to your environment to receive new-request emails.'}
                                         </span>
                                     </InfoStrip>
                                     <p className="text-[13px] dash-soft">
-                                        Every step is skippable — you can re-run this wizard any time from Settings.
+                                        Every step is skippable, and you can re-run this wizard any time from Settings.
                                     </p>
                                 </div>
                             )}

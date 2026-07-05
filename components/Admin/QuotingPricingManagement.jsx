@@ -371,7 +371,7 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
                 )}
                 {sections.includes('machines') && (
                     <>
-                        <DashCard title="Print time estimation — set up for your machines">{speedRows()}</DashCard>
+                        <DashCard title="Print time estimation: set up for your machines">{speedRows()}</DashCard>
                         <DashCard title="Machine limits">{limitRows()}</DashCard>
                     </>
                 )}
@@ -436,7 +436,7 @@ export default function QuotingPricingManagement({ sections, compact = false }) 
                         filament stock per colour needs its own backend. */}
                     <div className="mt-4 pt-3 border-t border-[var(--dash-line)] flex items-center gap-2 flex-wrap">
                         <span className="text-[13px] dash-soft">
-                            Spool tracking — per-colour filament stock with low-spool warnings
+                            Spool tracking: per-colour filament stock with low-spool warnings
                         </span>
                         <ComingSoon />
                     </div>

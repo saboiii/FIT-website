@@ -14,7 +14,7 @@ function Fallback() {
             <EmptyState
                 icon={<IoStorefrontOutline />}
                 title="Your Creator Space"
-                body="An active subscription unlocks your shop — sell products, message customers, and manage orders from one place."
+                body="An active subscription unlocks your shop: sell products, message customers, and manage orders from one place."
                 cta="View Subscriptions"
                 onCta={() => router.push('/account/subscription')}
                 secondary="Return home"

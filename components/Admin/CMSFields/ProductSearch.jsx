@@ -204,7 +204,7 @@ export default function ProductSearch({ label, value, onChange, helpText }) {
             {selectedProducts.length > 0 && (
                 <div className="flex flex-col gap-2">
                     <div className="dash-label">
-                        Selected Products ({selectedProducts.length}) — drag to reorder
+                        Selected Products ({selectedProducts.length}), drag to reorder
                     </div>
                     <div className="flex flex-col gap-2">
                         {selectedProducts.map((product, index) => (

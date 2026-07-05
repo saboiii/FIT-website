@@ -840,7 +840,7 @@ export default function CreatorPayments() {
                                         key="id"
                                         role="button"
                                         tabIndex={0}
-                                        title={`${session.sessionId} — click to copy`}
+                                        title={`${session.sessionId} (click to copy)`}
                                         onClick={(e) => {
                                             e.stopPropagation()
                                             copyToClipboard(session.sessionId, 'Session ID copied')
@@ -880,7 +880,7 @@ export default function CreatorPayments() {
                         <button
                             type="button"
                             disabled
-                            title="Refunds — coming soon"
+                            title="Refunds, coming soon"
                             className="dash-hoverable rounded-full px-3.5 py-1.5 text-[13px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-bad)] disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Refund…
@@ -970,7 +970,7 @@ export default function CreatorPayments() {
                                                         </div>
                                                         <div className="flex justify-between gap-2 text-[13px] dash-soft">
                                                             <span className="truncate">
-                                                                {item.variantName ? `${item.variantName} · ` : ''}{item.deliveryType}
+                                                                {item.variantName ? `${item.variantName}, ` : ''}{item.deliveryType}
                                                             </span>
                                                             <span className="dash-data shrink-0">{unitPriceLabel(item.unitPrice)}</span>
                                                         </div>

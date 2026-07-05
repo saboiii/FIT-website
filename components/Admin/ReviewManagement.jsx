@@ -350,7 +350,7 @@ function ReviewManagement() {
                                                     <button
                                                         type="button"
                                                         disabled
-                                                        title="Reply to reviews — coming soon"
+                                                        title="Reply to reviews, coming soon"
                                                         className={`${quietPillCls} ml-auto px-3 py-1`}
                                                     >
                                                         Reply

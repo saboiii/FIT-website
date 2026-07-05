@@ -101,7 +101,7 @@ function JobSheet() {
     if (state === 'missing' || !request) {
         return (
             <div className="dash min-h-[60vh] grid place-items-center">
-                <p className="text-[13px] dash-soft">Request {requestId} not found — open it from Print Requests.</p>
+                <p className="text-[13px] dash-soft">Request {requestId} not found. Open it from Print Requests.</p>
             </div>
         )
     }
@@ -114,7 +114,7 @@ function JobSheet() {
             ? `${String(r.quote.currency || 'sgd').toUpperCase()} ${Number(r.quote.total).toFixed(2)}`
             : typeof r.printFee === 'number' && r.printFee > 0
               ? `${String(r.currency || 'sgd').toUpperCase()} ${(Number(r.basePrice || 0) + Number(r.printFee)).toFixed(2)}`
-              : '—'
+              : '–'
 
     return (
         <div className="dash min-h-[92vh] py-8 px-4">
@@ -122,7 +122,7 @@ function JobSheet() {
 
             {/* Screen-only toolbar */}
             <div className="dash-print-hidden mx-auto max-w-[480px] flex items-center justify-between gap-3 mb-4">
-                <p className="text-[13px] dash-soft">A5 job sheet — ink on white.</p>
+                <p className="text-[13px] dash-soft">A5 job sheet, ink on white.</p>
                 <button
                     type="button"
                     onClick={() => window.print()}
@@ -166,7 +166,7 @@ function JobSheet() {
                 </div>
 
                 <div className="mt-4 border-t border-[var(--dash-line)] pt-3">
-                    <DottedRow label="Customer">{r.userEmail || '—'}</DottedRow>
+                    <DottedRow label="Customer">{r.userEmail || '–'}</DottedRow>
                     <DottedRow label="Quantity">1</DottedRow>
                     <DottedRow label="Quote total" className="font-medium">{quoteTotal}</DottedRow>
                 </div>

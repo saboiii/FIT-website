@@ -53,7 +53,7 @@ export default function NotificationsBell({ align = 'left', className = '' }) {
                     </div>
                     <EmptyState
                         icon={<IoNotificationsOutline />}
-                        title="Notifications — Coming Soon"
+                        title="Notifications: Coming Soon"
                         body="New paid orders, requests awaiting a quote and low-stock alerts will land here once the notification centre is wired up."
                         className="py-8"
                     />

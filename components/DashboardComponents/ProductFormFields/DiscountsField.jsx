@@ -187,7 +187,7 @@ export default function DiscountsField({ form, setForm, events }) {
         if (rule.startDate || rule.endDate) parts.push(`${rule.startDate || '…'} – ${rule.endDate || '…'}`)
         const tierCount = Array.isArray(rule.tiers) ? rule.tiers.length : 0
         if (tierCount > 0) parts.push(`${tierCount} ${tierCount === 1 ? 'tier' : 'tiers'}`)
-        return parts.join(' · ')
+        return parts.join(', ')
     }
 
     return (

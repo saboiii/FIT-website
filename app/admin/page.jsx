@@ -64,7 +64,7 @@ const NAV_GROUPS = [
                 key: 'overview',
                 label: 'Overview',
                 icon: IoGridOutline,
-                description: 'Store health at a glance — requests, setup, traffic.',
+                description: 'Store health at a glance: requests, setup, traffic.',
             },
         ],
     },
@@ -99,7 +99,7 @@ const NAV_GROUPS = [
                 key: 'customers',
                 label: 'Customers',
                 icon: IoPeopleOutline,
-                description: 'Customer list with orders, value and requests — coming soon.',
+                description: 'Customer list with orders, value and requests. Coming soon.',
             },
         ],
     },
@@ -110,7 +110,7 @@ const NAV_GROUPS = [
                 key: 'customPrint',
                 label: 'Custom Print Product',
                 icon: IoPrintOutline,
-                description: 'The base product behind Order Print — price and dimensions.',
+                description: 'The base product behind Order Print: price and dimensions.',
             },
             {
                 key: 'categories',
@@ -331,7 +331,7 @@ function AdminDashboard() {
             {
                 id: 'act:wizard',
                 label: 'Run setup wizard',
-                description: 'Guided store setup — pricing, machines, colours, delivery.',
+                description: 'Guided store setup: pricing, machines, colours, delivery.',
                 perform: openWizard,
             },
             {
@@ -367,7 +367,7 @@ function AdminDashboard() {
                     <EmptyState
                         icon={<IoLockClosedOutline />}
                         title="Access Denied"
-                        body="You don't have permission to access this page — the admin console needs an admin account."
+                        body="You don't have permission to access this page. The admin console needs an admin account."
                     />
                 </div>
             </DashProvider>

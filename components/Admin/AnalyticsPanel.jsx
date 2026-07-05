@@ -237,7 +237,7 @@ export default function AnalyticsPanel({ compact = false }) {
                                             {a.slug}
                                         </a>
                                         <span className="dash-data dash-soft whitespace-nowrap ml-3">
-                                            {a.views} views · ~{a.avgEngagedSeconds}s read
+                                            {a.views} views, ~{a.avgEngagedSeconds}s read
                                         </span>
                                     </div>
                                 ))}

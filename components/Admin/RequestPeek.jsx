@@ -171,7 +171,7 @@ export default function RequestPeek({
             await navigator.clipboard.writeText(r.requestId)
             showToast('Request ID copied.', 'success')
         } catch {
-            showToast('Copy failed — select the ID manually.', 'error')
+            showToast('Copy failed. Select the ID manually.', 'error')
         }
     }
 
@@ -284,7 +284,7 @@ export default function RequestPeek({
             </div>
 
             <div className="mt-4">
-                <DottedRow label="Customer">{r.userEmail || '—'}</DottedRow>
+                <DottedRow label="Customer">{r.userEmail || '–'}</DottedRow>
                 <DottedRow label="Request ID">
                     <button
                         type="button"
@@ -327,7 +327,7 @@ export default function RequestPeek({
                             {/* Honest stub (openspec add-quote-review-state): quotes have no
                                 validity window yet — the value stays a dash, never a fake date. */}
                             <DottedRow label="Valid until">
-                                <span className="dash-soft">—</span>
+                                <span className="dash-soft">–</span>
                                 <ComingSoon />
                             </DottedRow>
                         </>

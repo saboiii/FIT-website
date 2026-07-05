@@ -31,9 +31,16 @@
 - [ ] 3.2 **Validate against real prints** before pricing with it: compare
       heuristic vs layer-stack vs actual slicer/printer times on the print
       farm's reference models; tune `flowMm3PerS` / `perLayerOverheadS`.
-      Owner: client / print-farm operator. *(Unblocked for data gathering:
-      `printHoursShapeAware` is now recorded next to the priced `printHours` on
-      every instant-quoted request.)*
+      Owner: client / print-farm operator.
+      *(Harness built 2026-07-05 — the operator's job is now: print 3+
+      shape-diverse models, note wall-clock hours, fill a CSV, run
+      `node scripts/validate-print-times.mjs samples.csv`. The script
+      compares both estimators against actual times and least-squares fits
+      the two constants — `lib/quoting/printTime/validate.js` (pure, tested:
+      recovers known constants exactly; rejects same-shape or inconsistent
+      data), `layerStackComponents`/`hoursFromLayerStackComponents` extracted
+      from the estimator with identical numerics. Awaiting REAL print data —
+      constants must not ship from synthetic fits.)*
 - [ ] 3.3 After validation: feature-flag the swap behind the
       `estimatePrintHours` seam (heuristic remains the fallback), add the spec
       delta (print-time becomes shape-aware), and wire the worker into the

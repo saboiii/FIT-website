@@ -2,6 +2,7 @@ import { createWebhooksHandler } from '@brianmmdev/clerk-webhooks-handler'
 import Stripe from 'stripe'
 import { clerkClient } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { getPostHogClient } from '@/lib/posthog-server'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
@@ -26,6 +27,13 @@ const handler = createWebhooksHandler({
                         role: 'user',
                     },
                 })
+                try {
+                    const phog = getPostHogClient();
+                    phog.capture({ distinctId: user.id, event: 'user_registered', properties: { has_paid_tier: false, sign_up_method: 'clerk' } });
+                    phog.identify({ distinctId: user.id, properties: { role: 'user' } });
+                } catch (phErr) {
+                    console.error('PostHog user_registered capture failed:', phErr);
+                }
                 return
             }
 
@@ -81,6 +89,25 @@ const handler = createWebhooksHandler({
             await client.users.updateUser(user.id, {
                 publicMetadata: newMetadata,
             })
+            try {
+                const phog = getPostHogClient();
+                phog.capture({
+                    distinctId: user.id,
+                    event: 'user_registered',
+                    properties: {
+                        has_paid_tier: !!priceId,
+                        sign_up_method: 'clerk',
+                    },
+                });
+                phog.identify({
+                    distinctId: user.id,
+                    properties: {
+                        role: 'user',
+                    },
+                });
+            } catch (phErr) {
+                console.error('PostHog user_registered capture failed:', phErr);
+            }
         } catch (error) {
             console.error('Clerk webhook error:', error)
         }
@@ -88,6 +115,13 @@ const handler = createWebhooksHandler({
 })
 
 export async function POST(req) {
-    await handler.POST(req)
-    return NextResponse.json({ received: true })
+    const res = await handler.POST(req)
+    // The library 404s event types we don't handle — acknowledge those so
+    // Clerk doesn't retry deliberately-ignored events. Real failures (e.g.
+    // bad svix signature → 400) pass through so they surface in Clerk's
+    // dashboard and get retried.
+    if (!res || res.status === 404) {
+        return NextResponse.json({ received: true })
+    }
+    return res
 }

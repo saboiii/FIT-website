@@ -7,6 +7,7 @@ import CheckoutSession from "@/models/CheckoutSession";
 import CustomPrintRequest from "@/models/CustomPrintRequest";
 import { calculateCartItemBreakdown } from "../calculateBreakdown";
 import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: "2025-05-28.basil",
@@ -314,10 +315,20 @@ export async function POST(req) {
             return NextResponse.json({ clientSecret: session.client_secret });
         } catch (error) {
             console.error("Error creating Stripe session:", error);
+            try {
+                getPostHogClient().captureException(error, userId, { source: "checkout_session" });
+            } catch (phErr) {
+                console.error("PostHog exception capture failed:", phErr);
+            }
             return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 });
         }
     } catch (error) {
         console.error("General error in POST /api/checkout/session:", error);
+        try {
+            getPostHogClient().captureException(error, undefined, { source: "checkout_session" });
+        } catch (phErr) {
+            console.error("PostHog exception capture failed:", phErr);
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

@@ -72,6 +72,17 @@ const OrderSchema = new mongoose.Schema({
     totalAmount: { type: Number, required: true },
     currency: { type: String, default: 'SGD' },
 
+    // Set when the webhook's recomputed total differs from what Stripe
+    // actually captured (config/cart changed mid-payment). The order is
+    // fulfilled anyway — this flags it for admin review/refund/adjustment.
+    amountMismatch: {
+        type: new mongoose.Schema({
+            stripeAmountCents: { type: Number, required: true },
+            computedAmountCents: { type: Number, required: true },
+        }, { _id: false }),
+        default: undefined,
+    },
+
     // Order status
     status: {
         type: String,

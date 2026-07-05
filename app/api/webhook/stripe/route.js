@@ -13,9 +13,10 @@ import { computeProductPrintQuote } from "@/lib/customPrint/productQuote";
 import { customPrintChargeBreakdown } from "@/lib/customPrintDisplayPrice";
 import { randomUUID } from "crypto";
 import { sendEmail } from "@/lib/email";
-import { buildNewSaleEmail } from "@/lib/email/templates/transactional";
+import { buildNewSaleEmail, buildOrderConfirmationEmail } from "@/lib/email/templates/transactional";
 import { notifyCustomPrintEvent } from "@/lib/notifications/customPrint";
 import { clerkClient } from "@clerk/nextjs/server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
     apiVersion: "2025-05-28.basil",
@@ -45,27 +46,44 @@ export async function POST(req) {
     if (event.type === "checkout.session.completed") {
         const session = event.data.object;
 
+        // Released on failure paths so a Stripe retry can re-attempt fulfilment.
+        let claimed = false;
+        const releaseClaim = () =>
+            CheckoutSession.updateOne({ sessionId: session.id }, { processed: false })
+                .catch((err) => console.error('Failed to release webhook claim:', err));
+
         try {
             await connectToDatabase();
 
-            // Get the checkout session data from MongoDB
-            const checkoutSessionData = await CheckoutSession.findOne({
-                sessionId: session.id,
-            });
+            // Atomically claim the session so a redelivered event can never
+            // re-run fulfilment (stock decrements, Order creation, emails).
+            // Same claim-lock idiom as lib/newsletter/dispatch.js.
+            const checkoutSessionData = await CheckoutSession.findOneAndUpdate(
+                { sessionId: session.id, processed: { $ne: true } },
+                { processed: true },
+                { new: true },
+            );
 
             if (!checkoutSessionData) {
+                const existing = await CheckoutSession.findOne({ sessionId: session.id });
+                if (existing?.processed) {
+                    // Duplicate delivery of an already-fulfilled session.
+                    return NextResponse.json({ received: true, duplicate: true }, { status: 200 });
+                }
                 console.error(`CheckoutSession not found for sessionId: ${session.id}`);
                 return NextResponse.json(
                     { error: "Checkout session not found" },
                     { status: 404 }
                 );
             }
+            claimed = true;
 
             const userId = checkoutSessionData.userId;
             const user = await User.findOne({ userId });
 
             if (!user) {
                 console.error(`User not found for userId: ${userId}`);
+                await releaseClaim();
                 return NextResponse.json(
                     { error: "User not found" },
                     { status: 404 }
@@ -76,25 +94,26 @@ export async function POST(req) {
             const orders = [];
             const orderItems = []; // For the new Order model
 
-            // Fetch payment method details from Stripe
+            // Fetch payment method details from Stripe (best-effort). Current
+            // API versions expose the charge via `latest_charge` (expanded),
+            // not the removed `charges` list.
             let paymentMethodDetails = null;
             try {
                 if (session.payment_intent) {
-                    const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent);
-                    const charges = paymentIntent?.charges?.data || [];
-                    if (charges.length > 0) {
-                        const charge = charges[0];
-                        const paymentMethod = charge.payment_method_details;
+                    const paymentIntent = await stripe.paymentIntents.retrieve(
+                        session.payment_intent,
+                        { expand: ['latest_charge'] },
+                    );
+                    const paymentMethod = paymentIntent?.latest_charge?.payment_method_details;
 
-                        if (paymentMethod) {
-                            paymentMethodDetails = {
-                                type: paymentMethod.type,
-                                brand: paymentMethod.card?.brand || paymentMethod.type,
-                                last4: paymentMethod.card?.last4 || null,
-                                expiryMonth: paymentMethod.card?.exp_month || null,
-                                expiryYear: paymentMethod.card?.exp_year || null
-                            };
-                        }
+                    if (paymentMethod) {
+                        paymentMethodDetails = {
+                            type: paymentMethod.type,
+                            brand: paymentMethod.card?.brand || paymentMethod.type,
+                            last4: paymentMethod.card?.last4 || null,
+                            expiryMonth: paymentMethod.card?.exp_month || null,
+                            expiryYear: paymentMethod.card?.exp_year || null
+                        };
                     }
                 }
             } catch (error) {
@@ -374,6 +393,25 @@ export async function POST(req) {
                 }
             }
 
+            // Reconciliation (openspec change reconcile-webhook-charge-amounts,
+            // decision (b) 2026-07-05): fulfilment recomputes prices from the
+            // LIVE cart/config, which can diverge from what Stripe captured if
+            // anything changed mid-payment. Fulfil anyway (the customer paid),
+            // but flag the order for admin review/refund/adjustment.
+            const computedTotal = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
+            const computedAmountCents = Math.round(computedTotal * 100);
+            const stripeAmountCents = Number.isFinite(session.amount_total) ? session.amount_total : null;
+            const amountMismatch =
+                stripeAmountCents !== null && stripeAmountCents !== computedAmountCents
+                    ? { stripeAmountCents, computedAmountCents }
+                    : undefined;
+            if (amountMismatch) {
+                console.error(
+                    `[webhook] amount mismatch for session ${session.id}: ` +
+                        `Stripe captured ${stripeAmountCents}¢ but recomputed total is ${computedAmountCents}¢ — order flagged`,
+                );
+            }
+
             // Create the comprehensive Order record
             const orderId = `ORD_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const newOrder = new Order({
@@ -396,19 +434,57 @@ export async function POST(req) {
                 subtotal: orderItems.reduce((sum, item) => sum + item.finalPrice, 0),
                 totalDiscount: orderItems.reduce((sum, item) => sum + item.discount, 0),
                 totalDelivery: orderItems.reduce((sum, item) => sum + item.deliveryFee, 0),
-                totalAmount: orderItems.reduce((sum, item) => sum + item.totalPrice, 0),
+                totalAmount: computedTotal,
                 currency: orderItems[0]?.currency || 'SGD',
                 status: 'pending',
+                amountMismatch,
                 statusHistory: [{
                     status: 'pending',
                     timestamp: new Date(),
                     updatedBy: 'system',
-                    note: 'Order created from successful checkout'
+                    note: amountMismatch
+                        ? `Order created from successful checkout — NEEDS REVIEW: Stripe captured ` +
+                          `${(amountMismatch.stripeAmountCents / 100).toFixed(2)} but recomputed total is ` +
+                          `${(amountMismatch.computedAmountCents / 100).toFixed(2)}`
+                        : 'Order created from successful checkout'
                 }],
                 customerNote: orderItems.map(item => item.orderNote).filter(Boolean).join('; ') || ""
             });
 
             await newOrder.save();
+
+            // Customer order confirmation — sent HERE, where the Order now
+            // exists, not from the return page (whose endpoint was an
+            // unauthenticated open relay). The idempotency claim above means
+            // Stripe retries can't double-send it. Best-effort.
+            try {
+                const confirmationTo = session.customer_details?.email || user.email;
+                if (confirmationTo) {
+                    const { subject, html } = buildOrderConfirmationEmail({
+                        customerName: session.customer_details?.name || "",
+                    });
+                    await sendEmail({ to: confirmationTo, subject, html });
+                }
+            } catch (emailErr) {
+                console.error("Order confirmation email failed:", emailErr);
+            }
+
+            try {
+                const phog = getPostHogClient();
+                phog.capture({
+                    distinctId: userId,
+                    event: 'order_created',
+                    properties: {
+                        order_id: orderId,
+                        total_amount: newOrder.totalAmount,
+                        currency: newOrder.currency,
+                        item_count: orderItems.length,
+                        has_custom_print: orderItems.some(item => item.productSlug === 'custom-print'),
+                    },
+                });
+            } catch (phErr) {
+                console.error('PostHog order_created capture failed:', phErr);
+            }
 
             // Add orders to order history (keep for backward compatibility)
             user.orderHistory.push(...orders);
@@ -463,6 +539,15 @@ export async function POST(req) {
             return NextResponse.json({ received: true }, { status: 200 });
         } catch (error) {
             console.error("Error processing webhook:", error);
+            try {
+                getPostHogClient().captureException(error, undefined, {
+                    source: "stripe_webhook",
+                    session_id: session.id,
+                });
+            } catch (phErr) {
+                console.error("PostHog exception capture failed:", phErr);
+            }
+            if (claimed) await releaseClaim();
             return NextResponse.json(
                 { error: "Failed to process webhook" },
                 { status: 500 }

@@ -85,8 +85,9 @@ describe('Creator home', () => {
     it('greets with the fallback name when there is no display name or first name', async () => {
         stubFetch({})
         renderHome()
-        expect(await screen.findByText('there.')).toBeInTheDocument()
-        expect(screen.getByText(/^Good (morning|afternoon|evening),$/)).toBeInTheDocument()
+        // One-line greeting (client style): "Good evening, there." or the
+        // pre-hydration "Hello, there."
+        expect(await screen.findByText(/^(Good (morning|afternoon|evening)|Hello), there\.$/)).toBeInTheDocument()
     })
 
     it('renders the revenue card without crashing when products lack sales arrays', async () => {
@@ -108,7 +109,7 @@ describe('Creator home', () => {
     it('renders inside the shared shell rail with Home as the active link', async () => {
         stubFetch({})
         renderHome()
-        await screen.findByText('there.')
+        await screen.findByText(/there\.$/)
         expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page')
         expect(screen.getByRole('link', { name: 'My products' })).toHaveAttribute('href', '/dashboard/products')
         expect(screen.getByRole('link', { name: 'Payouts' })).toHaveAttribute('href', '/dashboard/payouts')
@@ -126,7 +127,7 @@ describe('Creator home', () => {
     it('hides the needs-attention block when nothing needs attention', async () => {
         stubFetch({})
         renderHome()
-        await screen.findByText('there.')
+        await screen.findByText(/there\.$/)
         expect(screen.queryByText('Needs attention')).toBeNull()
     })
 

@@ -43,7 +43,7 @@ describe('dashboard-ui primitives', () => {
 
     it('HeroGreeting renders the two-line greeting', () => {
         render(<HeroGreeting salutation="Good morning," name="Saba" context="Friday 5 July" />)
-        expect(screen.getByText('Saba.')).toBeInTheDocument()
+        expect(screen.getByText('Good morning, Saba.')).toBeInTheDocument()
         expect(screen.getByText('Friday 5 July')).toBeInTheDocument()
     })
 

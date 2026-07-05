@@ -8,7 +8,6 @@ import {
     ViewTabs,
     GlassBar,
     StatusPill,
-    SegmentPill,
     DottedRow,
     LedgerTable,
     PeekPanel,
@@ -30,6 +29,31 @@ const money = (cents) => `$${(cents / 100).toFixed(2)}`
 
 const unitPriceLabel = (unitPrice) =>
     `$${typeof unitPrice === 'number' ? unitPrice.toFixed(2) : (unitPrice / 100).toFixed(2)}`
+
+/**
+ * Product-vs-shipping split as a bar-only pill: the amounts stay off the
+ * screen at rest and surface in the hover tooltip (client directive). Ink =
+ * product revenue, hatch = shipping.
+ */
+function RevenueSplitBar({ productCents, shippingCents }) {
+    const total = Math.max(productCents + shippingCents, 1)
+    const label = `Product ${money(productCents)} / Shipping ${money(shippingCents)}`
+    return (
+        <div
+            role="img"
+            aria-label={label}
+            title={label}
+            className="flex h-4 max-w-[220px] rounded-full overflow-hidden border border-[var(--dash-line)]"
+        >
+            <div
+                className="bg-[var(--dash-ink)]"
+                title={`Product ${money(productCents)}`}
+                style={{ width: `${(Math.max(0, productCents) / total) * 100}%` }}
+            />
+            <div className="dash-hatch bg-[var(--dash-card)] flex-1" title={`Shipping ${money(shippingCents)}`} />
+        </div>
+    )
+}
 
 export default function CreatorPayments() {
     const { showToast } = useToast()
@@ -598,12 +622,14 @@ export default function CreatorPayments() {
         { key: 'status', label: 'Status', align: 'right', width: '0.9fr' },
     ]
 
+    // Sales gets a real column of its own so the count never squishes against
+    // the split bar; the bar carries its numbers in the hover tooltip.
     const creatorColumns = [
-        { key: 'creator', label: 'Creator', width: '1.5fr' },
-        { key: 'sales', label: 'Sales', align: 'right', width: '0.5fr' },
-        { key: 'split', label: 'Product / shipping split', width: '1.6fr' },
-        { key: 'stripe', label: 'Stripe', width: '1.1fr' },
-        { key: 'owed', label: 'Owed', align: 'right', width: '0.7fr' },
+        { key: 'creator', label: 'Creator', width: 'minmax(0,1.5fr)' },
+        { key: 'sales', label: 'Sales', align: 'right', width: 'minmax(4rem,0.7fr)' },
+        { key: 'split', label: 'Product / shipping', width: 'minmax(0,1.4fr)' },
+        { key: 'stripe', label: 'Stripe', width: 'minmax(0,1.1fr)' },
+        { key: 'owed', label: 'Owed', align: 'right', width: 'minmax(5rem,0.7fr)' },
     ]
 
     const stripeChip = (user) => {
@@ -748,13 +774,10 @@ export default function CreatorPayments() {
                                         <p className="text-[13px] dash-soft truncate">{row.user?.email || row.creatorId}</p>
                                     </div>,
                                     `${row.sessions}`,
-                                    <SegmentPill
+                                    <RevenueSplitBar
                                         key="split"
-                                        className="pr-4"
-                                        segments={[
-                                            { label: 'Product', value: Number((row.productRevenue / 100).toFixed(2)), tone: 'ink' },
-                                            { label: 'Shipping', value: Number((row.shippingRevenue / 100).toFixed(2)), tone: 'hatch' },
-                                        ]}
+                                        productCents={row.productRevenue}
+                                        shippingCents={row.shippingRevenue}
                                     />,
                                     <div key="stripe" className="min-w-0">{stripeChip(row.user)}</div>,
                                     money(row.totalAmount),

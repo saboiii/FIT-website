@@ -45,14 +45,24 @@ describe('PrintTimeCalibration', () => {
         vi.restoreAllMocks()
     })
 
-    it('lists samples with their estimates and guides toward shape diversity', async () => {
+    it('lists samples as a ledger with estimates, status and shape-diversity guidance', async () => {
         render(<PrintTimeCalibration />)
         expect(await screen.findByText('flat plate')).toBeInTheDocument()
         expect(screen.getByText('tall tower')).toBeInTheDocument()
-        expect(screen.getByText(/We estimate 1h 12m/)).toBeInTheDocument()
+        expect(screen.getByText('1h 12m')).toBeInTheDocument()
+        expect(screen.getByText('3h 24m')).toBeInTheDocument()
+        // Ledger status pills: the timed sample vs the one still waiting.
+        expect(screen.getByText('Timed')).toBeInTheDocument()
+        expect(screen.getByText('Awaiting time')).toBeInTheDocument()
         // One timed print → nudge for a second, differently-shaped one.
         expect(screen.getByText(/add a second, differently-shaped one/)).toBeInTheDocument()
         expect(screen.queryByText('Apply calibration')).toBeNull()
+    })
+
+    it('keeps the copy free of em dashes and middots', async () => {
+        render(<PrintTimeCalibration />)
+        await screen.findByText('flat plate')
+        expect(document.body.textContent).not.toMatch(/[—·]/)
     })
 
     it('offers one-click apply when a fit exists and PUTs the apply action', async () => {

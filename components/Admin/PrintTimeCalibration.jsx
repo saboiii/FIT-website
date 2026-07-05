@@ -1,12 +1,12 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { DashCard, SegmentPill, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
-import { inputCls, quietBtnCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
-import { IoTimerOutline } from 'react-icons/io5'
+import { DashCard, StatusPill, SegmentPill, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
+import { inputCls, dropZoneCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import { IoTimerOutline, IoBulbOutline, IoCloudUploadOutline } from 'react-icons/io5'
 
 const hoursLabel = (h) => {
-    if (!(h > 0)) return '—'
+    if (!(h > 0)) return 'n/a'
     const whole = Math.floor(h)
     const mins = Math.round((h - whole) * 60)
     return whole > 0 ? `${whole}h ${mins}m` : `${mins}m`
@@ -48,12 +48,15 @@ function ActualTimeEditor({ sample, onSave }) {
     )
 }
 
-// The 3-step explainer rendered as numbered document sections (§5.14).
+// The 3-step explainer rendered as quiet numbered cards.
 const EXPLAINER_STEPS = [
     ['Add', 'Upload a model you’re willing to test-print. We calculate our current time estimate.'],
     ['Print & time', 'Print it on your machine and note how long the printer says it took.'],
-    ['Apply', 'Enter the real times below — after two differently-shaped prints, one click tunes the estimates to your machines.'],
+    ['Apply', 'Enter the real times below. After two differently-shaped prints, one click tunes the estimates to your machines.'],
 ]
+
+// Ledger column template shared by the header row and the sample rows.
+const LEDGER_COLS = 'sm:grid sm:items-center sm:gap-3 sm:grid-cols-[minmax(0,1fr)_5.5rem_max-content_max-content_4rem]'
 
 /**
  * Print-time calibration: the admin uploads test models, prints them, enters
@@ -88,7 +91,7 @@ export default function PrintTimeCalibration({ compact = false }) {
             const body = await res.json()
             if (!res.ok) throw new Error(body.error || 'Upload failed')
             setData(body)
-            showToast('Test print added — now print it and enter the time it took', 'success')
+            showToast('Test print added. Now print it and enter the time it took.', 'success')
         } catch (e) {
             showToast(e.message || 'Upload failed', 'error')
         } finally {
@@ -150,10 +153,13 @@ export default function PrintTimeCalibration({ compact = false }) {
                 />
             )}
 
-            {/* How it works — numbered document sections with ink number chips */}
-            <ol className="flex flex-col gap-3" data-tour="timing-steps">
+            {/* How it works: three quiet numbered cards side by side. */}
+            <ol className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-tour="timing-steps">
                 {EXPLAINER_STEPS.map(([title, body], i) => (
-                    <li key={title} className="flex items-start gap-3">
+                    <li
+                        key={title}
+                        className="flex items-start gap-3 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-3"
+                    >
                         <span
                             aria-hidden="true"
                             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] text-[11px] font-semibold dash-data"
@@ -162,46 +168,62 @@ export default function PrintTimeCalibration({ compact = false }) {
                         </span>
                         <div className="min-w-0">
                             <p className="text-[13px] font-medium text-[var(--dash-ink)]">{title}</p>
-                            <p className="text-[13px] dash-soft">{body}</p>
+                            <p className="text-[13px] dash-soft mt-0.5">{body}</p>
                         </div>
                     </li>
                 ))}
             </ol>
 
-            <InfoStrip>
-                Tip: use two very different shapes — something <span className="text-[var(--dash-ink)]">flat and wide</span> and
-                something <span className="text-[var(--dash-ink)]">tall and narrow</span>. That contrast is what lets us separate
-                printing speed from per-layer overhead.
-            </InfoStrip>
+            {/* The one hint, as a single quiet callout with an icon. */}
+            <div className="flex items-start gap-2.5 rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-canvas)] px-3.5 py-2.5">
+                <IoBulbOutline size={16} className="mt-0.5 shrink-0 text-[var(--dash-ink-soft)]" aria-hidden="true" />
+                <p className="text-[13px] dash-soft">
+                    Use two very different shapes: one{' '}
+                    <span className="text-[var(--dash-ink)]">flat and wide</span>, one{' '}
+                    <span className="text-[var(--dash-ink)]">tall and narrow</span>. That contrast
+                    lets us separate printing speed from per-layer overhead.
+                </p>
+            </div>
 
-            {/* Add a test print */}
+            {/* Add a test print: settings row + one inviting primary drop zone. */}
             <DashCard title="Add a test print" data-tour="timing-add">
-                <div className="flex flex-wrap items-end gap-3">
-                    <label className="flex flex-col gap-1.5">
-                        <span className="dash-label">Layer height (mm)</span>
-                        <input type="number" step="0.05" min="0.05" max="5" className={`${inputCls()} w-24 text-right dash-data`}
-                            value={settings.layerHeightMm}
-                            onChange={(e) => setSettings((s) => ({ ...s, layerHeightMm: Number(e.target.value) }))} />
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                        <span className="dash-label">Infill %</span>
-                        <input type="number" min="0" max="100" className={`${inputCls()} w-20 text-right dash-data`}
-                            value={settings.infillPercent}
-                            onChange={(e) => setSettings((s) => ({ ...s, infillPercent: Number(e.target.value) }))} />
-                    </label>
-                    <label className="flex flex-col gap-1.5">
-                        <span className="dash-label">Walls</span>
-                        <input type="number" min="0" max="20" className={`${inputCls()} w-16 text-right dash-data`}
-                            value={settings.wallLoops}
-                            onChange={(e) => setSettings((s) => ({ ...s, wallLoops: Number(e.target.value) }))} />
-                    </label>
-                    <label className="flex items-center gap-2 pb-2 text-[13px] dash-soft cursor-pointer">
-                        <input type="checkbox" checked={settings.enableSupport} className="accent-[var(--dash-ink)]"
-                            onChange={(e) => setSettings((s) => ({ ...s, enableSupport: e.target.checked }))} />
-                        Supports
-                    </label>
-                    <label className={`${quietBtnCls} ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
-                        {busy ? 'Working…' : 'Choose model file'}
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-wrap items-end gap-3">
+                        <label className="flex flex-col gap-1.5">
+                            <span className="dash-label">Layer height (mm)</span>
+                            <input type="number" step="0.05" min="0.05" max="5" className={`${inputCls()} w-24 text-right dash-data`}
+                                value={settings.layerHeightMm}
+                                onChange={(e) => setSettings((s) => ({ ...s, layerHeightMm: Number(e.target.value) }))} />
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                            <span className="dash-label">Infill %</span>
+                            <input type="number" min="0" max="100" className={`${inputCls()} w-20 text-right dash-data`}
+                                value={settings.infillPercent}
+                                onChange={(e) => setSettings((s) => ({ ...s, infillPercent: Number(e.target.value) }))} />
+                        </label>
+                        <label className="flex flex-col gap-1.5">
+                            <span className="dash-label">Walls</span>
+                            <input type="number" min="0" max="20" className={`${inputCls()} w-16 text-right dash-data`}
+                                value={settings.wallLoops}
+                                onChange={(e) => setSettings((s) => ({ ...s, wallLoops: Number(e.target.value) }))} />
+                        </label>
+                        <label className="flex items-center gap-2 pb-2 text-[13px] dash-soft cursor-pointer">
+                            <input type="checkbox" checked={settings.enableSupport} className="accent-[var(--dash-ink)]"
+                                onChange={(e) => setSettings((s) => ({ ...s, enableSupport: e.target.checked }))} />
+                            Supports
+                        </label>
+                        <p className="text-[13px] dash-soft basis-full sm:basis-auto sm:pb-2">
+                            Match these to what you&apos;ll actually print with.
+                        </p>
+                    </div>
+                    <label className={`${dropZoneCls()} flex flex-col items-center gap-1.5 ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+                        <IoCloudUploadOutline size={20} className="text-[var(--dash-ink-soft)]" aria-hidden="true" />
+                        <span className="text-[13px] font-medium text-[var(--dash-ink)]">
+                            {busy ? 'Measuring…' : 'Choose a model file'}
+                        </span>
+                        <span className="text-[13px]">
+                            STL, OBJ, GLB or 3MF. The file is measured and discarded, not stored.
+                        </span>
                         <input
                             ref={fileRef} type="file" className="hidden"
                             accept=".stl,.obj,.glb,.gltf,.3mf"
@@ -209,51 +231,60 @@ export default function PrintTimeCalibration({ compact = false }) {
                         />
                     </label>
                 </div>
-                <p className="text-[13px] dash-soft mt-3">
-                    Match these settings to what you&apos;ll actually print with. STL, OBJ, GLB or 3MF —
-                    the file is measured and discarded, not stored.
-                </p>
             </DashCard>
 
-            {/* Samples as job-card rows */}
+            {/* Test prints as a ledger: model, estimate, real time, status. */}
             <DashCard title={`Your test prints (${samples.length})`} data-tour="timing-samples">
                 {samples.length === 0 ? (
                     <EmptyState
                         icon={<IoTimerOutline />}
                         title="No Test Prints Yet"
-                        body="Add a model above — we estimate it, you print it, then enter the real time here."
+                        body="Add a model above. We estimate it, you print it, then enter the real time here."
                         className="py-6"
                     />
                 ) : (
                     <div className="flex flex-col">
-                        {samples.map((s) => (
-                            <div
-                                key={s.id}
-                                className="flex flex-col gap-2 py-3 border-b border-[var(--dash-line)] last:border-b-0 last:pb-0 first:pt-0 sm:flex-row sm:items-center"
-                            >
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[13px] font-medium text-[var(--dash-ink)] truncate">{s.label}</p>
-                                    <p className="text-[13px] dash-soft dash-data">
-                                        We estimate {hoursLabel(s.estimatedHours)}
-                                        {' · '}{s.settings?.layerHeightMm}mm / {s.settings?.infillPercent}% infill
+                        <div className={`hidden ${LEDGER_COLS} pb-2`}>
+                            <span className="dash-label">Model</span>
+                            <span className="dash-label text-right">Estimate</span>
+                            <span className="dash-label">Actual time</span>
+                            <span className="dash-label">Status</span>
+                            <span className="sr-only">Remove</span>
+                        </div>
+                        <div className="divide-y divide-[var(--dash-line)]">
+                            {samples.map((s) => (
+                                <div key={s.id} className={`flex flex-col gap-2 py-3 last:pb-0 ${LEDGER_COLS}`}>
+                                    <div className="min-w-0">
+                                        <p className="text-[13px] font-medium text-[var(--dash-ink)] truncate">{s.label}</p>
+                                        <p className="text-[13px] dash-soft dash-data">
+                                            {s.settings?.layerHeightMm}mm layers, {s.settings?.infillPercent}% infill
+                                        </p>
+                                    </div>
+                                    <p className="text-[13px] dash-data sm:text-right">
+                                        <span className="dash-soft sm:hidden">We estimate </span>
+                                        {hoursLabel(s.estimatedHours)}
                                     </p>
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <span className="text-[13px] dash-soft">Actually took:</span>
                                     <ActualTimeEditor
                                         sample={s}
                                         onSave={(hours) => put({ action: 'update', id: s.id, actualHours: hours })}
                                     />
+                                    <span>
+                                        {s.actualHours > 0 ? (
+                                            <StatusPill tone="ink">Timed</StatusPill>
+                                        ) : (
+                                            <StatusPill tone="hatch">Awaiting time</StatusPill>
+                                        )}
+                                    </span>
                                     <button
                                         onClick={() => put({ action: 'delete', id: s.id })}
-                                        className="text-[13px] font-medium text-[var(--dash-bad)] hover:underline cursor-pointer px-1"
-                                        title="Remove"
+                                        className="self-start sm:self-auto text-[13px] font-medium text-[var(--dash-bad)] hover:underline cursor-pointer text-left"
+                                        title="Remove this test print"
                                     >
-                                        ×
+                                        Remove
                                     </button>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
                     </div>
                 )}
             </DashCard>
@@ -261,8 +292,8 @@ export default function PrintTimeCalibration({ compact = false }) {
             {/* Fit + apply */}
             {applied && (
                 <div className="rounded-[var(--dash-r-inner)] bg-[var(--dash-ok-bg)] text-[var(--dash-ok)] px-3 py-2 text-[13px]">
-                    ✓ Calibration applied{applied.fittedAt ? ` on ${new Date(applied.fittedAt).toLocaleDateString()}` : ''} —
-                    estimates are tuned to your machines. Add more timed prints any time to refine it.
+                    ✓ Calibration applied{applied.fittedAt ? ` on ${new Date(applied.fittedAt).toLocaleDateString()}` : ''}.
+                    Estimates are tuned to your machines. Add more timed prints any time to refine it.
                 </div>
             )}
             {fit ? (
@@ -271,7 +302,7 @@ export default function PrintTimeCalibration({ compact = false }) {
                         <p className="text-[13px] text-[var(--dash-ink)]">
                             Based on your {fit.samplesUsed} timed print{fit.samplesUsed === 1 ? '' : 's'}, estimates are
                             currently off by <span className="font-semibold dash-data">{Math.round(fit.currentMeanAbsPctError)}%</span> on
-                            average — after calibration that drops to{' '}
+                            average. After calibration that drops to{' '}
                             <span className="font-semibold dash-data">{Math.round(fit.fittedMeanAbsPctError)}%</span>.
                         </p>
                         <SegmentPill
@@ -282,7 +313,7 @@ export default function PrintTimeCalibration({ compact = false }) {
                             ]}
                         />
                         <button
-                            onClick={() => put({ action: 'apply' }, 'Calibration applied — estimates now use your machine speeds')}
+                            onClick={() => put({ action: 'apply' }, 'Calibration applied. Estimates now use your machine speeds.')}
                             disabled={busy}
                             className="dash-hoverable self-start rounded-full px-4 py-2 text-[13px] font-medium bg-[var(--dash-sun)] text-[var(--dash-ink)] cursor-pointer hover:bg-[var(--dash-sun-deep)] active:scale-[0.97] disabled:opacity-50"
                         >
@@ -294,13 +325,13 @@ export default function PrintTimeCalibration({ compact = false }) {
                 timedCount > 0 && (
                     <p className="text-[13px] dash-soft">
                         {timedCount === 1
-                            ? 'One timed print recorded — add a second, differently-shaped one to enable calibration.'
-                            : 'These prints are too similar in shape to calibrate from — add one flat/wide and one tall/narrow print.'}
+                            ? 'You have one timed print recorded. To enable calibration, add a second, differently-shaped one.'
+                            : 'These prints are too similar in shape to calibrate from. Add one flat and wide print and one tall and narrow print.'}
                     </p>
                 )
             )}
 
-            {/* Guided tour (§9.11) — not offered inside the onboarding wizard */}
+            {/* Guided tour (§9.11), not offered inside the onboarding wizard */}
             {!compact && (
                 <CoachMarks steps={TOURS.printTiming} open={tourOpen} onClose={() => setTourOpen(false)} panelKey="printTiming" />
             )}

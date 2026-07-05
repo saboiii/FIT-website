@@ -164,12 +164,52 @@ describe('Admin Overview', () => {
         onOpenWizard={vi.fn()}
       />,
     )
-    expect(screen.getByText('Requests — 30 days')).toBeInTheDocument()
+    expect(screen.getByText('Requests, last 30 days')).toBeInTheDocument()
     expect(screen.queryByText('No Requests Yet')).toBeNull()
     unmount()
 
     render(<Overview setupData={configuredSetup} requests={[]} onNavigate={vi.fn()} onOpenWizard={vi.fn()} />)
     expect(screen.getByText('No Requests Yet')).toBeInTheDocument()
+  })
+
+  it('derives status, weekday and material visualizations from the fetched requests', () => {
+    const now = new Date().toISOString()
+    render(
+      <Overview
+        setupData={configuredSetup}
+        requests={[
+          { status: 'configured', createdAt: now, printConfiguration: { printSettings: { materialType: 'plastic' } } },
+          { status: 'paid', createdAt: now, printConfiguration: { printSettings: { materialType: 'plastic' } } },
+          { status: 'paid', createdAt: now, printConfiguration: { generic: { material: 'resin' } } },
+        ]}
+        onNavigate={vi.fn()}
+        onOpenWizard={vi.fn()}
+      />,
+    )
+    // Status distribution bar list.
+    const statusList = screen.getByRole('list', { name: 'Open jobs by status' })
+    expect(within(statusList).getByText('Awaiting quote')).toBeInTheDocument()
+    expect(within(statusList).getByTitle('Paid: 2')).toBeInTheDocument()
+    // Day-of-week dot matrix over the trailing weeks.
+    expect(screen.getByText('Busy days, last 4 weeks')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Requests per day/ })).toBeInTheDocument()
+    // Material frequency bar list, from printSettings and generic fallbacks.
+    const materialList = screen.getByRole('list', { name: 'Materials requested' })
+    expect(within(materialList).getByTitle('Plastic: 2')).toBeInTheDocument()
+    expect(within(materialList).getByText('Resin')).toBeInTheDocument()
+  })
+
+  it('renders no em dashes or middots anywhere in the overview copy', () => {
+    render(
+      <Overview
+        setupData={{ ...configuredSetup, deliveryTypes: [] }}
+        requests={[{ status: 'configured', createdAt: new Date().toISOString() }]}
+        onNavigate={vi.fn()}
+        onOpenWizard={vi.fn()}
+      />,
+    )
+    fireEvent.click(screen.getByText(/6\/7 complete/))
+    expect(document.body.textContent).not.toMatch(/[—·]/)
   })
 })
 

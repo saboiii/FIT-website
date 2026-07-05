@@ -174,18 +174,13 @@ export default function EventManagement() {
 
     return (
         <div className="p-4 md:p-6">
-            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
-                <p className="text-[13px] dash-soft max-w-md">
-                    Time-bound sales like Christmas or 11.11 — a discount percentage,
-                    minimum spend and active window that products can link to. Global
-                    events apply store-wide automatically.
-                </p>
-                {events.length > 0 && (
+            {events.length > 0 && (
+                <div className="flex justify-end mb-4">
                     <button type="button" onClick={openCreate} className={`${sunBtnCls} flex items-center gap-1`}>
                         <BsPlus size={16} aria-hidden="true" /> New event
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {loading ? (
                 <div className="flex flex-col gap-3" aria-label="Loading events">
@@ -197,7 +192,7 @@ export default function EventManagement() {
                 <EmptyState
                     icon={<IoCalendarOutline />}
                     title="No Events Yet"
-                    body="Promotional events power storewide and product discounts — create the first one."
+                    body="Promotional events power storewide and product discounts. Create the first one."
                     cta="Create Event"
                     onCta={openCreate}
                 />

@@ -198,6 +198,20 @@ describe('EventManagement — event cards + sheet form', () => {
         expect(screen.getByText('Global')).toBeInTheDocument()
         expect(screen.getByText('Window')).toBeInTheDocument()
         expect(screen.getByText(/Locations: SG, Online/)).toBeInTheDocument()
+        // The redundant mid-page explainer is gone (client directive).
+        expect(screen.queryByText(/Time-bound sales like Christmas/)).toBeNull()
+    })
+
+    it('shows an em-dash-free empty state when no events exist', async () => {
+        global.fetch = vi.fn(() => ok({ events: [] }))
+        render(<EventManagement />)
+
+        expect(await screen.findByText('No Events Yet')).toBeInTheDocument()
+        expect(
+            screen.getByText('Promotional events power storewide and product discounts. Create the first one.'),
+        ).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Create Event' })).toBeInTheDocument()
+        expect(document.body.textContent).not.toContain('—')
     })
 
     it('opens the grouped What/How much/When/Flags form in a Sheet', async () => {

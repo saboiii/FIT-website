@@ -1,0 +1,193 @@
+/*
+ * "Sunlit Paper" — dashboard-only design tokens & utilities.
+ * Law: docs/DASHBOARD-UX-BLUEPRINT.md §4 (+ §9 amendments).
+ *
+ * Everything is scoped under `.dash` (set by the two dashboard shells via
+ * <DashProvider>) so nothing leaks into the storefront. Raw Tailwind palette
+ * classes are banned inside dashboards — use these variables/utilities.
+ */
+
+.dash {
+  /* Colour tokens */
+  --dash-canvas: #faf9f5;
+  --dash-card: #ffffff;
+  --dash-ink: #111111;
+  --dash-ink-soft: #66645e;
+  --dash-ink-faint: #a6a399; /* placeholders/disabled ONLY */
+  --dash-line: #eae7df;
+  --dash-sun: #ffd84d;
+  --dash-sun-soft: #fff3c4;
+  --dash-sun-deep: #f2c200;
+  --dash-ok: #3e7a4f;
+  --dash-ok-bg: #edf4ee;
+  --dash-bad: #b4432c;
+  --dash-bad-bg: #f9ede9;
+
+  /* Radii */
+  --dash-r-card: 20px;
+  --dash-r-inner: 12px;
+
+  /* Elevation (warm-hued, single light source above) */
+  --dash-shadow-card: 0 1px 2px rgb(120 90 20 / 0.04), 0 2px 8px rgb(120 90 20 / 0.04);
+  --dash-shadow-card-hover: 0 2px 4px rgb(120 90 20 / 0.05), 0 4px 12px rgb(120 90 20 / 0.06);
+  --dash-shadow-float: 0 2px 4px rgb(120 90 20 / 0.05), 0 8px 16px rgb(120 90 20 / 0.07),
+    0 24px 48px rgb(120 90 20 / 0.09);
+
+  background-color: var(--dash-canvas);
+  color: var(--dash-ink);
+  /* Legibility floor (§9.7): body text weight 400, never font-light. */
+  font-weight: 400;
+  font-size: 14px;
+}
+
+/* ---- Text roles ---------------------------------------------------------- */
+.dash .dash-display {
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 300;
+}
+.dash .dash-display b,
+.dash .dash-display strong {
+  font-weight: 600;
+}
+.dash .dash-title {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.dash .dash-section {
+  font-size: 16px;
+  font-weight: 600;
+}
+.dash .dash-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dash-ink-soft);
+}
+.dash .dash-data {
+  font-size: 13px;
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+}
+.dash .dash-numeral {
+  font-size: 44px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.dash .dash-soft {
+  color: var(--dash-ink-soft);
+}
+
+/* ---- Textures ------------------------------------------------------------ */
+/* The third status texture: pending/other (§4.1). */
+.dash .dash-hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 3px,
+    rgb(17 17 17 / 0.08) 3px 4px
+  );
+}
+
+/* Dotted-leader rows: `label ……… value` (§4.8 #8). */
+.dash .dash-leader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.dash .dash-leader::before {
+  content: '';
+}
+.dash .dash-leader > .dash-leader-dots {
+  flex: 1;
+  min-width: 16px;
+  border-bottom: 1px dotted var(--dash-ink-faint);
+  transform: translateY(-3px);
+}
+
+/* ---- Glass (Tier 2 only — §4.4) ------------------------------------------ */
+.dash .glass-warm {
+  background-color: rgb(250 249 245 / 0.7);
+  -webkit-backdrop-filter: blur(12px) saturate(160%) brightness(1.03);
+  backdrop-filter: blur(12px) saturate(160%) brightness(1.03);
+  border: 1px solid rgb(255 255 255 / 0.55);
+  border-bottom-color: rgb(180 150 60 / 0.15);
+  box-shadow:
+    0 1px 2px rgb(120 90 20 / 0.06),
+    0 8px 24px rgb(120 90 20 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .dash .glass-warm {
+    background-color: rgb(250 249 245 / 0.96);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dash .glass-warm {
+    background-color: rgb(250 249 245);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Full-viewport palette/sheet scrim: fade in, blur everything behind (§9.1). */
+.dash-scrim {
+  background-color: rgb(250 249 245 / 0.45);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .dash-scrim {
+    background-color: rgb(250 249 245 / 0.92);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* ---- Focus & interaction -------------------------------------------------- */
+.dash :focus-visible {
+  outline: 2px solid var(--dash-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.dash ::placeholder {
+  color: var(--dash-ink-faint);
+}
+
+/* Hover micro-interaction timing (CSS token — §4.5 `hover`). */
+.dash .dash-hoverable {
+  transition:
+    transform 150ms cubic-bezier(0.215, 0.61, 0.355, 1),
+    box-shadow 150ms cubic-bezier(0.215, 0.61, 0.355, 1),
+    background-color 150ms cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dash .dash-hoverable-lift:hover {
+    box-shadow: var(--dash-shadow-card-hover);
+    transform: translateY(-1px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dash .dash-hoverable,
+  .dash .dash-hoverable-lift {
+    transition: none;
+  }
+}
+
+/* Native inner scrolling (§9.8) */
+.dash .dash-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Print job sheets (§6): ink on white, hide app chrome. */
+@media print {
+  .dash-print-hidden {
+    display: none !important;
+  }
+}

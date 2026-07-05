@@ -2,6 +2,7 @@ import { jsonLdString } from '@/lib/jsonLd'
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import "./dashboard.css";
 import Navbar from "@/components/General/Navbar";
 import Footer from "@/components/General/Footer";
 import Smooth from "@/components/General/Smooth";

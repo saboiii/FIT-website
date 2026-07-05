@@ -407,6 +407,15 @@ export default function RequestPeek({
 
                                         const next = typeof updater === 'function' ? updater(current) : updater
 
+                                        // ShippingFields signals "no change" by returning the same
+                                        // object it was given — mirror that by returning the same
+                                        // state reference, or React re-renders forever.
+                                        if (!next || next === current) return edit
+                                        if (
+                                            next.dimensions === current.dimensions &&
+                                            next.delivery === current.delivery
+                                        ) return edit
+
                                         return {
                                             ...edit,
                                             [r.requestId]: {

@@ -9,17 +9,22 @@ vi.mock('@/components/Admin/BlogEditor/TiptapEditor', () => ({
 }))
 vi.mock('next/dynamic', () => ({ default: () => () => <div>md-editor</div> }))
 
-const posts = [
-  { _id: '1', title: 'Live post', slug: 'live', status: 'published', published: true, updatedAt: '2026-01-02', tags: [], categories: [] },
-  { _id: '2', title: 'WIP post', slug: 'wip', status: 'draft', published: false, updatedAt: '2026-01-02', tags: [], categories: [], contentFormat: 'tiptap' },
+// Full posts live behind `?slug=`; the list API only ever ships lean cards
+// (no content/contentJson).
+const fullPosts = [
+  { _id: '1', title: 'Live post', slug: 'live', status: 'published', published: true, updatedAt: '2026-01-02', tags: [], categories: [], contentFormat: 'markdown', content: '# body' },
+  { _id: '2', title: 'WIP post', slug: 'wip', status: 'draft', published: false, updatedAt: '2026-01-02', tags: [], categories: [], contentFormat: 'tiptap', contentJson: { type: 'doc', content: [] } },
 ]
+const lean = ({ content, contentJson, ...card }) => card
 
 const json = (body) => Promise.resolve({ ok: true, json: () => Promise.resolve(body) })
 
+let allPosts
 let fetchCalls
 let draftGet
 let slugExists
 beforeEach(() => {
+  allPosts = fullPosts
   fetchCalls = []
   draftGet = { ok: true, draft: null }
   slugExists = false
@@ -32,10 +37,32 @@ beforeEach(() => {
       return json(draftGet)
     }
     if (u.includes('slug-exists')) return json({ exists: slugExists })
-    if (u.includes('/clone')) return json({ ok: true, post: posts[1] })
+    if (u.includes('/clone')) return json({ ok: true, post: fullPosts[1] })
     if (opts.method === 'DELETE') return json({ ok: true })
-    if (opts.method === 'POST') return json({ ok: true, post: posts[1] })
-    return json({ ok: true, posts })
+    if (opts.method === 'POST') return json({ ok: true, post: fullPosts[1] })
+    // GET /api/admin/blog — the paginated lean list contract.
+    const q = new URLSearchParams(u.split('?')[1] || '')
+    const slug = q.get('slug')
+    if (slug) {
+      const post = allPosts.find((p) => p.slug === slug)
+      return post ? json({ ok: true, post }) : json({ ok: false, error: 'Not found' })
+    }
+    const status = q.get('status')
+    const page = parseInt(q.get('page') || '1', 10)
+    const limit = parseInt(q.get('limit') || '8', 10)
+    const filtered = (status ? allPosts.filter((p) => p.status === status) : allPosts).map(lean)
+    const counts = allPosts.reduce(
+      (acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc },
+      { all: allPosts.length },
+    )
+    return json({
+      ok: true,
+      posts: filtered.slice((page - 1) * limit, page * limit),
+      page,
+      totalPages: Math.max(1, Math.ceil(filtered.length / limit)),
+      total: filtered.length,
+      counts,
+    })
   })
 })
 afterEach(() => {
@@ -60,17 +87,69 @@ const goToStep = (title) => {
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next' }))
 
 describe('BlogManagement', () => {
-  it('lists posts with one status pill each and filters via view tabs', async () => {
+  it('lists posts with one status pill each and filters via the API from view tabs', async () => {
     render(<BlogManagement />)
     expect(await screen.findByText('Live post')).toBeInTheDocument()
     expect(screen.getByText('WIP post')).toBeInTheDocument()
     // status vocabulary pills (lowercase status text, distinct from tab labels)
     expect(screen.getByText('published')).toBeInTheDocument()
     expect(screen.getByText('draft')).toBeInTheDocument()
+    // the list is fetched lean and paginated
+    expect(fetchCalls[0][0]).toContain('page=1')
+    expect(fetchCalls[0][0]).toContain('limit=8')
 
     fireEvent.click(screen.getByRole('tab', { name: /Published/ }))
+    await waitFor(() => {
+      expect(screen.queryByText('WIP post')).toBeNull()
+    })
     expect(screen.getByText('Live post')).toBeInTheDocument()
-    expect(screen.queryByText('WIP post')).toBeNull()
+    // the filter is applied server-side, not on the current page client-side
+    expect(fetchCalls.some(([u]) => u.includes('status=published') && u.includes('page=1'))).toBe(true)
+  })
+
+  it('fetches the FULL post via ?slug= before entering focus mode', async () => {
+    render(<BlogManagement />)
+    fireEvent.click(await screen.findByText('WIP post'))
+    await screen.findByText('tiptap-editor')
+    expect(fetchCalls.some(([u]) => u.includes('slug=wip'))).toBe(true)
+    // the autosave-restore check still runs on select
+    expect(fetchCalls.some(([u, o]) => u.includes('/api/admin/blog/2/draft') && !o.method)).toBe(true)
+  })
+
+  it('pages through posts: Next fetches page 2, bounds disable the pills', async () => {
+    allPosts = Array.from({ length: 9 }, (_, i) => ({
+      _id: String(i + 1),
+      title: `Post ${i + 1}`,
+      slug: `post-${i + 1}`,
+      status: 'draft',
+      published: false,
+      updatedAt: '2026-01-02',
+      tags: [],
+      categories: [],
+      contentFormat: 'tiptap',
+    }))
+    render(<BlogManagement />)
+    expect(await screen.findByText('Post 1')).toBeInTheDocument()
+    expect(screen.getByText('Post 8')).toBeInTheDocument()
+    expect(screen.queryByText('Post 9')).toBeNull()
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(await screen.findByText('Post 9')).toBeInTheDocument()
+    expect(screen.queryByText('Post 1')).toBeNull()
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument()
+    expect(fetchCalls.some(([u]) => u.includes('page=2') && u.includes('limit=8'))).toBe(true)
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+  })
+
+  it('shows no pager when everything fits on one page', async () => {
+    render(<BlogManagement />)
+    await screen.findByText('Live post')
+    expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
+    expect(screen.queryByText(/Page 1 of/)).toBeNull()
   })
 
   it('opens a tiptap post in focus mode and saves with status', async () => {

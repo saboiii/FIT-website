@@ -43,7 +43,9 @@ function Campaigns({ showToast }) {
     const load = async () => {
         const [c, p, i] = await Promise.all([
             fetch('/api/admin/newsletter').then((r) => r.json()).catch(() => ({})),
-            fetch('/api/admin/blog').then((r) => r.json()).catch(() => ({})),
+            // Full (lean) set of published posts — the campaign composer needs
+            // every candidate article, not one admin-list page.
+            fetch('/api/admin/blog?all=1&status=published').then((r) => r.json()).catch(() => ({})),
             fetch('/api/admin/newsletter/interests').then((r) => r.json()).catch(() => ({})),
         ])
         setCampaigns(c.campaigns || [])

@@ -6,7 +6,7 @@ import { authenticate } from "@/lib/authenticate";
 import { checkAdminPrivileges } from "@/lib/checkPrivileges";
 import { readingTimeMinutes } from '@/lib/blog/readingTime';
 import { extractTextFromTiptap } from '@/lib/blog/tiptapText';
-import { statusWrite, effectiveStatus } from '@/lib/blog/status';
+import { statusWrite, effectiveStatus, statusQuery } from '@/lib/blog/status';
 import { getPostHogClient } from '@/lib/posthog-server';
 
 export const runtime = 'nodejs';
@@ -14,7 +14,11 @@ export const dynamic = 'force-dynamic';
 
 function computeReadingTime(body) {
     if (body.contentFormat === 'tiptap') {
-        return readingTimeMinutes(extractTextFromTiptap(body.contentJson));
+        const text = extractTextFromTiptap(body.contentJson);
+        if (text.trim()) return readingTimeMinutes(text);
+        // htmlBlock-converted legacy posts extract no plain text: fall back to
+        // the preserved raw content, tags stripped.
+        return readingTimeMinutes(String(body.content || '').replace(/<[^>]*>/g, ' '));
     }
     return readingTimeMinutes(body.content || '');
 }
@@ -95,7 +99,20 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, post });
 }
 
+// Lean list-card projection: NEVER content/contentJson (imported posts carry
+// hundreds of KB of raw HTML each). `published` rides along only so
+// effectiveStatus() can resolve legacy docs and existing callers keep working.
+const LIST_FIELDS =
+    'title slug excerpt heroImage status published scheduledFor publishDate createdAt updatedAt featured tags categories contentFormat readingTimeMinutes';
+
+const DEFAULT_PAGE_SIZE = 8;
+const MAX_PAGE_SIZE = 50;
+
 // Admin-only list / fetch (drafts included). The public site uses /api/blog.
+// - `?slug=<slug>`: the FULL single post (the editor loads one this way).
+// - `?all=1`: every post, lean card fields only (newsletter composer).
+// - default: paginated lean cards — `page` (1-based), `limit` (default 8,
+//   max 50), optional `status` filter with effectiveStatus semantics.
 export async function GET(req) {
     const { userId } = await authenticate(req);
     const isAdmin = await checkAdminPrivileges(userId);
@@ -109,12 +126,42 @@ export async function GET(req) {
     if (slug) {
         const post = await BlogPost.findOne({ slug }).lean();
         if (!post) return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 });
+        post.status = effectiveStatus(post);
         return NextResponse.json({ ok: true, post });
     }
 
-    const posts = await BlogPost.find({}).sort({ createdAt: -1 }).limit(200).lean();
+    const filter = statusQuery(url.searchParams.get('status'));
+
+    if (url.searchParams.get('all') === '1') {
+        const posts = await BlogPost.find(filter).select(LIST_FIELDS).sort({ createdAt: -1 }).lean();
+        for (const p of posts) p.status = effectiveStatus(p);
+        return NextResponse.json({ ok: true, posts, total: posts.length });
+    }
+
+    const page = Math.max(1, parseInt(url.searchParams.get('page'), 10) || 1);
+    const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(url.searchParams.get('limit'), 10) || DEFAULT_PAGE_SIZE));
+
+    const [total, posts, statusRows] = await Promise.all([
+        BlogPost.countDocuments(filter),
+        BlogPost.find(filter)
+            .select(LIST_FIELDS)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean(),
+        // Tab counts across ALL posts (cheap: two tiny fields per doc).
+        BlogPost.find({}).select('status published').lean(),
+    ]);
     for (const p of posts) p.status = effectiveStatus(p);
-    return NextResponse.json({ ok: true, posts });
+
+    const counts = { all: statusRows.length, published: 0, draft: 0, hidden: 0 };
+    for (const row of statusRows) {
+        const s = effectiveStatus(row);
+        counts[s] = (counts[s] || 0) + 1;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return NextResponse.json({ ok: true, posts, page, totalPages, total, counts });
 }
 
 export async function DELETE(req) {

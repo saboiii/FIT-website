@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { effectiveStatus, statusWrite } from '@/lib/blog/status'
+import { effectiveStatus, statusWrite, statusQuery } from '@/lib/blog/status'
 
 describe('effectiveStatus', () => {
   it('uses status when present', () => {
@@ -28,5 +28,26 @@ describe('statusWrite', () => {
   })
   it('rejects unknown statuses as draft', () => {
     expect(statusWrite('nonsense', null, now).status).toBe('draft')
+  })
+})
+
+describe('statusQuery', () => {
+  it('published matches status OR the legacy published boolean', () => {
+    expect(statusQuery('published')).toEqual({
+      $or: [{ status: 'published' }, { status: null, published: true }],
+    })
+  })
+  it('draft matches status OR legacy unpublished docs', () => {
+    expect(statusQuery('draft')).toEqual({
+      $or: [{ status: 'draft' }, { status: null, published: { $ne: true } }],
+    })
+  })
+  it('hidden matches only the explicit status', () => {
+    expect(statusQuery('hidden')).toEqual({ status: 'hidden' })
+  })
+  it('anything else (all / missing) matches everything', () => {
+    expect(statusQuery('all')).toEqual({})
+    expect(statusQuery(null)).toEqual({})
+    expect(statusQuery(undefined)).toEqual({})
   })
 })

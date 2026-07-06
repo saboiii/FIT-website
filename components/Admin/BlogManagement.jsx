@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic'
 import { motion } from 'framer-motion'
 import TiptapEditor from '@/components/Admin/BlogEditor/TiptapEditor'
 import MetaRail from '@/components/Admin/BlogEditor/MetaRail'
+import { buildHtmlBlockDoc } from '@/lib/blog/htmlBlock'
 import { useToast } from '@/components/General/ToastProvider'
 import { toDatetimeLocal } from '@/utils/datetimeLocal'
 import { settle } from '@/lib/motion/tokens'
@@ -144,8 +145,14 @@ function InfoStrip({ children, actions }) {
  * borderless display title, TipTap directly on paper, GlassBar chrome and a
  * MetaRail (sticky right / Sheet under 1280 px) for everything else.
  */
+const PAGE_SIZE = 8
+
 export default function BlogManagement() {
-    const [posts, setPosts] = useState([])
+    const [posts, setPosts] = useState([]) // current page of lean list cards
+    const [page, setPage] = useState(1)
+    const [totalPages, setTotalPages] = useState(1)
+    const [total, setTotal] = useState(0)
+    const [counts, setCounts] = useState({}) // per-status totals across all posts
     const [selected, setSelected] = useState(null)
     const [loading, setLoading] = useState(false)
     const [statusFilter, setStatusFilter] = useState('all')
@@ -168,20 +175,49 @@ export default function BlogManagement() {
     // A pending autosave must not fire after the panel unmounts (tab switch).
     useEffect(() => () => clearTimeout(autosaveTimer.current), [])
 
-    const fetchList = async () => {
+    // Paginated lean list — the API never ships post bodies here; the full
+    // post is fetched on select. Defaults keep refresh-after-save on the
+    // current page and filter.
+    const fetchList = async (pageArg = page, statusArg = statusFilter) => {
         setLoading(true)
         try {
-            const res = await fetch('/api/admin/blog')
+            const params = new URLSearchParams({ page: String(pageArg), limit: String(PAGE_SIZE) })
+            if (statusArg && statusArg !== 'all') params.set('status', statusArg)
+            const res = await fetch(`/api/admin/blog?${params.toString()}`)
             const data = await res.json()
-            if (data.ok) setPosts(data.posts || [])
+            if (data.ok) {
+                setPosts(data.posts || [])
+                setTotalPages(data.totalPages || 1)
+                setTotal(data.total ?? (data.posts || []).length)
+                if (data.counts) setCounts(data.counts)
+                // Page fell off the end (e.g. last post on the page deleted):
+                // clamp back to the last real page.
+                if ((data.posts || []).length === 0 && pageArg > (data.totalPages || 1)) {
+                    setPage(data.totalPages || 1)
+                }
+            }
         } catch (err) {
             console.error(err)
         } finally { setLoading(false) }
     }
 
-    useEffect(() => { fetchList() }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => { fetchList(page, statusFilter) }, [page, statusFilter])
 
-    const handleSelect = async (post) => {
+    const handleSelect = async (listPost) => {
+        // List cards are lean (no content/contentJson) — load the full post
+        // before entering focus mode.
+        let post = listPost
+        try {
+            const res = await fetch(`/api/admin/blog?slug=${encodeURIComponent(listPost.slug)}`)
+            const data = await res.json()
+            if (!data.ok || !data.post) throw new Error(data.error || 'Load failed')
+            post = data.post
+        } catch (err) {
+            console.error(err)
+            showToast('Could not load the post', 'error')
+            return
+        }
         setSelected(post)
         setForm(postToForm(post))
         setTagsInput((post.tags || []).join(', '))
@@ -360,21 +396,34 @@ export default function BlogManagement() {
         showToast('Draft restored. Save to keep it', 'success')
     }
 
-    const filteredPosts = statusFilter === 'all' ? posts : posts.filter((p) => (p.status || 'draft') === statusFilter)
     const previewUrl = form.slug ? `/blog/${encodeURIComponent(form.slug)}?previewKey=${previewKey}` : null
     const isTiptap = form.contentFormat === 'tiptap'
+    // Imported legacy posts are flagged 'markdown' but hold raw HTML — those
+    // convert losslessly into one editable HTML block (blueprint: no breakage).
+    const legacyIsHtml = String(form.content || '').trimStart().startsWith('<')
 
-    const counts = posts.reduce((acc, p) => {
-        const s = p.status || 'draft'
-        acc[s] = (acc[s] || 0) + 1
-        return acc
-    }, {})
+    const convertToModernEditor = () => {
+        updateForm({
+            contentFormat: 'tiptap',
+            contentJson: buildHtmlBlockDoc(String(form.content || '')),
+        })
+        setRestoreNonce((n) => n + 1) // remount the editor onto the converted doc
+        showToast('Converted. Review the post, then save to keep it', 'success')
+    }
+
+    // Server-side filtering: `posts` is already the current page of the
+    // current filter; `counts` covers every post regardless of page.
+    const totalAll = counts.all ?? total
     const tabs = [
-        { key: 'all', label: 'All', count: posts.length },
+        { key: 'all', label: 'All', count: counts.all ?? 0 },
         { key: 'published', label: 'Published', count: counts.published || 0 },
         { key: 'draft', label: 'Draft', count: counts.draft || 0 },
         { key: 'hidden', label: 'Hidden', count: counts.hidden || 0 },
     ]
+    const changeFilter = (key) => {
+        setStatusFilter(key)
+        setPage(1)
+    }
 
     const publishBlocked = form.status === 'published' && !hasImage(form)
     const saveDisabled = slugTaken || publishBlocked
@@ -415,7 +464,7 @@ export default function BlogManagement() {
             >
                 <div className="flex items-center justify-between gap-4">
                     <h2 className="dash-title">Blog posts</h2>
-                    {posts.length > 0 && (
+                    {totalAll > 0 && (
                         <button
                             type="button"
                             onClick={handleNew}
@@ -425,7 +474,7 @@ export default function BlogManagement() {
                         </button>
                     )}
                 </div>
-                <ViewTabs className="mt-5" tabs={tabs} active={statusFilter} onChange={setStatusFilter} />
+                <ViewTabs className="mt-5" tabs={tabs} active={statusFilter} onChange={changeFilter} />
 
                 {loading && posts.length === 0 ? (
                     <div className="mt-6 flex flex-col gap-2">
@@ -433,7 +482,7 @@ export default function BlogManagement() {
                         <SkeletonRow />
                         <SkeletonRow />
                     </div>
-                ) : posts.length === 0 ? (
+                ) : totalAll === 0 ? (
                     <EmptyState
                         icon={<IoNewspaperOutline />}
                         title="Write Your First Post"
@@ -441,7 +490,7 @@ export default function BlogManagement() {
                         cta="New Post"
                         onCta={handleNew}
                     />
-                ) : filteredPosts.length === 0 ? (
+                ) : posts.length === 0 ? (
                     <EmptyState
                         icon={<IoNewspaperOutline />}
                         title="No Posts Here"
@@ -449,7 +498,7 @@ export default function BlogManagement() {
                     />
                 ) : (
                     <ul className="mt-4">
-                        {filteredPosts.map((p) => {
+                        {posts.map((p) => {
                             const status = p.status || 'draft'
                             return (
                                 <li key={p._id} className="border-b border-[var(--dash-line)] last:border-0">
@@ -484,6 +533,31 @@ export default function BlogManagement() {
                             )
                         })}
                     </ul>
+                )}
+
+                {/* Pager: quiet pills, fixed h-8 so the row never shifts. */}
+                {totalAll > 0 && totalPages > 1 && (
+                    <nav aria-label="Pagination" className="mt-5 flex items-center justify-between gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                            disabled={page <= 1}
+                            className="dash-hoverable inline-flex h-8 items-center leading-none rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 text-[13px] font-medium hover:bg-[var(--dash-canvas)] cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                        >
+                            Previous
+                        </button>
+                        <span className="dash-data dash-soft inline-flex h-8 items-center leading-none whitespace-nowrap">
+                            Page {page} of {totalPages}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                            disabled={page >= totalPages}
+                            className="dash-hoverable inline-flex h-8 items-center leading-none rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 text-[13px] font-medium hover:bg-[var(--dash-canvas)] cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                        >
+                            Next
+                        </button>
+                    </nav>
                 )}
             </motion.div>
         )
@@ -575,7 +649,23 @@ export default function BlogManagement() {
                             </InfoStrip>
                         )}
                         {!isTiptap && (
-                            <InfoStrip>Legacy markdown post. New posts use the rich editor.</InfoStrip>
+                            <InfoStrip
+                                actions={
+                                    legacyIsHtml ? (
+                                        <button
+                                            type="button"
+                                            onClick={convertToModernEditor}
+                                            className="text-[13px] font-medium text-[var(--dash-ink)] hover:underline cursor-pointer whitespace-nowrap"
+                                        >
+                                            Switch to the modern editor
+                                        </button>
+                                    ) : null
+                                }
+                            >
+                                {legacyIsHtml
+                                    ? 'Legacy post with raw HTML content. Switching keeps the HTML byte-for-byte inside an editable HTML block; nothing changes until you save.'
+                                    : 'Legacy markdown post. New posts use the rich editor.'}
+                            </InfoStrip>
                         )}
 
                         <input

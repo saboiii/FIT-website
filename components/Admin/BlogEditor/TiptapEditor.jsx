@@ -4,7 +4,8 @@ import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import { AnimatePresence, motion } from 'framer-motion'
 import { sheet, swapExit } from '@/lib/motion/tokens'
-import { generateJSON } from '@tiptap/html'
+import { generateJSON, generateHTML } from '@tiptap/html'
+import { oneDark } from '@codemirror/theme-one-dark'
 import { useEditor, EditorContent, useEditorState, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -20,7 +21,7 @@ import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import { Sheet } from '@/components/dashboard-ui'
 import { useToast } from '@/components/General/ToastProvider'
-import { HtmlBlock, sanitizeHtmlBlock, injectHtmlBlocks, segmentBody } from '@/lib/blog/htmlBlock'
+import { HtmlBlock, sanitizeHtmlBlock, docToArticleHtml, segmentBody } from '@/lib/blog/htmlBlock'
 import {
     LuBold, LuItalic, LuUnderline, LuStrikethrough, LuList, LuListOrdered,
     LuQuote, LuLink, LuImage, LuAlignLeft, LuAlignCenter, LuAlignRight,
@@ -33,27 +34,20 @@ import {
 // auto-closing tags). Loaded lazily — admin editor only.
 const CodeMirror = dynamic(() => import('@uiw/react-codemirror'), { ssr: false })
 
-// Lets HTML-block NodeViews open the DOCUMENT-level code view (the whole
-// article, not one section — client directive).
-const CodeModeContext = createContext({ openCode: () => {} })
+// Lets HTML-block NodeViews open the DOCUMENT-level code view and report
+// cursor position to the ONE shared tooltip the editor owns (one pill total,
+// never one per block).
+const CodeModeContext = createContext({ openCode: () => {}, moveHint: () => {}, clearHint: () => {} })
 
 /**
  * NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js): renders the
- * raw markup read-only. Editing happens in the whole-article code view. The
- * glass hint behaves like components/LinkToolTip.jsx: it appears on hover,
- * follows the cursor (spring-smoothed) until it leaves the block, and is
- * portaled to <body> so no scroll container can clip it. It is
- * pointer-events-none like a real tooltip; clicking ANYWHERE on the block
- * (including through the pill) opens the whole-article code view, and the
- * click is intercepted so links inside imported sections cannot navigate the
- * admin away.
+ * raw markup read-only. Editing happens in the whole-article code view; the
+ * editor-level tooltip follows the cursor over the block. Clicking ANYWHERE
+ * on the block opens the code view, with the click intercepted so links
+ * inside imported sections cannot navigate the admin away.
  */
 function HtmlBlockView({ node, selected }) {
-    const { openCode } = useContext(CodeModeContext)
-    const [hint, setHint] = useState(null) // viewport coords, follows cursor
-
-    const clampX = (x) => Math.min(Math.max(8, x + 14), (window.innerWidth || 1200) - 380)
-    const clampY = (y) => Math.min(y + 18, (window.innerHeight || 800) - 56)
+    const { openCode, moveHint, clearHint } = useContext(CodeModeContext)
 
     return (
         <NodeViewWrapper>
@@ -65,9 +59,9 @@ function HtmlBlockView({ node, selected }) {
             >
                 {node.attrs.html ? (
                     <div
-                        onMouseMove={(e) => setHint({ x: e.clientX, y: e.clientY })}
-                        onMouseLeave={() => setHint(null)}
-                        onClickCapture={(e) => { e.preventDefault(); e.stopPropagation(); openCode() }}
+                        onMouseMove={(e) => moveHint(e.clientX, e.clientY)}
+                        onMouseLeave={clearHint}
+                        onClickCapture={(e) => { e.preventDefault(); e.stopPropagation(); clearHint(); openCode() }}
                         dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }}
                     />
                 ) : (
@@ -76,33 +70,44 @@ function HtmlBlockView({ node, selected }) {
                     </div>
                 )}
             </div>
-            {typeof document !== 'undefined' && createPortal(
-                <AnimatePresence>
-                    {hint && (
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.7, x: clampX(hint.x) - 40, y: clampY(hint.y) }}
-                            animate={{ opacity: 1, scale: 1, x: clampX(hint.x), y: clampY(hint.y) }}
-                            exit={{ opacity: 0, scale: 0.7, transition: swapExit }}
-                            transition={{ type: 'spring', stiffness: 400, damping: 50 }}
-                            className="dash-scrim glass-warm fixed z-[60] flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap shadow-[var(--dash-shadow-float)] shadow-md border border-white/40 pointer-events-none"
-                            style={{ left: 0, top: 0 }}
-                        >
-                            <span className="text-[12px] text-[var(--dash-ink-soft)]">
-                                This section is raw HTML and is edited as code
-                            </span>
-                            <button
-                                type="button"
-                                tabIndex={-1}
-                                className="dash-hoverable rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
-                            >
-                                Open code view
-                            </button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>,
-                document.body,
-            )}
         </NodeViewWrapper>
+    )
+}
+
+/**
+ * THE one cursor-following hint pill (components/LinkToolTip.jsx behavior):
+ * portaled to <body>, spring-follows the cursor, disappears the moment the
+ * cursor leaves a block, on scroll, or when code view opens.
+ */
+function HtmlHintTip({ hint }) {
+    if (typeof document === 'undefined') return null
+    const clampX = (x) => Math.min(Math.max(8, x + 14), (window.innerWidth || 1200) - 380)
+    const clampY = (y) => Math.min(y + 18, (window.innerHeight || 800) - 56)
+    return createPortal(
+        <AnimatePresence>
+            {hint && (
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.7, x: clampX(hint.x) - 40, y: clampY(hint.y) }}
+                    animate={{ opacity: 1, scale: 1, x: clampX(hint.x), y: clampY(hint.y) }}
+                    exit={{ opacity: 0, scale: 0.7, transition: swapExit }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 50 }}
+                    className="dash-scrim glass-warm fixed z-[60] flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap shadow-[var(--dash-shadow-float)] shadow-md border border-white/40 pointer-events-none"
+                    style={{ left: 0, top: 0 }}
+                >
+                    <span className="text-[12px] text-[var(--dash-ink-soft)]">
+                        This section is raw HTML and is edited as code
+                    </span>
+                    <button
+                        type="button"
+                        tabIndex={-1}
+                        className="dash-hoverable rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
+                    >
+                        Open code view
+                    </button>
+                </motion.div>
+            )}
+        </AnimatePresence>,
+        document.body,
     )
 }
 
@@ -348,12 +353,25 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
         )
     }, [editor])
 
+    // The ONE shared hover pill for HTML blocks (duplicates and stuck pills
+    // came from per-block tooltips). Cleared on leave, scroll, or mode switch.
+    const [hint, setHint] = useState(null)
+    const moveHint = useCallback((x, y) => setHint({ x, y }), [])
+    const clearHint = useCallback(() => setHint(null), [])
+    useEffect(() => {
+        if (!hint) return undefined
+        window.addEventListener('scroll', clearHint, true)
+        return () => window.removeEventListener('scroll', clearHint, true)
+    }, [hint, clearHint])
+
     const switchMode = useCallback(async (next) => {
         if (!editor || next === mode) return
+        setHint(null)
         if (next === 'code') {
-            // The article's real rendered HTML, pretty-printed for humans
-            // (imports arrive minified on one line).
-            const raw = injectHtmlBlocks(editor.getHTML())
+            // The article's real HTML, built STRAIGHT from the doc JSON:
+            // htmlBlock markup passes through verbatim (no serializer
+            // escaping round trip), pretty-printed for humans.
+            const raw = docToArticleHtml(editor.getJSON(), (d) => generateHTML(d, extensions))
             let pretty = raw
             try {
                 const jsb = await import('js-beautify')
@@ -461,7 +479,7 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
     if (!editor) return null
 
     return (
-        <CodeModeContext.Provider value={{ openCode }}>
+        <CodeModeContext.Provider value={{ openCode, moveHint, clearHint }}>
         <div>
             {/* Write ⇄ Code, always within reach while scrolling. */}
             <div className="sticky top-16 z-30 flex justify-end pointer-events-none -mb-8">
@@ -549,11 +567,12 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <EditorContent editor={editor} />
             </div>
             {mode === 'code' && (
-                <div className="mt-10 border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden text-[13px] [&_.cm-editor]:outline-none [&_.cm-scroller]:font-mono">
+                <div className="mt-10 rounded-[var(--dash-r-inner)] overflow-hidden text-[13px] shadow-[var(--dash-shadow-card)] [&_.cm-editor]:outline-none [&_.cm-scroller]:font-mono [&_.cm-content]:!py-5 [&_.cm-content]:!pr-5 [&_.cm-content]:!pl-3 [&_.cm-gutters]:!pl-2 [&_.cm-gutters]:!pr-1 [&_.cm-scroller]:leading-relaxed">
                     <CodeMirror
                         value={codeDraft}
                         onChange={onCodeChange}
                         extensions={langExtensions || []}
+                        theme={oneDark}
                         minHeight="60vh"
                         basicSetup={{
                             lineNumbers: true,
@@ -583,6 +602,7 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <CropModal src={cropSrc} busy={uploading} onCancel={() => setCropSrc(null)} onConfirm={insertCropped} />
             )}
         </div>
+        <HtmlHintTip hint={mode === 'write' ? hint : null} />
         </CodeModeContext.Provider>
     )
 }

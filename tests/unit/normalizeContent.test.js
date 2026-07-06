@@ -73,3 +73,33 @@ describe('code-view round trip', () => {
         expect(doc.content.map((n) => n.type)).toEqual(['paragraph', 'image', 'paragraph'])
     })
 })
+
+describe('whole-article code view round trip', () => {
+    it('docToArticleHtml passes htmlBlock markup through verbatim, no escaping', async () => {
+        const { docToArticleHtml } = await import('@/lib/blog/htmlBlock')
+        const gnarly = '<section style="margin:8px 0;color:#111"><a href="/x?a=1&b=2">Hi &amp; bye</a></section>'
+        const doc = {
+            type: 'doc',
+            content: [
+                { type: 'paragraph', content: [{ type: 'text', text: 'Intro' }] },
+                { type: 'htmlBlock', attrs: { html: gnarly } },
+            ],
+        }
+        const { renderTiptapHtml } = await import('@/lib/blog/renderTiptap')
+        const { tiptapExtensions } = await import('@/lib/blog/renderTiptap')
+        const { generateHTML } = await import('@tiptap/html/server')
+        const html = docToArticleHtml(doc, (d) => generateHTML(d, tiptapExtensions))
+        expect(html).toContain(gnarly)
+        expect(html).toContain('<p>Intro</p>')
+        expect(html).not.toContain('data-html-block')
+        expect(renderTiptapHtml).toBeTypeOf('function')
+    })
+
+    it('segmentBody unwraps rendered-article wrappers instead of nesting them', async () => {
+        const { htmlToSegmentedDoc } = await import('@/lib/blog/normalizeContent')
+        const doc = htmlToSegmentedDoc('<div data-html-block=""><section><div>Kept</div></section></div>')
+        expect(doc.content).toHaveLength(1)
+        expect(doc.content[0].type).toBe('htmlBlock')
+        expect(doc.content[0].attrs.html).toBe('<section><div>Kept</div></section>')
+    })
+})

@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { useEditor, EditorContent, useEditorState, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -23,23 +24,29 @@ import {
     LuCode,
 } from 'react-icons/lu'
 
+// Same source editor the legacy markdown posts use — code pane only, no
+// markdown preview/toolbar. It holds the raw HTML as plain text with syntax
+// colouring, so nothing re-parses or reformats the markup.
+const SourceEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false })
+
 /**
- * Read-only NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js).
- * The raw markup in attrs.html is shown via dangerouslySetInnerHTML and only
- * ever edited as a plain string in a textarea, so ProseMirror never parses it
- * (imported legacy posts can carry up to ~700KB of hand-authored HTML).
+ * NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js). Two modes,
+ * swapped IN PLACE (client directive): the rendered HTML, or the code editor
+ * occupying the same spot. The raw markup lives in attrs.html and is only
+ * ever edited as a plain string, so ProseMirror never parses it (imported
+ * legacy posts can carry up to ~700KB of hand-authored HTML).
  */
 function HtmlBlockView({ node, updateAttributes }) {
     const [editing, setEditing] = useState(() => !node.attrs.html)
     const [draft, setDraft] = useState(node.attrs.html || '')
 
-    const openEditor = () => {
+    const startEditing = () => {
         setDraft(node.attrs.html || '')
         setEditing(true)
     }
 
-    const apply = () => {
-        updateAttributes({ html: draft })
+    const done = () => {
+        updateAttributes({ html: draft }) // undoable via the editor history
         setEditing(false)
     }
 
@@ -49,47 +56,30 @@ function HtmlBlockView({ node, updateAttributes }) {
                 contentEditable={false}
                 className="group relative my-2 rounded-[var(--dash-r-inner)] outline outline-1 outline-transparent outline-offset-4 hover:outline-[var(--dash-line)] transition-[outline-color]"
             >
-                {node.attrs.html ? (
+                <button
+                    type="button"
+                    onClick={editing ? done : startEditing}
+                    className="dash-hoverable absolute top-2 right-2 z-10 rounded-full px-3 py-1 text-[12px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer shadow-[var(--dash-shadow-float)]"
+                >
+                    {editing ? 'Done' : 'Edit HTML'}
+                </button>
+                {editing ? (
+                    <div data-color-mode="light" className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden">
+                        <SourceEditor
+                            value={draft}
+                            onChange={(v) => setDraft(v ?? '')}
+                            preview="edit"
+                            hideToolbar
+                            visibleDragbar
+                            height={Math.min(720, Math.max(280, Math.ceil((node.attrs.html || '').length / 60) * 18))}
+                            textareaProps={{ spellCheck: false, 'aria-label': 'HTML source', placeholder: '<section>Paste or write raw HTML</section>' }}
+                        />
+                    </div>
+                ) : node.attrs.html ? (
                     <div dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
                 ) : (
                     <div className="text-[13px] text-[var(--dash-ink-soft)] border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-6 text-center">
-                        Empty HTML block
-                    </div>
-                )}
-                <button
-                    type="button"
-                    onClick={openEditor}
-                    className={`dash-hoverable absolute top-2 right-2 rounded-full px-3 py-1 text-[12px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer shadow-[var(--dash-shadow-float)] transition-opacity ${editing ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
-                >
-                    Edit HTML
-                </button>
-                {editing && (
-                    <div className="mt-2 flex flex-col gap-2 border border-[var(--dash-line)] bg-[var(--dash-card)] rounded-[var(--dash-r-inner)] p-3">
-                        <textarea
-                            autoFocus
-                            value={draft}
-                            onChange={(e) => setDraft(e.target.value)}
-                            spellCheck={false}
-                            aria-label="HTML source"
-                            placeholder="<section>Paste or write raw HTML</section>"
-                            className="w-full h-56 dash-scroll resize-y font-mono text-xs leading-relaxed bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] p-3 outline-none"
-                        />
-                        <div className="flex justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setEditing(false)}
-                                className="dash-hoverable rounded-full px-4 py-1.5 text-[13px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={apply}
-                                className="dash-hoverable rounded-full px-4 py-1.5 text-[13px] font-medium bg-[var(--dash-ink)] text-[var(--dash-canvas)] cursor-pointer active:scale-[0.97]"
-                            >
-                                Apply
-                            </button>
-                        </div>
+                        Empty HTML block. Use Edit HTML to add markup.
                     </div>
                 )}
             </div>

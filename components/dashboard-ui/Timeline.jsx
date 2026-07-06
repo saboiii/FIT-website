@@ -10,7 +10,7 @@ export default function Timeline({ items, composer, className = '' }) {
     return (
         <div className={className}>
             {composer}
-            <ol className="relative mt-2 pl-5 before:absolute before:left-[5px] before:top-1 before:bottom-1 before:w-px before:bg-[var(--dash-line)]">
+            <ol className="relative mt-2 pl-5">
                 {items.map((item, i) => {
                     const tone = item.tone || (i === 0 ? 'sun' : 'ink')
                     // Solid fills only — yellow borders are banned (§4.1) and
@@ -22,9 +22,17 @@ export default function Timeline({ items, composer, className = '' }) {
                     }[tone]
                     return (
                         <li key={item.id || i} className="relative pb-4 last:pb-0">
+                            {/* Per-item connector: runs dot-to-dot, so the line
+                                STOPS at the last dot instead of trailing past it. */}
+                            {i < items.length - 1 && (
+                                <span
+                                    aria-hidden="true"
+                                    className="absolute -left-[15px] top-4 bottom-0 w-px bg-[var(--dash-line)]"
+                                />
+                            )}
                             <span
                                 aria-hidden="true"
-                                className={`absolute -left-[26px] top-1 h-3 w-3 rounded-full ${dot}`}
+                                className={`absolute -left-[20.5px] top-1 h-3 w-3 rounded-full ${dot}`}
                             />
                             <div className="flex items-baseline justify-between gap-3">
                                 <p className={`text-[13px] ${i === 0 ? 'font-medium' : 'dash-soft'}`}>{item.title}</p>

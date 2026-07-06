@@ -158,10 +158,9 @@ function OrderSection() {
 
     // Message-seller CTA: only for catalogue products that still resolve, and
     // never when the buyer IS the creator. Custom prints are fulfilled by the
-    // store itself and have no per-order seller chat surface (the global
-    // "Chat with us" launcher is the store contact), so they get no CTA.
+    // Custom prints are creator products too, so the CTA shows whenever the
+    // product resolves to a creator who is not the viewer.
     const canMessageSeller = (d) => {
-        if (d.isCustomPrint) return false
         const creatorId = d.product?.creatorUserId ? String(d.product.creatorUserId) : null
         if (!creatorId) return false
         return !(viewerUserId && viewerUserId === creatorId)

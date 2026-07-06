@@ -352,9 +352,11 @@ function OrderPage({ orderId }) {
     // buyer IS the creator. Custom prints are fulfilled by the store itself and
     // have no per-order seller chat surface (the global "Chat with us" launcher
     // is the store contact), so they get no CTA.
+    // Custom prints are creator products too, so the CTA shows whenever the
+    // product resolves to a creator who is not the viewer.
     const creatorUserId = product?.creatorUserId ? String(product.creatorUserId) : null
     const canMessageSeller =
-        !isCustomPrint && Boolean(creatorUserId) && !(viewerUserId && viewerUserId === creatorUserId)
+        Boolean(creatorUserId) && !(viewerUserId && viewerUserId === creatorUserId)
 
     // The global ChatLauncher (app/layout.jsx) listens for this event. The
     // ?ids= product fetch carries creatorUserId but no display name, so fall

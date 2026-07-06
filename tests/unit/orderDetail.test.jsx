@@ -119,7 +119,12 @@ function stubFetch(order) {
     global.fetch = vi.fn((url) => {
         const u = String(url)
         if (u.startsWith('/api/user/orders?orderId=')) return okJson({ order, userDetails })
-        if (u.startsWith('/api/product')) return okJson({ products: [product] })
+        if (u.startsWith('/api/product')) {
+            // Mirror the real ids endpoint: pseudo ids (custom-print:...) never
+            // resolve to a product document.
+            if (u.includes('custom-print')) return okJson({ products: [] })
+            return okJson({ products: [product] })
+        }
         if (u.startsWith('/api/checkout/payment-method')) return okJson(paymentPayload)
         if (u.startsWith('/api/admin/settings'))
             return okJson({
@@ -321,7 +326,7 @@ describe('Message seller', () => {
         expect(screen.queryByRole('button', { name: 'Message seller' })).toBeNull()
     })
 
-    it('hides the CTA for custom print orders (the store is the global chat launcher)', async () => {
+    it('hides the CTA when the product id cannot resolve to a seller', async () => {
         stubFetch({
             ...baseOrder,
             cartItem: { ...baseOrder.cartItem, productId: 'custom-print:REQ-9', requestId: 'REQ-9' },

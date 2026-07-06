@@ -517,8 +517,8 @@ describe('Account hub', () => {
         try {
             render(<Account />)
             await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
-            // Only the two catalogue orders get the CTA; the custom print order
-            // has no seller chat surface (the store is the global launcher).
+            // The two catalogue orders get the CTA; the custom print order's
+            // pseudo product id never resolves, so its seller is unknown.
             const buttons = screen.getAllByRole('button', { name: 'Message seller' })
             expect(buttons.length).toBe(2)
             fireEvent.click(buttons[0])

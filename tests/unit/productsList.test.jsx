@@ -5,6 +5,11 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import MyProducts from '@/app/dashboard/products/page'
 
+// Entitlements: creator by default (gating cases override entitlementsState).
+const entitlementsState = { loading: false, canAccessDashboard: true, canUseMessaging: true }
+vi.mock('@/utils/useAccess', () => ({ default: () => ({ isAdmin: false, canAccess: true, loading: false }) }))
+vi.mock('@/utils/useEntitlements', () => ({ default: () => entitlementsState }))
+
 const push = vi.fn()
 vi.mock('next/navigation', () => ({
     useRouter: () => ({ push }),

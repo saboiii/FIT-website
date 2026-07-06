@@ -11,8 +11,17 @@ import {
     SkeletonRow,
     SkeletonTile,
 } from '@/components/dashboard-ui'
+import { CreatorGate } from '@/components/DashboardComponents/CreatorShell'
 
 export default function PayoutsPage() {
+    return (
+        <CreatorGate>
+            <PayoutsBody />
+        </CreatorGate>
+    )
+}
+
+function PayoutsBody() {
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3">

@@ -7,6 +7,10 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import Dashboard from '@/app/dashboard/Dashboard'
 import CreatorShell from '@/components/DashboardComponents/CreatorShell'
 
+// Entitlements: creator by default (gating cases override entitlementsState).
+const entitlementsState = { loading: false, canAccessDashboard: true, canUseMessaging: true }
+vi.mock('@/utils/useEntitlements', () => ({ default: () => entitlementsState }))
+
 // jsdom has no ResizeObserver (Recharts' ResponsiveContainer observes).
 global.ResizeObserver = global.ResizeObserver || class {
     observe() {}

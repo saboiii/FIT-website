@@ -38,7 +38,7 @@ export default function ShopImageCropModal({ src, aspect = 4, circular = false, 
         <Sheet open onClose={onCancel} label={title} widthClass="max-w-2xl">
             <div className="p-5 flex flex-col gap-3">
                 <h3 className="dash-section">{title}</h3>
-                <div className="max-h-[60vh] dash-scroll flex justify-center bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden">
+                <div className="max-h-[60vh] dash-scroll flex justify-center items-start bg-[var(--dash-card)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden">
                     <ReactCrop
                         crop={crop}
                         aspect={aspect}
@@ -47,7 +47,7 @@ export default function ShopImageCropModal({ src, aspect = 4, circular = false, 
                         onComplete={(px) => setCompleted(px)}
                     >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img ref={imgRef} src={src} alt="To crop" onLoad={onImageLoad} style={{ maxWidth: '100%' }} />
+                        <img ref={imgRef} src={src} alt="To crop" onLoad={onImageLoad} style={{ maxWidth: '100%', maxHeight: '58vh' }} />
                     </ReactCrop>
                 </div>
                 <div className="flex justify-end gap-2">

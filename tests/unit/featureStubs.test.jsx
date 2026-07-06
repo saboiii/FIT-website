@@ -15,6 +15,11 @@ import ReviewManagement from '@/components/Admin/ReviewManagement'
 import CreatorPayments from '@/components/Admin/CreatorPayments'
 import NewsletterManagement from '@/components/Admin/NewsletterManagement'
 
+// Entitlements: creator by default (gating cases override entitlementsState).
+const entitlementsState = { loading: false, canAccessDashboard: true, canUseMessaging: true }
+vi.mock('@/utils/useAccess', () => ({ default: () => ({ isAdmin: false, canAccess: true, loading: false }) }))
+vi.mock('@/utils/useEntitlements', () => ({ default: () => entitlementsState }))
+
 vi.mock('next/navigation', () => ({
     useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))

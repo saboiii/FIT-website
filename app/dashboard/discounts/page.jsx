@@ -6,8 +6,17 @@
 import { GoPlus } from 'react-icons/go'
 import { IoPricetagOutline } from 'react-icons/io5'
 import { ComingSoon, EmptyState } from '@/components/dashboard-ui'
+import { CreatorGate } from '@/components/DashboardComponents/CreatorShell'
 
 export default function DiscountsPage() {
+    return (
+        <CreatorGate>
+            <DiscountsBody />
+        </CreatorGate>
+    )
+}
+
+function DiscountsBody() {
     return (
         <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">

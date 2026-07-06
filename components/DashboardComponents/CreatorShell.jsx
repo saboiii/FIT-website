@@ -13,6 +13,8 @@ import { useUser } from '@clerk/nextjs'
 import { IoPencilOutline, IoStorefrontOutline } from 'react-icons/io5'
 import { DashProvider } from '@/components/dashboard-ui'
 import useAccess from '@/utils/useAccess'
+import useEntitlements from '@/utils/useEntitlements'
+import Fallback from '@/app/dashboard/Fallback'
 import NotificationsBell from './NotificationsBell'
 
 const ShopIdentityContext = createContext({ displayName: '', displayNameAvailable: false })
@@ -20,15 +22,31 @@ const ShopIdentityContext = createContext({ displayName: '', displayNameAvailabl
 /** Shop identity shared from the rail: `{ displayName, displayNameAvailable }`. */
 export const useShopIdentity = () => useContext(ShopIdentityContext)
 
+// creatorOnly links require a paid subscription (or admin) — the same
+// entitlement that unlocks the dashboard itself. Without it the rail shows
+// only Home (which renders the upgrade Fallback) and Account settings.
 export const NAV_LINKS = [
     { href: '/dashboard', label: 'Home', exact: true },
-    { href: '/dashboard/products', label: 'My products' },
-    { href: '/dashboard/shop', label: 'My shop', icon: IoStorefrontOutline },
-    { href: '/dashboard/messages', label: 'Messages' },
-    { href: '/dashboard/payouts', label: 'Payouts' },
-    { href: '/dashboard/discounts', label: 'Discounts' },
+    { href: '/dashboard/products', label: 'My products', creatorOnly: true },
+    { href: '/dashboard/shop', label: 'My shop', icon: IoStorefrontOutline, creatorOnly: true },
+    { href: '/dashboard/messages', label: 'Messages', creatorOnly: true },
+    { href: '/dashboard/payouts', label: 'Payouts', creatorOnly: true },
+    { href: '/dashboard/discounts', label: 'Discounts', creatorOnly: true },
     { href: '/account', label: 'Account settings', exact: true },
 ]
+
+/**
+ * Client-side gate for creator-only /dashboard subpages: while entitlements
+ * load nothing is revealed; without the creator entitlement the page renders
+ * the same upgrade Fallback the dashboard home uses. (APIs enforce the same
+ * rule server-side; this keeps the UI honest.)
+ */
+export function CreatorGate({ children }) {
+    const { loading, canAccessDashboard } = useEntitlements()
+    if (loading) return null
+    if (!canAccessDashboard) return <Fallback />
+    return children
+}
 
 const isActiveLink = (link, pathname) =>
     link.exact ? pathname === link.href : pathname === link.href || pathname.startsWith(`${link.href}/`)
@@ -36,6 +54,12 @@ const isActiveLink = (link, pathname) =>
 export default function CreatorShell({ children }) {
     const { user, isLoaded } = useUser()
     const { isAdmin } = useAccess()
+    const { loading: entitlementsLoading, canAccessDashboard } = useEntitlements()
+    // Creator-only links stay hidden while entitlements load, so a
+    // non-subscriber never sees them flash in.
+    const visibleLinks = NAV_LINKS.filter(
+        (link) => !link.creatorOnly || (!entitlementsLoading && canAccessDashboard),
+    )
     const pathname = usePathname() || ''
 
     // Shop display name (rail identity block). GET/PUT /api/user/display-name;
@@ -174,7 +198,7 @@ export default function CreatorShell({ children }) {
                         </div>
 
                         <nav aria-label="Creator dashboard" className="flex flex-row lg:flex-col flex-wrap gap-1 -mx-3 lg:mx-0">
-                            {NAV_LINKS.map((link) => {
+                            {visibleLinks.map((link) => {
                                 const active = isActiveLink(link, pathname)
                                 return (
                                     <Link

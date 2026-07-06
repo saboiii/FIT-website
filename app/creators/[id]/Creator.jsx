@@ -118,7 +118,7 @@ function Creator({ creator, products }) {
                         )}
                     </div>
 
-                    <div className="flex flex-col md:flex-row md:items-end gap-4 px-4 md:px-6 -mt-10">
+                    <div className="relative z-10 flex flex-col md:flex-row md:items-end gap-4 px-4 md:px-6 -mt-10">
                         <div
                             className="shrink-0 h-20 w-20 md:h-24 md:w-24 rounded-full border border-borderColor bg-background overflow-hidden flex items-center justify-center"
                             data-testid="shop-logo"

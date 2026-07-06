@@ -12,7 +12,7 @@ import { useUser } from '@clerk/nextjs'
 import { GoLinkExternal, GoPlus, GoX } from 'react-icons/go'
 import { IoImageOutline } from 'react-icons/io5'
 import { useToast } from '@/components/General/ToastProvider'
-import { useShopIdentity } from '@/components/DashboardComponents/CreatorShell'
+import { useShopIdentity, CreatorGate } from '@/components/DashboardComponents/CreatorShell'
 import ShopImageCropModal from '@/components/DashboardComponents/ShopImageCropModal'
 import { SkeletonRow } from '@/components/dashboard-ui'
 
@@ -51,7 +51,7 @@ function FieldRow({ label, help, children }) {
     )
 }
 
-export default function ShopEditor() {
+function ShopEditor() {
     const { user } = useUser()
     const { displayName } = useShopIdentity()
     const { showToast } = useToast()
@@ -287,7 +287,7 @@ export default function ShopEditor() {
                                 <img src={proxySrc(shop.bannerImage)} alt="Banner preview" className="absolute inset-0 h-full w-full object-cover" />
                             )}
                         </div>
-                        <div className="flex items-end gap-3 px-4 pb-3 -mt-6">
+                        <div className="relative z-10 flex items-end gap-3 px-4 pb-3 -mt-6">
                             <div className="h-12 w-12 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] overflow-hidden flex items-center justify-center shrink-0">
                                 {shop.logoImage ? (
                                     // eslint-disable-next-line @next/next/no-img-element
@@ -511,5 +511,13 @@ export default function ShopEditor() {
                 />
             )}
         </div>
+    )
+}
+
+export default function GatedShopEditor() {
+    return (
+        <CreatorGate>
+            <ShopEditor />
+        </CreatorGate>
     )
 }

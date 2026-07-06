@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@clerk/nextjs/server";
 import { connectToDatabase } from "@/lib/db";
 import User from "@/models/User";
+import { requireCreator } from "@/lib/requireCreator";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,6 +80,9 @@ export async function PUT(req) {
     try {
         const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (!(await requireCreator(userId))) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         const contentLength = Number(req.headers.get("content-length") || 0);
         if (contentLength > MAX_BODY_BYTES) {

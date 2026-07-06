@@ -5,6 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import ShopEditor from '@/app/dashboard/shop/page'
 
+// Entitlements: creator by default (gating cases override entitlementsState).
+const entitlementsState = { loading: false, canAccessDashboard: true, canUseMessaging: true }
+vi.mock('@/utils/useEntitlements', () => ({ default: () => entitlementsState }))
+
 const showToast = vi.fn()
 
 vi.mock('@clerk/nextjs', () => ({
@@ -15,6 +19,7 @@ vi.mock('@/components/General/ToastProvider', () => ({
 }))
 vi.mock('@/components/DashboardComponents/CreatorShell', () => ({
     useShopIdentity: () => ({ displayName: 'Ada Prints', displayNameAvailable: true }),
+    CreatorGate: ({ children }) => children,
 }))
 // react-image-crop pulls CSS; the crop flow is exercised manually, not here.
 vi.mock('@/components/DashboardComponents/ShopImageCropModal', () => ({

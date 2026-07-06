@@ -14,6 +14,11 @@ const state = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs/server', () => ({
     auth: vi.fn(async () => ({ userId: state.userId })),
 }))
+// Creator gate (admin or paid subscription): true by default, flipped in the
+// entitlement tests below.
+vi.mock('@/lib/requireCreator', () => ({
+    requireCreator: vi.fn(async () => state.isCreator !== false),
+}))
 vi.mock('@/lib/db', () => ({ connectToDatabase: vi.fn(async () => { }) }))
 vi.mock('@/models/User', () => ({
     default: {
@@ -40,11 +45,30 @@ const putRequest = (body, headers = {}) => {
 
 beforeEach(() => {
     state.userId = 'user_abc'
+    state.isCreator = true
     state.userDoc = null
     state.updatedDoc = null
     state.updateArgs = null
     state.s3Sends = []
     vi.clearAllMocks()
+})
+
+describe('creator entitlement gate', () => {
+    it('PUT returns 403 without admin or paid subscription', async () => {
+        state.isCreator = false
+        const { PUT } = await import('@/app/api/user/shop/route')
+        const res = await PUT(putRequest({ description: 'hi' }))
+        expect(res.status).toBe(403)
+    })
+
+    it('upload returns 403 without admin or paid subscription', async () => {
+        state.isCreator = false
+        const { POST } = await import('@/app/api/user/shop/upload/route')
+        const form = new FormData()
+        form.set('kind', 'logo')
+        const res = await POST(new Request('http://x/api/user/shop/upload', { method: 'POST', body: form }))
+        expect(res.status).toBe(403)
+    })
 })
 
 describe('GET /api/user/shop', () => {

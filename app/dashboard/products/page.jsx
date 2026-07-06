@@ -14,6 +14,7 @@ import { GoChevronDown, GoChevronUp, GoPlus } from 'react-icons/go'
 import { IoCopyOutline, IoStatsChartOutline, IoStorefrontOutline } from 'react-icons/io5'
 import { ActionIcon, ComingSoon, EmptyState, PeekPanel, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
 import { currencyPrefix, formatMoney } from '@/components/DashboardComponents/format'
+import { CreatorGate } from '@/components/DashboardComponents/CreatorShell'
 
 // Tailwind needs literal class strings (no runtime interpolation of variants).
 const HEAD_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_110px]'
@@ -295,4 +296,10 @@ function MyProducts() {
     )
 }
 
-export default MyProducts
+export default function GatedMyProducts() {
+    return (
+        <CreatorGate>
+            <MyProducts />
+        </CreatorGate>
+    )
+}

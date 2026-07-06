@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { requireCreator } from "@/lib/requireCreator";
 import { s3 } from "@/lib/s3";
 import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
@@ -20,6 +21,9 @@ export async function POST(req) {
     try {
         const { userId } = await auth();
         if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (!(await requireCreator(userId))) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
 
         const contentLength = Number(req.headers.get("content-length") || 0);
         if (contentLength > MAX_BODY_BYTES) {

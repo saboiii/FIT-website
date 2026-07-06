@@ -76,10 +76,41 @@ function HtmlBlockView({ node, selected }) {
 
 /**
  * THE one cursor-following hint pill (components/LinkToolTip.jsx behavior):
- * portaled to <body>, spring-follows the cursor, disappears the moment the
- * cursor leaves a block, on scroll, or when code view opens.
+ * portaled to <body>, spring-follows the cursor. It owns its OWN state via an
+ * imperative ref API so mousemove re-renders only this tiny component, never
+ * the editor tree (that was the lag). Clearing waits 140ms so crossing the
+ * gaps between blocks does not blink the pill; scroll or a real leave hides
+ * it for good.
  */
-function HtmlHintTip({ hint }) {
+function HtmlHintTip({ apiRef }) {
+    const [hint, setHint] = useState(null)
+    const hideTimer = useRef(null)
+
+    useEffect(() => {
+        apiRef.current = {
+            move: (x, y) => {
+                clearTimeout(hideTimer.current)
+                setHint({ x, y })
+            },
+            clear: (instant) => {
+                clearTimeout(hideTimer.current)
+                if (instant) setHint(null)
+                else hideTimer.current = setTimeout(() => setHint(null), 140)
+            },
+        }
+        return () => {
+            apiRef.current = null
+            clearTimeout(hideTimer.current)
+        }
+    }, [apiRef])
+
+    useEffect(() => {
+        if (!hint) return undefined
+        const clear = () => setHint(null)
+        window.addEventListener('scroll', clear, true)
+        return () => window.removeEventListener('scroll', clear, true)
+    }, [hint])
+
     if (typeof document === 'undefined') return null
     const clampX = (x) => Math.min(Math.max(8, x + 14), (window.innerWidth || 1200) - 380)
     const clampY = (y) => Math.min(y + 18, (window.innerHeight || 800) - 56)
@@ -353,20 +384,15 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
         )
     }, [editor])
 
-    // The ONE shared hover pill for HTML blocks (duplicates and stuck pills
-    // came from per-block tooltips). Cleared on leave, scroll, or mode switch.
-    const [hint, setHint] = useState(null)
-    const moveHint = useCallback((x, y) => setHint({ x, y }), [])
-    const clearHint = useCallback(() => setHint(null), [])
-    useEffect(() => {
-        if (!hint) return undefined
-        window.addEventListener('scroll', clearHint, true)
-        return () => window.removeEventListener('scroll', clearHint, true)
-    }, [hint, clearHint])
+    // The ONE shared hover pill for HTML blocks. State lives inside
+    // HtmlHintTip (imperative API): mousemove never re-renders the editor.
+    const hintApi = useRef(null)
+    const moveHint = useCallback((x, y) => hintApi.current?.move(x, y), [])
+    const clearHint = useCallback(() => hintApi.current?.clear(), [])
 
     const switchMode = useCallback(async (next) => {
         if (!editor || next === mode) return
-        setHint(null)
+        hintApi.current?.clear(true)
         if (next === 'code') {
             // The article's real HTML, built STRAIGHT from the doc JSON:
             // htmlBlock markup passes through verbatim (no serializer
@@ -602,7 +628,7 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <CropModal src={cropSrc} busy={uploading} onCancel={() => setCropSrc(null)} onConfirm={insertCropped} />
             )}
         </div>
-        <HtmlHintTip hint={mode === 'write' ? hint : null} />
+        <HtmlHintTip apiRef={hintApi} />
         </CodeModeContext.Provider>
     )
 }

@@ -1,37 +1,29 @@
 'use client'
 import Link from 'next/link'
 import Logo from '../Logo'
-import { SignOutButton, useUser, SignUpButton } from '@clerk/nextjs'
-import { useRouter } from 'next/navigation';
-import Image from 'next/image'
+import { useUser } from '@clerk/nextjs'
 import { FcMenu } from "react-icons/fc";
-import { PiSignIn, PiSignOut } from "react-icons/pi";
-import { GoChevronRight } from 'react-icons/go'
 import AccountDropdown from './AccountDropdown'
-import { useEffect, useState } from 'react'
+import MobileMenu from './MobileMenu'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname, useSearchParams } from 'next/navigation'
 import { HiOutlineShoppingCart } from 'react-icons/hi'
 import { IoChatbubblesOutline } from 'react-icons/io5'
-import { LuPlus } from 'react-icons/lu'
-import { SiPrintables } from "react-icons/si";
 import { BsBadge3D } from 'react-icons/bs'
 import { FaChevronRight } from 'react-icons/fa'
 import useEntitlements from '@/utils/useEntitlements';
 
 function Navbar() {
     const { user, isLoaded, isSignedIn } = useUser();
-    const router = useRouter();
-    const { loading: entitlementsLoading, canUseMessaging, canAccessDashboard } = useEntitlements();
+    const { loading: entitlementsLoading, canUseMessaging } = useEntitlements();
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [dropdownType, setDropdownType] = useState(null);
-    const [mobileDropdown, setMobileDropdown] = useState(null);
-    const [openShopCategory, setOpenShopCategory] = useState(null);
-    const [openPrintCategory, setOpenPrintCategory] = useState(null);
     const [shopCategories, setShopCategories] = useState([]);
     const [printCategories, setPrintCategories] = useState([]);
+    const mobileTriggerRef = useRef(null);
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const currentUrl = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : '');
@@ -42,11 +34,12 @@ function Navbar() {
         setIsOpen((prev) => !prev);
     }
 
-    // Auto-close mobile drawer on route change
+    // Auto-close mobile menu on route change (keyed on the string, not the
+    // params object, whose identity can change per render).
+    const searchKey = searchParams ? searchParams.toString() : '';
     useEffect(() => {
         setIsOpen(false);
-        setMobileDropdown(null);
-    }, [pathname, searchParams]);
+    }, [pathname, searchKey]);
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -221,205 +214,27 @@ function Navbar() {
             </div>
 
             <div className='flex fixed left-0 top-0 lg:hidden bg-background w-full h-16 border-b border-borderColor items-center justify-between px-8 z-50'>
-                <button onClick={handleMenu} className='cursor-pointer z-10'>
+                <button
+                    ref={mobileTriggerRef}
+                    type="button"
+                    onClick={handleMenu}
+                    aria-label="Open menu"
+                    aria-expanded={isOpen}
+                    className='cursor-pointer z-10'
+                >
                     <FcMenu size={20} />
                 </button>
-                <div className={`fixed flex flex-col top-0 left-0 w-[80vw] h-screen z-0 bg-background transition-transform duration-300 pt-16 ease-in-out border-r border-borderColor ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:hidden`}>
-                    <div className='flex flex-row mt-8 w-full items-center gap-6 px-8 min-w-0'>
-                        <div className="flex items-center justify-center rounded-full overflow-hidden w-12 h-12 min-w-12">
-                            <Link href="/account" className="block w-full h-full">
-                                <Image
-                                    src={user?.imageUrl || '/user.jpg'}
-                                    alt="User Avatar"
-                                    width={64}
-                                    height={64}
-                                    className="object-cover"
-                                    style={{ width: '100%', height: '100%', borderRadius: '50%' }}
-                                />
-                            </Link>
-                        </div>
-                        <div className='flex flex-col w-full items-start'>
-                            <div className='flex w-full text-lg font-semibold overflow-hidden'>
-                                {!isLoaded
-                                    ? (<div className='block h-6 animate-pulse bg-lightColor' />)
-                                    : user
-                                        ? user.firstName || user.emailAddresses[0]?.emailAddress
-                                        : 'Guest'}
-                            </div>
-                            {isSignedIn && isLoaded && user ? (
-                                <div className='flex flex-row items-center gap-1 cursor-pointer w-full'>
-                                    <PiSignOut />
-                                    <SignOutButton redirectUrl="/">
-                                        Log Out
-                                    </SignOutButton>
-                                </div>
-                            ) : (
-                                <div className='flex flex-row items-center gap-1 cursor-pointer w-full'>
-                                    <PiSignIn />
-                                    <SignUpButton>
-                                        Sign Up
-                                    </SignUpButton>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className='flex w-full h-0 border-t border-borderColor mt-8' />
-                    <div className='flex flex-col w-full h-full pt-8 pb-24 px-8 justify-between'>
-                        <ul className='flex w-full gap-4 flex-col items-start font-normal'>
-
-                            <li className='w-full flex flex-col'>
-                                <button
-                                    className='flex navSidebarLink w-full justify-between items-center'
-                                    onClick={() => setMobileDropdown(mobileDropdown === 'shop' ? null : 'shop')}
-                                >
-                                    Shop
-                                    <GoChevronRight size={16} className={mobileDropdown === 'shop' ? 'rotate-90 transition' : 'transition'} />
-                                </button>
-                                <AnimatePresence>
-                                    {mobileDropdown === 'shop' && (
-                                        <motion.div
-                                            initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: "auto", opacity: 1 }}
-                                            exit={{ height: 0, opacity: 0 }}
-                                            transition={{ duration: 0.3, ease: "easeInOut" }}
-                                            className="pl-2 pr-4 pt-4 max-h-[60vh] overflow-y-auto w-full"
-                                        >
-                                            {shopCategories.map((category, catIdx) => (
-                                                <div key={category.name} className="mb-2 w-full">
-                                                    <button
-                                                        className="font-medium uppercase text-xs  justify-between text-lightColor mb-1 w-full text-left py-2 flex-row flex items-center"
-                                                        onClick={() =>
-                                                            setOpenShopCategory(openShopCategory === category.name ? null : category.name)
-                                                        }
-                                                    >
-                                                        {category.displayName}
-                                                        <LuPlus
-                                                            className={`flex ml-2 transition-transform ${openShopCategory === category.name ? 'rotate-45' : ''}`}
-                                                        />
-                                                    </button>
-                                                    <AnimatePresence>
-                                                        {openShopCategory === category.name && (
-                                                            <motion.ul
-                                                                initial={{ height: 0, opacity: 0 }}
-                                                                animate={{ height: "auto", opacity: 1 }}
-                                                                exit={{ height: 0, opacity: 0 }}
-                                                                transition={{ duration: 0.3, ease: "easeInOut" }}
-                                                                className="pl-2"
-                                                            >
-                                                                {(category.subcategories || [])
-                                                                    .filter(sub => sub.isActive)
-                                                                    .map(subcategory => (
-                                                                        <li key={subcategory.name}>
-                                                                            <Link
-                                                                                href={`/shop?productType=shop&productCategory=${encodeURIComponent(category.displayName)}&productSubCategory=${encodeURIComponent(subcategory.displayName)}`}
-                                                                                className="text-lightColor text-xs py-1 block"
-                                                                            >
-                                                                                {subcategory.displayName}
-                                                                            </Link>
-                                                                        </li>
-                                                                    ))}
-                                                            </motion.ul>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </li>
-                            <div className='flex w-full h-0 border-t border-borderColor my-1' />
-
-                            <li className='flex w-full flex-col'>
-                                <button
-                                    className='flex navSidebarLink w-full justify-between items-center'
-                                    onClick={() => setMobileDropdown(mobileDropdown === 'prints' ? null : 'prints')}
-                                >
-                                    Prints
-                                    <GoChevronRight size={16} className={mobileDropdown === 'prints' ? 'rotate-90 transition' : 'transition'} />
-                                </button>
-                                <AnimatePresence>
-                                    {mobileDropdown === 'prints' && (
-                                        <motion.div
-                                            initial={{ height: 0, opacity: 0 }}
-                                            animate={{ height: "auto", opacity: 1 }}
-                                            exit={{ height: 0, opacity: 0 }}
-                                            transition={{ duration: 0.3, ease: "easeInOut" }}
-                                            className="pl-2 pr-4 pt-4 max-h-[60vh] overflow-y-auto w-full"
-                                        >
-                                            {printCategories.map((category, catIdx) => (
-                                                <div key={category.name} className="mb-2 w-full">
-                                                    <button
-                                                        className="font-medium uppercase text-xs  justify-between text-lightColor mb-1 w-full text-left py-2 flex-row flex items-center"
-                                                        onClick={() =>
-                                                            setOpenPrintCategory(openPrintCategory === category.name ? null : category.name)
-                                                        }
-                                                    >
-                                                        {category.displayName}
-                                                        <LuPlus
-                                                            className={`flex ml-2 transition-transform ${openPrintCategory === category.name ? 'rotate-45' : ''}`}
-                                                        />
-                                                    </button>
-                                                    <AnimatePresence>
-                                                        {openPrintCategory === category.name && (
-                                                            <motion.ul
-                                                                initial={{ height: 0, opacity: 0 }}
-                                                                animate={{ height: "auto", opacity: 1 }}
-                                                                exit={{ height: 0, opacity: 0 }}
-                                                                transition={{ duration: 0.3, ease: "easeInOut" }}
-                                                                className="pl-2"
-                                                            >
-                                                                {(category.subcategories || [])
-                                                                    .filter(sub => sub.isActive)
-                                                                    .map(subcategory => (
-                                                                        <li key={subcategory.name}>
-                                                                            <Link
-                                                                                href={`/prints?productType=prints&productCategory=${encodeURIComponent(category.displayName)}&productSubCategory=${encodeURIComponent(subcategory.displayName)}`}
-                                                                                className="text-lightColor text-xs py-1 block"
-                                                                            >
-                                                                                {subcategory.displayName}
-                                                                            </Link>
-                                                                        </li>
-                                                                    ))}
-                                                            </motion.ul>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </li>
-
-                            <div className='flex w-full h-0 border-t border-borderColor my-1' />
-
-                            <li><Link href='/creators' className='flex navSidebarLink'>Creators</Link></li>
-                            <div className='flex w-full h-0 border-t border-borderColor my-1' />
-                            <li><Link href='/about' className='flex navSidebarLink'>About</Link></li>
-                            <div className='flex w-full h-0 border-t border-borderColor my-1' />
-                            {isSignedIn && isLoaded && user && (
-                                <>
-                                    <li><Link href='/cart' className='flex navSidebarLink'>Cart</Link></li>
-                                    <div className='flex w-full h-0 border-t border-borderColor my-1' />
-                                    {canUseMessaging && !entitlementsLoading && (
-                                        <>
-                                            <li><Link href='/dashboard/messages' className='flex navSidebarLink'>Messages</Link></li>
-                                            <div className='flex w-full h-0 border-t border-borderColor my-1' />
-                                        </>
-                                    )}
-                                    <li><Link href='/account' className='flex navSidebarLink'>Account</Link></li>
-                                    <div className='flex w-full h-0 border-t border-borderColor my-1' />
-                                </>
-                            )}
-                        </ul>
-                        {canAccessDashboard && !entitlementsLoading && (
-                            <Link href='/dashboard' className='flex flex-row justify-between items-center bg-textColor py-3 rounded-lg text-sm font-semibold px-4 text-background w-full '>
-                                Dashboard
-                                <GoChevronRight size={16} />
-                            </Link>
-                        )}
-                    </div>
-
-                </div>
+                <Link href='/' aria-label="Home" className='text-textColor hover:opacity-80 transition-opacity duration-300 ease-in-out'>
+                    <Logo width={26} height={26} />
+                </Link>
+                <MobileMenu
+                    open={isOpen}
+                    onClose={() => setIsOpen(false)}
+                    triggerRef={mobileTriggerRef}
+                    shopCategories={shopCategories}
+                    printCategories={printCategories}
+                    unreadMessages={unreadMessages}
+                />
             </div >
 
 

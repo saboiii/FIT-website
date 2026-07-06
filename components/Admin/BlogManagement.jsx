@@ -1,10 +1,8 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from 'react'
-import dynamic from 'next/dynamic'
 import { motion } from 'framer-motion'
 import TiptapEditor from '@/components/Admin/BlogEditor/TiptapEditor'
 import MetaRail from '@/components/Admin/BlogEditor/MetaRail'
-import { buildHtmlBlockDoc } from '@/lib/blog/htmlBlock'
 import { useToast } from '@/components/General/ToastProvider'
 import { toDatetimeLocal } from '@/utils/datetimeLocal'
 import { settle } from '@/lib/motion/tokens'
@@ -22,7 +20,6 @@ import {
     IoOptionsOutline, IoRefreshOutline, IoOpenOutline, IoNewspaperOutline,
 } from 'react-icons/io5'
 
-const MDEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false })
 
 function slugify(s) {
     return s
@@ -80,7 +77,7 @@ function postToForm(post) {
         excerpt: post.excerpt || '',
         content: post.content || '',
         contentJson: post.contentJson || null,
-        contentFormat: post.contentFormat === 'tiptap' ? 'tiptap' : 'markdown',
+        contentFormat: 'tiptap', // the API normalizes every post to TipTap on read and write
         heroImage: post.heroImage || '',
         cta: post.cta || { tag: '', text: '', url: '' },
         metaTitle: post.metaTitle || '',
@@ -129,7 +126,7 @@ function UndoRedo({ editor }) {
     )
 }
 
-// Quiet informational strip (restore banner, legacy-markdown note — §5.12).
+// Quiet informational strip (autosave-restore banner — §5.12).
 function InfoStrip({ children, actions }) {
     return (
         <div className="flex items-center justify-between gap-3 border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-2.5">
@@ -397,19 +394,6 @@ export default function BlogManagement() {
     }
 
     const previewUrl = form.slug ? `/blog/${encodeURIComponent(form.slug)}?previewKey=${previewKey}` : null
-    const isTiptap = form.contentFormat === 'tiptap'
-    // Imported legacy posts are flagged 'markdown' but hold raw HTML — those
-    // convert losslessly into one editable HTML block (blueprint: no breakage).
-    const legacyIsHtml = String(form.content || '').trimStart().startsWith('<')
-
-    const convertToModernEditor = () => {
-        updateForm({
-            contentFormat: 'tiptap',
-            contentJson: buildHtmlBlockDoc(String(form.content || '')),
-        })
-        setRestoreNonce((n) => n + 1) // remount the editor onto the converted doc
-        showToast('Converted. Review the post, then save to keep it', 'success')
-    }
 
     // Server-side filtering: `posts` is already the current page of the
     // current filter; `counts` covers every post regardless of page.
@@ -590,7 +574,7 @@ export default function BlogManagement() {
                         Autosaved {new Date(autosavedAt).toLocaleTimeString()}
                     </span>
                 )}
-                <UndoRedo editor={isTiptap ? editorInst : null} />
+                <UndoRedo editor={editorInst} />
                 <button
                     type="button"
                     onClick={() => {
@@ -648,26 +632,6 @@ export default function BlogManagement() {
                                 An unsaved autosave from {new Date(restorableDraft.updatedAt).toLocaleString()} exists.
                             </InfoStrip>
                         )}
-                        {!isTiptap && (
-                            <InfoStrip
-                                actions={
-                                    legacyIsHtml ? (
-                                        <button
-                                            type="button"
-                                            onClick={convertToModernEditor}
-                                            className="text-[13px] font-medium text-[var(--dash-ink)] hover:underline cursor-pointer whitespace-nowrap"
-                                        >
-                                            Switch to the modern editor
-                                        </button>
-                                    ) : null
-                                }
-                            >
-                                {legacyIsHtml
-                                    ? 'Legacy post with raw HTML content. Switching keeps the HTML byte-for-byte inside an editable HTML block; nothing changes until you save.'
-                                    : 'Legacy markdown post. New posts use the rich editor.'}
-                            </InfoStrip>
-                        )}
-
                         <input
                             aria-label="Title"
                             placeholder="Untitled post"
@@ -679,18 +643,12 @@ export default function BlogManagement() {
                             className="w-full bg-transparent border-0 outline-none text-[36px] leading-tight font-semibold tracking-[-0.02em]"
                         />
 
-                        {isTiptap ? (
-                            <TiptapEditor
-                                key={`${form._id || 'new'}:${restoreNonce}`}
-                                value={form.contentJson}
-                                onChange={(json) => updateForm({ contentJson: json })}
-                                onEditor={setEditorInst}
-                            />
-                        ) : (
-                            <div data-color-mode="light">
-                                <MDEditor value={form.content} onChange={(v) => updateForm({ content: v })} height={400} />
-                            </div>
-                        )}
+                        <TiptapEditor
+                            key={`${form._id || 'new'}:${restoreNonce}`}
+                            value={form.contentJson}
+                            onChange={(json) => updateForm({ contentJson: json })}
+                            onEditor={setEditorInst}
+                        />
                     </div>
                 </div>
             </div>

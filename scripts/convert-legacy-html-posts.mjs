@@ -1,8 +1,8 @@
-// Convert imported legacy posts (contentFormat 'markdown' whose `content` is
-// actually raw HTML) onto the modern TipTap format: contentJson becomes one
-// htmlBlock node holding the HTML byte-for-byte. The original `content`
-// string is left untouched as a backup, so the change is reversible by
-// setting contentFormat back to 'markdown'.
+// Convert every legacy post (contentFormat other than 'tiptap') onto the
+// modern TipTap format: raw-HTML content becomes one byte-preserving
+// htmlBlock node; markdown content becomes real TipTap nodes (via
+// lib/blog/normalizeContent). The original `content` string is left
+// untouched as a backup, so the change is reversible.
 //
 // Usage:
 //   node scripts/convert-legacy-html-posts.mjs           # dry run (default)
@@ -12,7 +12,7 @@
 
 import { readFileSync } from 'node:fs'
 import mongoose from 'mongoose'
-import { buildHtmlBlockDoc } from '../lib/blog/htmlBlock.js'
+import { normalizeToTiptap } from '../lib/blog/normalizeContent.js'
 
 const apply = process.argv.includes('--apply')
 
@@ -31,24 +31,26 @@ const col = conn.connection.db.collection('blogposts')
 
 const candidates = await col
     .find(
-        { contentFormat: { $ne: 'tiptap' }, content: { $regex: /^\s*</ } },
-        { projection: { title: 1, slug: 1, content: 1 } },
+        { contentFormat: { $ne: 'tiptap' } },
+        { projection: { title: 1, slug: 1, content: 1, contentFormat: 1 } },
     )
     .toArray()
 
-console.log(`${candidates.length} legacy post(s) with raw HTML content${apply ? '' : ' (dry run, pass --apply to write)'}`)
+console.log(`${candidates.length} legacy post(s)${apply ? '' : ' (dry run, pass --apply to write)'}`)
 
 let converted = 0
 for (const post of candidates) {
     const size = Buffer.byteLength(post.content || '', 'utf8')
-    console.log(`- ${post.slug} | ${String(post.title).slice(0, 60)} | ${(size / 1024).toFixed(0)}KB`)
+    const kind = String(post.content || '').trimStart().startsWith('<') ? 'html' : 'markdown'
+    console.log(`- ${post.slug} | ${kind} | ${String(post.title).slice(0, 60)} | ${(size / 1024).toFixed(0)}KB`)
     if (!apply) continue
+    const normalized = normalizeToTiptap(post)
     await col.updateOne(
         { _id: post._id },
         {
             $set: {
                 contentFormat: 'tiptap',
-                contentJson: buildHtmlBlockDoc(post.content || ''),
+                contentJson: normalized.contentJson,
                 // `content` intentionally untouched: reversible backup.
             },
         },

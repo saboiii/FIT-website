@@ -12,7 +12,7 @@ vi.mock('next/dynamic', () => ({ default: () => () => <div>md-editor</div> }))
 // Full posts live behind `?slug=`; the list API only ever ships lean cards
 // (no content/contentJson).
 const fullPosts = [
-  { _id: '1', title: 'Live post', slug: 'live', status: 'published', published: true, updatedAt: '2026-01-02', tags: [], categories: [], contentFormat: 'markdown', content: '# body' },
+  { _id: '1', title: 'Live post', slug: 'live', status: 'published', published: true, updatedAt: '2026-01-02', tags: [], categories: [], contentFormat: 'tiptap', contentJson: { type: 'doc', content: [] }, content: '' },
   { _id: '2', title: 'WIP post', slug: 'wip', status: 'draft', published: false, updatedAt: '2026-01-02', tags: [], categories: [], contentFormat: 'tiptap', contentJson: { type: 'doc', content: [] } },
 ]
 const lean = ({ content, contentJson, ...card }) => card

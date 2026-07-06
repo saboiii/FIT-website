@@ -7,6 +7,7 @@ import { checkAdminPrivileges } from "@/lib/checkPrivileges";
 import { readingTimeMinutes } from '@/lib/blog/readingTime';
 import { extractTextFromTiptap } from '@/lib/blog/tiptapText';
 import { statusWrite, effectiveStatus, statusQuery } from '@/lib/blog/status';
+import { normalizeToTiptap } from '@/lib/blog/normalizeContent';
 import { getPostHogClient } from '@/lib/posthog-server';
 
 export const runtime = 'nodejs';
@@ -34,12 +35,17 @@ export async function POST(req) {
 
     const requestedStatus = body.status || (body.published ? 'published' : 'draft');
 
+    // The legacy 'markdown' format is retired: whatever shape arrives (tiptap
+    // JSON, raw HTML, or markdown, e.g. from the import pipeline), it is
+    // normalized to TipTap on write. The raw source stays in `content`.
+    const normalized = normalizeToTiptap(body);
+
     const data = {
         title: body.title,
         excerpt: body.excerpt || '',
         content: body.content || '',
-        contentJson: body.contentJson ?? null,
-        contentFormat: body.contentFormat === 'tiptap' ? 'tiptap' : 'markdown',
+        contentJson: normalized.contentJson,
+        contentFormat: 'tiptap',
         heroImage: body.heroImage || '',
         cta: body.cta || {},
         tags: body.tags || [],
@@ -48,7 +54,7 @@ export async function POST(req) {
         scheduledFor: body.scheduledFor ? new Date(body.scheduledFor) : null,
         metaTitle: body.metaTitle || '',
         metaDescription: body.metaDescription || '',
-        readingTimeMinutes: computeReadingTime(body),
+        readingTimeMinutes: computeReadingTime({ ...body, contentFormat: 'tiptap', contentJson: normalized.contentJson }),
     };
 
     // make slug from provided slug or title
@@ -127,6 +133,14 @@ export async function GET(req) {
         const post = await BlogPost.findOne({ slug }).lean();
         if (!post) return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 });
         post.status = effectiveStatus(post);
+        // Read-side safety net: the editor only speaks TipTap. Any doc that
+        // slipped in as legacy (older imports) is normalized in the response;
+        // the next save persists the normalized form.
+        if (post.contentFormat !== 'tiptap' || !post.contentJson) {
+            const normalized = normalizeToTiptap(post);
+            post.contentFormat = 'tiptap';
+            post.contentJson = normalized.contentJson;
+        }
         return NextResponse.json({ ok: true, post });
     }
 

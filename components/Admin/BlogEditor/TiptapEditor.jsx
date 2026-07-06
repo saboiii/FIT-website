@@ -131,7 +131,7 @@ function HtmlHintTip({ apiRef }) {
                     <button
                         type="button"
                         tabIndex={-1}
-                        className="dash-hoverable rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
+                        className="dash-hoverable rounded-full bg-black text-white px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
                     >
                         Open code view
                     </button>

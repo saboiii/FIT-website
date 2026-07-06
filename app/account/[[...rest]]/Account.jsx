@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react'
 import { useUser, useSession } from '@clerk/nextjs'
 import { useSearchParams } from 'next/navigation'
 import AccountShell, { ACCOUNT_SECTIONS } from '@/components/Account/AccountShell'
+import AccountIdentityHero from '@/components/Account/AccountIdentityHero'
 import AccountOverview from '@/components/Account/AccountOverview'
 import ContactSection from '@/components/Account/ContactSection'
 import OrderSection from '@/components/Account/OrderSection'
@@ -61,17 +62,9 @@ function Account() {
         }
     }
 
-    const header = (
-        <div>
-            <p className="dash-label">Your account</p>
-            <h1 className="dash-display mt-1">
-                Hello, <strong>{(isLoaded && user?.firstName) || 'there'}.</strong>
-            </h1>
-            <p className="dash-data dash-soft mt-2">
-                Profile, security, orders, downloads and your plan in one place.
-            </p>
-        </div>
-    )
+    // Calm identity band: avatar (with the Clerk photo-change affordance),
+    // name at display scale, member-since and the plan chip. No boxy card.
+    const header = <AccountIdentityHero user={user} isLoaded={isLoaded} />
 
     return (
         <AccountShell active={tab} onSelect={selectTab} header={header}>

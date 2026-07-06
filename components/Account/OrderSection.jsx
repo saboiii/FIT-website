@@ -397,6 +397,16 @@ function OrderSection() {
                                 Track custom print
                             </Link>
                         )}
+
+                        {/* Delivered shop orders get a one-tap route back to the product. */}
+                        {peek.order.status === 'delivered' && peek.product?.slug && (
+                            <Link
+                                href={`/products/${peek.product.slug}`}
+                                className="dash-hoverable inline-flex w-fit items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                            >
+                                Order again
+                            </Link>
+                        )}
                     </div>
                 )}
             </PeekPanel>

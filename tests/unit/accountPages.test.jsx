@@ -1,15 +1,20 @@
-// RTL smokes for the redesigned customer account area ("Sunlit Paper"):
-// the hub rail renders every section + service destination, ?tab= deep links
-// land on the right section (other pages link ?tab=billing / ?tab=downloads),
-// every legacy capability stays reachable, the orders ledger groups by day
-// with a peek + detail-page link, the prints view shows status/quote/progress,
-// and no rendered copy contains an em dash or middot (blueprint §10.1).
+// RTL smokes for the redesigned customer account area ("Sunlit Paper" +
+// Apple-esque inline-edit restyle): the hub rail renders every section +
+// service destination, the identity hero carries name/member-since/plan chip,
+// ?tab= deep links land on the right section (other pages link ?tab=billing /
+// ?tab=downloads), every legacy capability stays reachable through the new
+// inline-edit rows (edit morphs the row in place and saves through the same
+// endpoints), the completeness ring derives its percentage from existing
+// data, the navbar account dropdown opens a keyboard-accessible menu with
+// every destination, and no rendered copy contains an em dash or middot
+// (blueprint §10.1).
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, within, waitFor } from '@testing-library/react'
 import dayjs from 'dayjs'
 import Account from '@/app/account/[[...rest]]/Account'
 import AccountPrintRequestsPage from '@/app/account/prints/page'
 import OrderPage from '@/app/account/orders/[orderId]/OrderPage'
+import AccountDropdown from '@/components/General/AccountDropdown'
 
 // jsdom has no ResizeObserver (ViewTabs observes its scroll strip).
 global.ResizeObserver =
@@ -27,6 +32,7 @@ vi.mock('@clerk/nextjs', () => ({
     useUser: () => ({ user: mockUser, isLoaded: true }),
     useSession: () => ({ session: { id: 'sess_current' } }),
     useClerk: () => ({ signOut: vi.fn() }),
+    SignOutButton: ({ children }) => children || <button>Sign out</button>,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -48,6 +54,16 @@ vi.mock('@/components/General/ToastProvider', () => ({
 let mockSubscription = { subscription: null, loading: false, error: null }
 vi.mock('@/utils/UserSubscriptionContext', () => ({
     useUserSubscription: () => mockSubscription,
+}))
+
+let mockEntitlements
+vi.mock('@/utils/useEntitlements', () => ({
+    default: () => mockEntitlements,
+}))
+
+let mockIsAdmin = false
+vi.mock('@/utils/useAccess', () => ({
+    default: () => ({ loading: false, canAccess: true, isAdmin: mockIsAdmin }),
 }))
 
 vi.mock('@/utils/useOrderStatuses', () => ({
@@ -164,6 +180,7 @@ function stubFetch() {
                     country: 'Singapore',
                 },
             })
+        if (u.startsWith('/api/user/sessions')) return okJson({})
         if (u.startsWith('/api/account/custom-print')) return okJson({ requests: printRequests })
         if (u.startsWith('/api/admin/settings'))
             return okJson({
@@ -178,7 +195,17 @@ function stubFetch() {
 
 beforeEach(() => {
     mockTabParam = null
+    mockIsAdmin = false
     mockSubscription = { subscription: null, loading: false, error: null }
+    mockEntitlements = {
+        loading: false,
+        canAccessDashboard: true,
+        canUseMessaging: true,
+        isPaidTier: false,
+        isAdmin: false,
+        tier: 'free',
+        subscription: null,
+    }
     mockUser = {
         id: 'user_1',
         firstName: 'Saba',
@@ -187,8 +214,14 @@ beforeEach(() => {
         hasImage: true,
         passwordEnabled: true,
         imageUrl: '',
+        createdAt: '2025-01-15T00:00:00Z',
         primaryEmailAddress: { emailAddress: 'saba@example.com' },
         externalAccounts: [{ provider: 'google', emailAddress: 'saba@gmail.com' }],
+        update: vi.fn(async () => {}),
+        reload: vi.fn(async () => {}),
+        createEmailAddress: vi.fn(async () => {}),
+        updatePassword: vi.fn(async () => {}),
+        setProfileImage: vi.fn(async () => {}),
         getSessions: async () => [
             {
                 id: 'sess_current',
@@ -215,7 +248,7 @@ afterEach(() => {
 const NO_EM_DASH_OR_MIDDOT = /[—·]/
 
 describe('Account hub', () => {
-    it('renders every section tab and service destination in the rail', () => {
+    it('renders every section tab and service destination in the rail, under the identity hero', () => {
         render(<Account />)
         const nav = screen.getByRole('navigation', { name: 'Account' })
         ;['Overview', 'Profile', 'Security', 'Orders', 'Billing', 'Downloads'].forEach((label) => {
@@ -229,11 +262,14 @@ describe('Account hub', () => {
             'href',
             '/account/subscription',
         )
-        // The greeting header is present.
-        expect(screen.getByText('Saba.')).toBeInTheDocument()
+        // Identity hero: name, member-since, plan chip, photo-change affordance.
+        expect(screen.getByText('Saba M')).toBeInTheDocument()
+        expect(screen.getByText(/Member since January 2025/)).toBeInTheDocument()
+        expect(screen.getByText('Free plan')).toBeInTheDocument()
+        expect(screen.getByLabelText('Change profile photo')).toBeInTheDocument()
     })
 
-    it('lands on the overview by default with latest order, subscription and completeness hints', async () => {
+    it('lands on the overview by default with latest order, subscription and completeness ring', async () => {
         render(<Account />)
         expect(await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)).toBeInTheDocument()
         expect(screen.getByRole('link', { name: 'View order' })).toHaveAttribute(
@@ -248,6 +284,16 @@ describe('Account hub', () => {
         )
     })
 
+    it('completeness ring derives its percentage from existing data and jump-links to sections', async () => {
+        mockUser.passwordEnabled = false // 5 of 6 items done
+        render(<Account />)
+        expect(await screen.findByText('83%')).toBeInTheDocument()
+        expect(screen.getByRole('img', { name: 'Profile 83% complete' })).toBeInTheDocument()
+        // Missing item is a jump link to its section.
+        fireEvent.click(screen.getByRole('button', { name: 'Password' }))
+        expect(await screen.findByRole('button', { name: 'Delete account' })).toBeInTheDocument()
+    })
+
     it('?tab=downloads deep link lands on the downloads section (product pages link here)', async () => {
         mockTabParam = 'downloads'
         render(<Account />)
@@ -258,29 +304,68 @@ describe('Account hub', () => {
         expect(screen.getByRole('link', { name: 'Benchy' })).toHaveAttribute('href', '/products/benchy')
     })
 
-    it('?tab=billing deep link lands on the contact section with view + edit (the cart links here)', async () => {
+    it('?tab=billing deep link lands on the contact rows with view values + per-row edit (the cart links here)', async () => {
         mockTabParam = 'billing'
         render(<Account />)
         expect(await screen.findByText('Billing & contact')).toBeInTheDocument()
         expect(await screen.findByText('+65 81234567')).toBeInTheDocument()
         expect(screen.getByText(/1 Maker Way/)).toBeInTheDocument()
-        // Edit mode exposes every address field.
-        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
-        ;['Street', 'Unit number', 'City', 'State', 'Postal code', 'Country', 'Code', 'Number'].forEach(
-            (label) => expect(screen.getByText(label)).toBeInTheDocument(),
+        // The address shows as a formatted block with a copy affordance.
+        expect(screen.getByRole('button', { name: 'Copy address' })).toBeInTheDocument()
+        // The phone row morphs in place into its inputs.
+        fireEvent.click(screen.getByRole('button', { name: 'Edit phone' }))
+        ;['Code', 'Number'].forEach((label) => expect(screen.getByText(label)).toBeInTheDocument())
+        // The address row exposes every address field.
+        fireEvent.click(screen.getByRole('button', { name: 'Edit billing address' }))
+        ;['Street', 'Unit number', 'City', 'State', 'Postal code', 'Country'].forEach((label) =>
+            expect(screen.getByText(label)).toBeInTheDocument(),
         )
     })
 
-    it('profile section keeps name/email editing and connected accounts', async () => {
+    it('profile section keeps name/email editing (inline rows) and connected accounts', async () => {
         mockTabParam = 'profile'
         render(<Account />)
-        expect(await screen.findByText('Saba M')).toBeInTheDocument()
+        // Name appears in the hero and as the Name row value.
+        expect((await screen.findAllByText('Saba M')).length).toBeGreaterThanOrEqual(2)
         expect(screen.getByText('saba@example.com')).toBeInTheDocument()
         expect(await screen.findByText('saba@gmail.com')).toBeInTheDocument()
         expect(screen.getByText('Connected accounts')).toBeInTheDocument()
-        fireEvent.click(screen.getByRole('button', { name: /Edit/ }))
+        expect(screen.getByText('Upload new photo')).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: 'Edit name' }))
         expect(screen.getByLabelText('First name')).toHaveValue('Saba')
+        fireEvent.click(screen.getByRole('button', { name: 'Edit email' }))
         expect(screen.getByLabelText('Email address')).toHaveValue('saba@example.com')
+    })
+
+    it('inline name edit morphs the row and saves through the same Clerk call', async () => {
+        mockTabParam = 'profile'
+        render(<Account />)
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit name' }))
+        const first = screen.getByLabelText('First name')
+        fireEvent.change(first, { target: { value: 'Sara' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+        await waitFor(() =>
+            expect(mockUser.update).toHaveBeenCalledWith({ firstName: 'Sara', lastName: 'M' }),
+        )
+        // The row settles back into view mode.
+        await waitFor(() =>
+            expect(screen.queryByLabelText('First name')).not.toBeInTheDocument(),
+        )
+    })
+
+    it('inline phone edit saves through the same contact endpoint', async () => {
+        mockTabParam = 'billing'
+        render(<Account />)
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit phone' }))
+        fireEvent.change(screen.getByLabelText('Number'), { target: { value: '99998888' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+        await waitFor(() => {
+            const call = global.fetch.mock.calls.find(
+                ([url, opts]) => String(url) === '/api/user/contact/phone' && opts?.method === 'POST',
+            )
+            expect(call).toBeTruthy()
+            expect(JSON.parse(call[1].body).phone.number).toBe('99998888')
+        })
     })
 
     it('security section keeps password edit, device sign-out and delete via ConfirmDialog', async () => {
@@ -290,10 +375,40 @@ describe('Account hub', () => {
         expect(await screen.findByText('Macintosh')).toBeInTheDocument()
         expect(screen.getByText('This device')).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Sign out of device' })).toBeInTheDocument()
+        // The password row morphs in place into its inputs.
+        fireEvent.click(screen.getByRole('button', { name: 'Edit password' }))
+        expect(screen.getByPlaceholderText('New password')).toBeInTheDocument()
+        expect(screen.getByPlaceholderText('Confirm password')).toBeInTheDocument()
         // Delete goes through a ConfirmDialog, never window.confirm.
         fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
         expect(await screen.findByText('Delete your account?')).toBeInTheDocument()
         expect(screen.getByRole('dialog')).toBeInTheDocument()
+    })
+
+    it('sign out other devices loops the existing per-device revoke', async () => {
+        mockTabParam = 'security'
+        mockUser.getSessions = async () => [
+            {
+                id: 'sess_current',
+                lastActiveAt: DAY_A,
+                latestActivity: { deviceType: 'Macintosh', ipAddress: '1.2.3.4' },
+            },
+            {
+                id: 'sess_other',
+                lastActiveAt: DAY_B,
+                latestActivity: { deviceType: 'iPhone', ipAddress: '5.6.7.8' },
+            },
+        ]
+        render(<Account />)
+        expect(await screen.findByText('iPhone')).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: 'Sign out other devices' }))
+        await waitFor(() => {
+            const call = global.fetch.mock.calls.find(
+                ([url, opts]) => String(url) === '/api/user/sessions' && opts?.method === 'DELETE',
+            )
+            expect(call).toBeTruthy()
+            expect(JSON.parse(call[1].body).sessionId).toBe('sess_other')
+        })
     })
 
     it('orders section groups by day with collapsible strips and a peek carrying the detail link', async () => {
@@ -320,6 +435,56 @@ describe('Account hub', () => {
         )
         expect(screen.getByText('Please pack well')).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Copy order ID' })).toBeInTheDocument()
+    })
+
+    it('delivered orders offer an order-again link back to the product page', async () => {
+        mockTabParam = 'orders'
+        render(<Account />)
+        await screen.findAllByText('Benchy')
+        // Second row is the delivered ORDER_B.
+        fireEvent.click(screen.getAllByText('Benchy')[1].closest('button'))
+        expect(await screen.findByRole('link', { name: 'Order again' })).toHaveAttribute(
+            'href',
+            '/products/benchy',
+        )
+    })
+})
+
+describe('Navbar account dropdown', () => {
+    it('opens a floating menu with every destination and a plan badge', async () => {
+        render(<AccountDropdown />)
+        fireEvent.click(screen.getByRole('button', { name: 'Account menu' }))
+        const menu = await screen.findByRole('menu')
+        ;[
+            ['Account', '/account'],
+            ['Orders', '/account?tab=orders'],
+            ['Downloads', '/account?tab=downloads'],
+            ['Print requests', '/account/prints'],
+            ['Dashboard', '/dashboard'],
+        ].forEach(([name, href]) => {
+            expect(within(menu).getByRole('menuitem', { name })).toHaveAttribute('href', href)
+        })
+        // Subscription row carries the plan badge (free tier here).
+        expect(within(menu).getByRole('menuitem', { name: /Subscription/ })).toHaveAttribute(
+            'href',
+            '/account/subscription',
+        )
+        expect(within(menu).getByText('Free')).toBeInTheDocument()
+        expect(within(menu).getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument()
+        // No admin row for non-admins.
+        expect(within(menu).queryByRole('menuitem', { name: 'Admin' })).toBeNull()
+    })
+
+    it('hides Dashboard when not entitled and closes on Escape, returning focus', async () => {
+        mockEntitlements = { ...mockEntitlements, canAccessDashboard: false }
+        render(<AccountDropdown />)
+        const trigger = screen.getByRole('button', { name: 'Account menu' })
+        fireEvent.click(trigger)
+        const menu = await screen.findByRole('menu')
+        expect(within(menu).queryByRole('menuitem', { name: 'Dashboard' })).toBeNull()
+        fireEvent.keyDown(document, { key: 'Escape' })
+        await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+        expect(document.activeElement).toBe(trigger)
     })
 })
 

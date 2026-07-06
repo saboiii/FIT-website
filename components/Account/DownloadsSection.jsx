@@ -8,7 +8,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { IoMdDownload } from 'react-icons/io'
-import { DashCard, EmptyState, SkeletonRow } from '@/components/dashboard-ui'
+import { EmptyState, SkeletonRow } from '@/components/dashboard-ui'
 import { useToast } from '@/components/General/ToastProvider'
 
 function DownloadsSection({ user, isLoaded }) {
@@ -96,9 +96,9 @@ function DownloadsSection({ user, isLoaded }) {
                     />
                 </div>
             ) : (
-                <div className="flex flex-col gap-4">
+                <div className="border-t border-[var(--dash-line)] divide-y divide-[var(--dash-line)]">
                     {myTransactions.map((transaction) => (
-                        <DashCard key={transaction._id}>
+                        <div key={transaction._id} className="py-5">
                             <div className="flex flex-col md:flex-row md:items-center gap-4">
                                 <div className="flex flex-row gap-4 items-center min-w-0 md:w-1/2">
                                     <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[var(--dash-r-inner)] border border-[var(--dash-line)] bg-[var(--dash-canvas)]">
@@ -153,7 +153,7 @@ function DownloadsSection({ user, isLoaded }) {
                                     ))}
                                 </div>
                             </div>
-                        </DashCard>
+                        </div>
                     ))}
                 </div>
             )}

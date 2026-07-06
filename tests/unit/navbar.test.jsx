@@ -1,11 +1,19 @@
-// RTL smokes for the navbar's mobile menu sheet: the hamburger opens a
-// dialog that mirrors the desktop nav (Home/Shop/Prints/Creators/About),
-// carries the full signed-in account inventory (Cart, Messages, Account,
-// Orders, Downloads, Print requests, Subscription with plan badge, Sign out),
-// gates Dashboard/Admin/Messages rows by entitlement (unentitled rows are not
-// rendered at all), shows only auth links when signed out, expands the
-// Shop/Prints category disclosures, and closes on Escape returning focus to
-// the hamburger trigger.
+// RTL smokes for the storefront navbar.
+//
+// Desktop: primary links (Creators/About) render with hrefs; Shop and Prints
+// are mega-panel triggers (aria-expanded) whose panels carry the category ->
+// subcategory links with exact query-param hrefs plus the one featured tile;
+// Escape closes the panel and returns focus to its trigger; cart/messages
+// icons keep their destinations and entitlement gating; signed-out shows
+// Sign in / Sign up instead of the account dropdown.
+//
+// Mobile: the hamburger opens a dialog that mirrors the desktop nav
+// (Home/Shop/Prints/Creators/About), carries the full signed-in account
+// inventory (Cart, Messages, Account, Orders, Downloads, Print requests,
+// Subscription with plan badge, Sign out), gates Dashboard/Admin/Messages
+// rows by entitlement (unentitled rows are not rendered at all), shows only
+// auth links when signed out, expands the Shop/Prints category disclosures,
+// and closes on Escape returning focus to the hamburger trigger.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, within, waitFor } from '@testing-library/react'
 import Navbar from '@/components/General/Navbar'
@@ -103,6 +111,89 @@ async function openMobileMenu() {
     fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
     return screen.findByRole('dialog', { name: 'Menu' })
 }
+
+describe('Navbar desktop bar', () => {
+    it('renders the primary links, cart, messages and the account dropdown', async () => {
+        render(<Navbar />)
+        expect(screen.getByRole('link', { name: 'Creators' })).toHaveAttribute('href', '/creators')
+        expect(screen.getByRole('link', { name: 'About' })).toHaveAttribute('href', '/about')
+        // Shop and Prints are mega panel triggers, closed by default.
+        ;['Shop', 'Prints'].forEach((name) => {
+            expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'false')
+        })
+        // Cart keeps its redirect-back href; messages keeps its destination.
+        expect(screen.getByRole('link', { name: 'Cart' })).toHaveAttribute(
+            'href',
+            '/cart?redirect=%2F',
+        )
+        expect(screen.getByRole('link', { name: 'Messages' })).toHaveAttribute(
+            'href',
+            '/dashboard/messages',
+        )
+        expect(screen.getByTestId('account-dropdown')).toBeInTheDocument()
+    })
+
+    it('opens the Shop mega panel on click with category columns and the featured tile', async () => {
+        render(<Navbar />)
+        const trigger = screen.getByRole('button', { name: 'Shop' })
+        fireEvent.click(trigger)
+        expect(trigger).toHaveAttribute('aria-expanded', 'true')
+        const panel = await screen.findByRole('region', { name: 'Shop menu' })
+        expect(within(panel).getByText('Figurines')).toBeInTheDocument()
+        expect(await within(panel).findByRole('link', { name: 'Anime' })).toHaveAttribute(
+            'href',
+            '/shop?productType=shop&productCategory=Figurines&productSubCategory=Anime',
+        )
+        expect(within(panel).getByRole('link', { name: /Print your model/ })).toHaveAttribute(
+            'href',
+            '/products/custom-print-request',
+        )
+        expect(within(panel).getByRole('link', { name: 'Browse all shop' })).toHaveAttribute(
+            'href',
+            '/shop',
+        )
+    })
+
+    it('opens the Prints mega panel with print category links', async () => {
+        render(<Navbar />)
+        fireEvent.click(screen.getByRole('button', { name: 'Prints' }))
+        const panel = await screen.findByRole('region', { name: 'Prints menu' })
+        expect(within(panel).getByText('FDM')).toBeInTheDocument()
+        expect(await within(panel).findByRole('link', { name: 'PLA' })).toHaveAttribute(
+            'href',
+            '/prints?productType=prints&productCategory=FDM&productSubCategory=PLA',
+        )
+    })
+
+    it('closes the mega panel on Escape and returns focus to its trigger', async () => {
+        render(<Navbar />)
+        const trigger = screen.getByRole('button', { name: 'Shop' })
+        fireEvent.click(trigger)
+        await screen.findByRole('region', { name: 'Shop menu' })
+        fireEvent.keyDown(document, { key: 'Escape' })
+        await waitFor(() =>
+            expect(screen.queryByRole('region', { name: 'Shop menu' })).toBeNull(),
+        )
+        expect(trigger).toHaveAttribute('aria-expanded', 'false')
+        expect(document.activeElement).toBe(trigger)
+    })
+
+    it('hides the messages icon when messaging is not entitled', async () => {
+        mockEntitlements = { ...mockEntitlements, canUseMessaging: false }
+        render(<Navbar />)
+        expect(screen.queryByRole('link', { name: 'Messages' })).toBeNull()
+        expect(screen.getByRole('link', { name: 'Cart' })).toBeInTheDocument()
+    })
+
+    it('shows Sign in and Sign up instead of cart and account when signed out', async () => {
+        mockUser = null
+        render(<Navbar />)
+        expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/sign-in')
+        expect(screen.getByRole('link', { name: 'Sign up' })).toHaveAttribute('href', '/sign-up')
+        expect(screen.queryByRole('link', { name: 'Cart' })).toBeNull()
+        expect(screen.queryByTestId('account-dropdown')).toBeNull()
+    })
+})
 
 describe('Navbar mobile menu', () => {
     it('opens from the hamburger with the full signed-in row inventory', async () => {

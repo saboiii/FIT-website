@@ -1,245 +1,302 @@
 'use client'
+// Storefront navbar: an Apple-style fixed translucent bar (backdrop blur,
+// hairline bottom border) carrying Nixon-style uppercase letter-spaced links
+// whose active item is a thin ink underline, and Descript-style rounded mega
+// panels for Shop and Prints (see docs/navbar/). The bar is position:fixed
+// (an overflow-hidden layout ancestor defeats position:sticky here) with an
+// in-flow spacer so pages keep their offset; the small-screen spacer already
+// lives in app/layout.jsx. Panels open on hover intent, click or ArrowDown;
+// Escape closes and refocuses the trigger; outside click, focus leaving the
+// bar and route changes all close. Mobile keeps the full MobileMenu sheet.
 import Link from 'next/link'
 import Logo from '../Logo'
 import { useUser } from '@clerk/nextjs'
-import { FcMenu } from "react-icons/fc";
 import AccountDropdown from './AccountDropdown'
 import MobileMenu from './MobileMenu'
+import NavPanel, { navItemCls, NavUnderline } from './NavPanel'
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, useReducedMotion } from 'framer-motion'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { HiOutlineShoppingCart } from 'react-icons/hi'
-import { IoChatbubblesOutline } from 'react-icons/io5'
-import { BsBadge3D } from 'react-icons/bs'
-import { FaChevronRight } from 'react-icons/fa'
-import useEntitlements from '@/utils/useEntitlements';
+import { IoCartOutline, IoChatbubblesOutline, IoMenuOutline } from 'react-icons/io5'
+import useEntitlements from '@/utils/useEntitlements'
+
+// Shop and Prints open a mega panel; the rest are plain routes. `key` doubles
+// as the productType segment in panel subcategory hrefs.
+const PRIMARY = [
+    { key: 'shop', label: 'Shop' },
+    { key: 'prints', label: 'Prints' },
+    { key: 'creators', label: 'Creators', href: '/creators' },
+    { key: 'about', label: 'About', href: '/about' },
+]
+
+// Fixed bar mirrors the centered layout column's width classes exactly.
+const barCls =
+    'fixed left-1/2 top-0 z-50 w-screen max-w-[1350px] -translate-x-1/2 border-b border-borderColor bg-white/80 backdrop-blur-md backdrop-saturate-150 md:w-[90vw] lg:w-[85vw]'
 
 function Navbar() {
-    const { user, isLoaded, isSignedIn } = useUser();
-    const { loading: entitlementsLoading, canUseMessaging } = useEntitlements();
-    const [unreadMessages, setUnreadMessages] = useState(0);
-    const [isOpen, setIsOpen] = useState(false);
-    const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [dropdownType, setDropdownType] = useState(null);
-    const [shopCategories, setShopCategories] = useState([]);
-    const [printCategories, setPrintCategories] = useState([]);
-    const mobileTriggerRef = useRef(null);
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
-    const currentUrl = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : '');
+    const { user, isLoaded, isSignedIn } = useUser()
+    const { loading: entitlementsLoading, canUseMessaging } = useEntitlements()
+    const [unreadMessages, setUnreadMessages] = useState(0)
+    const [isOpen, setIsOpen] = useState(false) // mobile sheet
+    const [openPanel, setOpenPanel] = useState(null) // 'shop' | 'prints' | null
+    const [shopCategories, setShopCategories] = useState([])
+    const [printCategories, setPrintCategories] = useState([])
+    const headerRef = useRef(null)
+    const hoverTimer = useRef(null)
+    const triggerRefs = useRef({})
+    const mobileTriggerRef = useRef(null)
+    const reduceMotion = useReducedMotion()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
+    const currentUrl = pathname + (searchParams.toString() ? `?${searchParams.toString()}` : '')
 
-
-
-    const handleMenu = () => {
-        setIsOpen((prev) => !prev);
+    // Single shared timer gives hover intent: a short pause before opening,
+    // a grace period on leave so the pointer can travel bar -> panel.
+    const setTimer = (fn, ms) => {
+        clearTimeout(hoverTimer.current)
+        hoverTimer.current = setTimeout(fn, ms)
     }
+    const cancelTimer = () => clearTimeout(hoverTimer.current)
+    const scheduleClose = () => setTimer(() => setOpenPanel(null), 160)
 
-    // Auto-close mobile menu on route change (keyed on the string, not the
+    // Auto-close menu and panel on route change (keyed on the string, not the
     // params object, whose identity can change per render).
-    const searchKey = searchParams ? searchParams.toString() : '';
+    const searchKey = searchParams ? searchParams.toString() : ''
     useEffect(() => {
-        setIsOpen(false);
-    }, [pathname, searchKey]);
+        setIsOpen(false)
+        setOpenPanel(null)
+    }, [pathname, searchKey])
+
+    useEffect(() => () => clearTimeout(hoverTimer.current), [])
 
     useEffect(() => {
         const fetchCategories = async () => {
             try {
-                const res = await fetch('/api/categories');
+                const res = await fetch('/api/categories')
                 if (!res.ok) {
-                    console.error('Failed to fetch categories:', res.status);
-                    return;
+                    console.error('Failed to fetch categories:', res.status)
+                    return
                 }
-                const data = await res.json();
-                const cats = data.categories || [];
-                setShopCategories(cats.filter(c => c.type === 'shop' && c.isActive));
-                setPrintCategories(cats.filter(c => c.type === 'print' && c.isActive));
+                const data = await res.json()
+                const cats = data.categories || []
+                setShopCategories(cats.filter((c) => c.type === 'shop' && c.isActive))
+                setPrintCategories(cats.filter((c) => c.type === 'print' && c.isActive))
             } catch (e) {
-                console.error('Failed to load categories for navbar', e);
+                console.error('Failed to load categories for navbar', e)
             }
         }
-        fetchCategories();
-    }, []);
+        fetchCategories()
+    }, [])
 
     useEffect(() => {
         const fetchUnread = async () => {
-            if (!isSignedIn || !isLoaded || !user) return;
+            if (!isSignedIn || !isLoaded || !user) return
             try {
-                const res = await fetch('/api/chat/inbox');
-                if (!res.ok) return;
-                const data = await res.json();
-                const channels = data.channels || [];
-                const total = channels.reduce((sum, ch) => sum + (ch.unreadCount || 0), 0);
-                setUnreadMessages(total);
+                const res = await fetch('/api/chat/inbox')
+                if (!res.ok) return
+                const data = await res.json()
+                const channels = data.channels || []
+                setUnreadMessages(channels.reduce((sum, ch) => sum + (ch.unreadCount || 0), 0))
             } catch (e) {
-                console.error('Failed to load unread messages for navbar', e);
+                console.error('Failed to load unread messages for navbar', e)
             }
-        };
-        fetchUnread();
-    }, [isSignedIn, isLoaded, user]);
+        }
+        fetchUnread()
+    }, [isSignedIn, isLoaded, user])
 
-    // Listen for global unread count updates from chat components
+    // Listen for global unread count updates from chat components.
     useEffect(() => {
-        if (typeof window === 'undefined') return;
-
+        if (typeof window === 'undefined') return undefined
         const handleUnreadUpdated = (event) => {
-            const total = event.detail?.total;
-            if (typeof total === 'number') {
-                setUnreadMessages(total);
-            }
-        };
+            const total = event.detail?.total
+            if (typeof total === 'number') setUnreadMessages(total)
+        }
+        window.addEventListener('chat:unread-updated', handleUnreadUpdated)
+        return () => window.removeEventListener('chat:unread-updated', handleUnreadUpdated)
+    }, [])
 
-        window.addEventListener('chat:unread-updated', handleUnreadUpdated);
-        return () => window.removeEventListener('chat:unread-updated', handleUnreadUpdated);
-    }, []);
+    // While a panel is open: Escape closes and refocuses its trigger; a
+    // pointer-down outside the bar closes.
+    useEffect(() => {
+        if (!openPanel) return undefined
+        const key = openPanel
+        const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                setOpenPanel(null)
+                triggerRefs.current[key]?.focus()
+            }
+        }
+        const onPointerDown = (event) => {
+            if (headerRef.current && !headerRef.current.contains(event.target)) setOpenPanel(null)
+        }
+        document.addEventListener('keydown', onKeyDown)
+        document.addEventListener('mousedown', onPointerDown)
+        return () => {
+            document.removeEventListener('keydown', onKeyDown)
+            document.removeEventListener('mousedown', onPointerDown)
+        }
+    }, [openPanel])
 
     if (!isLoaded) {
         return (
-            <div className="flex w-full h-16 border-b border-borderColor items-center justify-between px-8 z-50 relative" />
-        );
+            <div className="flex w-full flex-col">
+                <div className={`h-16 ${barCls}`} />
+                <div className="hidden h-16 w-full lg:block" />
+            </div>
+        )
     }
 
+    const routeKey = PRIMARY.find(
+        (item) => pathname === (item.href ?? `/${item.key}`) || pathname?.startsWith(`${item.href ?? `/${item.key}`}/`),
+    )?.key
+    const activeKey = openPanel || routeKey
+    const openItem = PRIMARY.find((item) => item.key === openPanel)
+
     return (
-        <div className='flex relative w-full'>
-            <div className='hidden lg:flex w-full h-16 border-b border-borderColor items-center justify-between px-8 z-50 relative'>
-                <Link href='/' className=' text-textColor text-lg font-bold tracking-widest  hover:opacity-80 transition-opacity duration-300 ease-in-out z-10'>
-                    <Logo
-                        width={30}
-                        height={30}
-                    />
-                </Link>
-
-                <ul className='flex gap-6 flex-row items-center font-normal z-10'>
-                    <li
-                        className='flex navbarLink relative cursor-pointer'
-                        onMouseEnter={() => { setDropdownOpen(true); setDropdownType('shop'); }}
-                        onMouseLeave={() => setDropdownOpen(false)}
+        <div className="flex w-full flex-col">
+            <header
+                ref={headerRef}
+                onBlur={(event) => {
+                    // Focus moving out of the bar (Tab past the last panel
+                    // link, or a click elsewhere) dismisses the panel.
+                    if (openPanel && !event.currentTarget.contains(event.relatedTarget)) setOpenPanel(null)
+                }}
+                className={barCls}
+            >
+                <nav aria-label="Primary" className="relative flex h-16 items-center justify-between px-6 lg:px-8">
+                    <Link
+                        href="/"
+                        aria-label="Home"
+                        className="z-10 text-textColor transition-opacity duration-300 ease-in-out hover:opacity-80"
                     >
-                        Shop
-                    </li>
-                    <li
-                        className='flex navbarLink relative cursor-pointer'
-                        onMouseEnter={() => { setDropdownOpen(true); setDropdownType('prints'); }}
-                        onMouseLeave={() => setDropdownOpen(false)}
-                    >
-                        Prints
-                    </li>
-                    <li className='flex navbarLink'><Link href='/creators'>Creators</Link></li>
-                    <li className='flex navbarLink'><Link href='/about'>About</Link></li>
-                </ul>
+                        <Logo width={28} height={28} />
+                    </Link>
 
-                <div className='flex gap-6 items-center'>
-                    {isSignedIn && isLoaded && user && (
-                        <>
-                            <Link href={`/cart?redirect=${encodeURIComponent(currentUrl)}`} className='hover:text-textColor transition-colors duration-300 ease-in-out'>
-                                <HiOutlineShoppingCart size={16} />
-                            </Link>
-                            {canUseMessaging && !entitlementsLoading && (
-                                <Link href="/dashboard/messages" className='relative hover:text-textColor transition-colors duration-300 ease-in-out'>
-                                    <IoChatbubblesOutline size={18} />
-                                    {unreadMessages > 0 && (
-                                        <span className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full text-[9px] px-1.5 py-0.5">
-                                            {unreadMessages > 9 ? '9+' : unreadMessages}
-                                        </span>
-                                    )}
+                    <ul className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 flex-row items-center gap-9 lg:flex">
+                        {PRIMARY.map((item) => (
+                            <li key={item.key} className="relative flex">
+                                {item.href ? (
+                                    <Link href={item.href} onMouseEnter={scheduleClose} className={navItemCls(activeKey === item.key)}>
+                                        {item.label}
+                                    </Link>
+                                ) : (
+                                    <button
+                                        ref={(el) => {
+                                            triggerRefs.current[item.key] = el
+                                        }}
+                                        type="button"
+                                        aria-haspopup="true"
+                                        aria-expanded={openPanel === item.key}
+                                        aria-controls={`nav-panel-${item.key}`}
+                                        onClick={() => {
+                                            cancelTimer()
+                                            setOpenPanel(openPanel === item.key ? null : item.key)
+                                        }}
+                                        onKeyDown={(event) => {
+                                            if (event.key !== 'ArrowDown') return
+                                            event.preventDefault()
+                                            setOpenPanel(item.key)
+                                            requestAnimationFrame(() =>
+                                                document.getElementById(`nav-panel-${item.key}`)?.querySelector('a')?.focus(),
+                                            )
+                                        }}
+                                        onMouseEnter={() => setTimer(() => setOpenPanel(item.key), openPanel ? 0 : 90)}
+                                        onMouseLeave={scheduleClose}
+                                        className={`${navItemCls(activeKey === item.key)} cursor-pointer`}
+                                    >
+                                        {item.label}
+                                    </button>
+                                )}
+                                {activeKey === item.key && <NavUnderline reduceMotion={reduceMotion} />}
+                            </li>
+                        ))}
+                    </ul>
+
+                    <div className="z-10 flex items-center gap-5">
+                        {isSignedIn && user && (
+                            <>
+                                <Link
+                                    href={`/cart?redirect=${encodeURIComponent(currentUrl)}`}
+                                    aria-label="Cart"
+                                    className="hidden text-lightColor transition-colors duration-200 ease-in-out hover:text-textColor lg:flex"
+                                >
+                                    <IoCartOutline size={18} aria-hidden="true" />
                                 </Link>
-                            )}
-                        </>
-                    )}
-                    <AccountDropdown />
-                </div>
-
-
+                                {canUseMessaging && !entitlementsLoading && (
+                                    <Link
+                                        href="/dashboard/messages"
+                                        aria-label="Messages"
+                                        className="relative hidden text-lightColor transition-colors duration-200 ease-in-out hover:text-textColor lg:flex"
+                                    >
+                                        <IoChatbubblesOutline size={18} aria-hidden="true" />
+                                        {unreadMessages > 0 && (
+                                            <span className="absolute -right-2 -top-2 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                                                {unreadMessages > 9 ? '9+' : unreadMessages}
+                                            </span>
+                                        )}
+                                    </Link>
+                                )}
+                            </>
+                        )}
+                        {isSignedIn ? (
+                            <div className="hidden lg:flex">
+                                <AccountDropdown />
+                            </div>
+                        ) : (
+                            <div className="hidden items-center gap-5 lg:flex">
+                                <Link href="/sign-in" className={navItemCls(false)}>
+                                    Sign in
+                                </Link>
+                                <Link
+                                    href="/sign-up"
+                                    className="flex items-center rounded-full bg-textColor px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-background transition-opacity duration-200 ease-in-out hover:opacity-85"
+                                >
+                                    Sign up
+                                </Link>
+                            </div>
+                        )}
+                        <button
+                            ref={mobileTriggerRef}
+                            type="button"
+                            onClick={() => setIsOpen((prev) => !prev)}
+                            aria-label="Open menu"
+                            aria-expanded={isOpen}
+                            className="flex cursor-pointer text-textColor transition-opacity duration-200 ease-in-out hover:opacity-70 lg:hidden"
+                        >
+                            <IoMenuOutline size={22} aria-hidden="true" />
+                        </button>
+                    </div>
+                </nav>
 
                 <AnimatePresence>
-                    {dropdownOpen && (
-                        <motion.div
-                            key={dropdownType}
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.25, ease: "easeInOut" }}
-                            className='flex w-full min-h-[30vh] bg-background absolute top-0 left-0 z-0 border-b border-borderColor py-24 px-12 drop-shadow-sm'
-                            onMouseEnter={() => setDropdownOpen(true)}
-                            onMouseLeave={() => setDropdownOpen(false)}
-                            style={{ pointerEvents: dropdownOpen ? 'auto' : 'none' }}
-                        >
-                            <div className={`flex flex-row gap-16 h-full w-full`}>
-                                <Link href='/products/custom-print-request' className="flex bg-gradient-to-br from-amber-300 to-red-400 flex flex-col rounded-md h-fit items-start justify-center p-4 font-medium text-xs text-pretty text-white shadow-lg transition hover:scale-[1.01] cursor-pointer">
-                                    {/* <div className='animate-spin border-1 border-t-transparent mr-1 h-4 w-4 rounded-full' />
-                                    <div className="mt-3">Loading...</div> */}
-                                    <div className='gap-3 font-semibold mb-2 items-center flex w-full'>
-                                        <BsBadge3D className='flex shrink-0' size={24} />
-
-                                        <div className='flex items-center justify-between w-full text-base shrink-0'>
-                                            Print your Model
-
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        You can now 3D print your models with us with ease!
-                                    </div>
-
-                                    <div className='mask-flare-loop mt-3 bg-red-500/40 py-1 px-2 rounded-full font-semibold'>
-                                        <span className='flex gap-2 items-center'>
-                                            Do it now <FaChevronRight size={10} />
-                                        </span>
-                                    </div>
-                                </Link>
-                                {(dropdownType === 'shop' ? shopCategories : printCategories).map((category, catIdx) => (
-                                    <div key={category.name} className='flex flex-col row-span-1 col-span-1 gap-8'>
-                                        <p className='font-semibold text-xs tracking-wider uppercase'>{category.displayName}</p>
-                                        {/* <div className='w-10 border-t border-borderColor flex' /> */}
-                                        <ul className='flex flex-col gap-1 tracking-wider uppercase font-medium'>
-                                            {(category.subcategories || [])
-                                                .filter(sub => sub.isActive)
-                                                .map((subcategory, subIdx) => (
-                                                    <li key={subcategory.name}>
-                                                        <Link
-                                                            href={`/${dropdownType}?productType=${dropdownType}&productCategory=${encodeURIComponent(category.displayName)}&productSubCategory=${encodeURIComponent(subcategory.displayName)}`}
-                                                            className='flex hover:text-textColor transition-colors duration-300 ease-in-out text-lightColor text-[10px]'
-                                                        >
-                                                            {subcategory.displayName}
-                                                        </Link>
-                                                    </li>
-                                                ))}
-                                        </ul>
-                                    </div>
-                                ))}
-                            </div>
-                        </motion.div>
+                    {openItem && (
+                        <NavPanel
+                            key={openItem.key}
+                            id={`nav-panel-${openItem.key}`}
+                            type={openItem.key}
+                            label={openItem.label}
+                            categories={openItem.key === 'shop' ? shopCategories : printCategories}
+                            reduceMotion={reduceMotion}
+                            onMouseEnter={cancelTimer}
+                            onMouseLeave={scheduleClose}
+                            onNavigate={() => setOpenPanel(null)}
+                        />
                     )}
                 </AnimatePresence>
+            </header>
 
-            </div>
+            {/* In-flow spacer for the fixed desktop bar. */}
+            <div className="hidden h-16 w-full lg:block" />
 
-            <div className='flex fixed left-0 top-0 lg:hidden bg-background w-full h-16 border-b border-borderColor items-center justify-between px-8 z-50'>
-                <button
-                    ref={mobileTriggerRef}
-                    type="button"
-                    onClick={handleMenu}
-                    aria-label="Open menu"
-                    aria-expanded={isOpen}
-                    className='cursor-pointer z-10'
-                >
-                    <FcMenu size={20} />
-                </button>
-                <Link href='/' aria-label="Home" className='text-textColor hover:opacity-80 transition-opacity duration-300 ease-in-out'>
-                    <Logo width={26} height={26} />
-                </Link>
-                <MobileMenu
-                    open={isOpen}
-                    onClose={() => setIsOpen(false)}
-                    triggerRef={mobileTriggerRef}
-                    shopCategories={shopCategories}
-                    printCategories={printCategories}
-                    unreadMessages={unreadMessages}
-                />
-            </div >
-
-
-        </div >
-
+            <MobileMenu
+                open={isOpen}
+                onClose={() => setIsOpen(false)}
+                triggerRef={mobileTriggerRef}
+                shopCategories={shopCategories}
+                printCategories={printCategories}
+                unreadMessages={unreadMessages}
+            />
+        </div>
     )
 }
 

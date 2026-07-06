@@ -1,7 +1,8 @@
 'use client'
-// Mobile navigation sheet, the small-screen counterpart of AccountDropdown:
-// a full-height right sheet with soft rounded corners, layered shadow,
-// hairline dividers and icon + label rows at comfortable touch size. Rows are
+// Mobile navigation sheet, the small-screen counterpart of AccountDropdown
+// and the desktop mega panels: a full-height right sheet with soft rounded
+// corners, layered shadow, Nixon-style uppercase hairline-underlined group
+// headers and icon + label rows at comfortable touch size. Rows are
 // entitlement-gated (Dashboard, Admin, Messages) and mirror the desktop nav
 // (Home, Shop, Prints, Creators, About) plus every account destination.
 // Storefront vocabulary only (borderColor/baseColor/lightColor/textColor).
@@ -54,6 +55,16 @@ function SheetRow({ href, icon: Icon, label, active = false, badge = null, onNav
     )
 }
 
+// Uppercase letter-spaced header over a hairline, matching the desktop mega
+// panel's column headers.
+function GroupLabel({ children }) {
+    return (
+        <p className="mx-3 mb-1 mt-4 border-b border-borderColor pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-lightColor">
+            {children}
+        </p>
+    )
+}
+
 function Separator() {
     return <div role="separator" className="mx-3 my-2 h-0 border-t border-borderColor" />
 }
@@ -61,18 +72,7 @@ function Separator() {
 // Shop / Prints disclosure: tapping the row reveals the category tree inline,
 // flattened one level (category heading + subcategory links) so nothing is
 // more than two taps deep.
-function CategoryDisclosure({
-    id,
-    icon: Icon,
-    label,
-    browseHref,
-    productType,
-    categories,
-    expanded,
-    onToggle,
-    onNavigate,
-    reduceMotion,
-}) {
+function CategoryDisclosure({ id, icon: Icon, label, browseHref, productType, categories, expanded, onToggle, onNavigate, reduceMotion }) {
     return (
         <div className="flex w-full flex-col">
             <button
@@ -110,7 +110,7 @@ function CategoryDisclosure({
                             </Link>
                             {categories.map((category) => (
                                 <div key={category.name} className="pt-2">
-                                    <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-lightColor">
+                                    <p className="mx-2 border-b border-borderColor pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-lightColor">
                                         {category.displayName}
                                     </p>
                                     {(category.subcategories || [])
@@ -135,23 +135,10 @@ function CategoryDisclosure({
     )
 }
 
-function MobileMenu({
-    open,
-    onClose,
-    triggerRef,
-    shopCategories = [],
-    printCategories = [],
-    unreadMessages = 0,
-}) {
+function MobileMenu({ open, onClose, triggerRef, shopCategories = [], printCategories = [], unreadMessages = 0 }) {
     const { user, isLoaded } = useUser()
     const { isAdmin } = useAccess()
-    const {
-        loading: entitlementsLoading,
-        canAccessDashboard,
-        canUseMessaging,
-        isPaidTier,
-        subscription,
-    } = useEntitlements()
+    const { loading: entitlementsLoading, canAccessDashboard, canUseMessaging, isPaidTier, subscription } = useEntitlements()
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const tab = searchParams?.get('tab')
@@ -235,6 +222,28 @@ function MobileMenu({
             </span>
         ) : null
 
+    // Signed-in account destinations, mirrored from AccountDropdown.
+    const accountRows = [
+        { href: '/cart', icon: IoCartOutline, label: 'Cart', active: pathname?.startsWith('/cart') },
+        canUseMessaging && !entitlementsLoading
+            ? { href: '/dashboard/messages', icon: IoChatbubblesOutline, label: 'Messages', active: pathname?.startsWith('/dashboard/messages'), badge: unreadBadgeEl }
+            : null,
+        { href: '/account', icon: IoPersonOutline, label: 'Account', active: isAccountHub && tab !== 'orders' && tab !== 'downloads' },
+        { href: '/account?tab=orders', icon: IoBagHandleOutline, label: 'Orders', active: isAccountHub && tab === 'orders' },
+        { href: '/account?tab=downloads', icon: IoDownloadOutline, label: 'Downloads', active: isAccountHub && tab === 'downloads' },
+        { href: '/account/prints', icon: IoPrintOutline, label: 'Print requests', active: pathname?.startsWith('/account/prints') },
+        { href: '/account/subscription', icon: IoCardOutline, label: 'Subscription', active: pathname?.startsWith('/account/subscription'), badge: planBadgeEl },
+    ].filter(Boolean)
+
+    const workspaceRows = [
+        canAccessDashboard && !entitlementsLoading
+            ? { href: '/dashboard', icon: IoGridOutline, label: 'Dashboard', active: pathname?.startsWith('/dashboard') && !pathname?.startsWith('/dashboard/messages') }
+            : null,
+        isAdmin
+            ? { href: '/admin', icon: IoShieldOutline, label: 'Admin dashboard', active: pathname?.startsWith('/admin') }
+            : null,
+    ].filter(Boolean)
+
     return (
         <AnimatePresence>
             {open && (
@@ -260,7 +269,7 @@ function MobileMenu({
                         transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
                         className="fixed right-0 top-0 z-[70] flex h-dvh w-[85vw] max-w-sm flex-col overflow-hidden rounded-l-2xl border-l border-borderColor bg-background shadow-[0_2px_6px_rgba(17,17,17,0.05),0_16px_40px_rgba(17,17,17,0.10)]"
                     >
-                        <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-4">
+                        <div className="flex items-center justify-between gap-3 border-b border-borderColor bg-white/80 px-4 pb-3 pt-4 backdrop-blur-md">
                             {signedIn ? (
                                 <div className="flex min-w-0 items-center gap-3">
                                     <span className="flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-borderColor">
@@ -296,16 +305,10 @@ function MobileMenu({
                                 <IoCloseOutline size={18} aria-hidden="true" />
                             </button>
                         </div>
-                        <div className="h-0 border-t border-borderColor" />
 
-                        <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-2 pb-8 pt-2">
-                            <SheetRow
-                                href="/"
-                                icon={IoHomeOutline}
-                                label="Home"
-                                active={pathname === '/'}
-                                onNavigate={onClose}
-                            />
+                        <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-2 pb-8 pt-1">
+                            <GroupLabel>Browse</GroupLabel>
+                            <SheetRow href="/" icon={IoHomeOutline} label="Home" active={pathname === '/'} onNavigate={onClose} />
                             <CategoryDisclosure
                                 id="mobile-menu-shop"
                                 icon={IoStorefrontOutline}
@@ -330,133 +333,34 @@ function MobileMenu({
                                 onNavigate={onClose}
                                 reduceMotion={reduceMotion}
                             />
-                            <SheetRow
-                                href="/creators"
-                                icon={IoPeopleOutline}
-                                label="Creators"
-                                active={pathname?.startsWith('/creators')}
-                                onNavigate={onClose}
-                            />
-                            <SheetRow
-                                href="/about"
-                                icon={IoInformationCircleOutline}
-                                label="About"
-                                active={pathname?.startsWith('/about')}
-                                onNavigate={onClose}
-                            />
-
-                            <Separator />
+                            <SheetRow href="/creators" icon={IoPeopleOutline} label="Creators" active={pathname?.startsWith('/creators')} onNavigate={onClose} />
+                            <SheetRow href="/about" icon={IoInformationCircleOutline} label="About" active={pathname?.startsWith('/about')} onNavigate={onClose} />
 
                             {signedIn ? (
                                 <>
-                                    <SheetRow
-                                        href="/cart"
-                                        icon={IoCartOutline}
-                                        label="Cart"
-                                        active={pathname?.startsWith('/cart')}
-                                        onNavigate={onClose}
-                                    />
-                                    {canUseMessaging && !entitlementsLoading && (
-                                        <SheetRow
-                                            href="/dashboard/messages"
-                                            icon={IoChatbubblesOutline}
-                                            label="Messages"
-                                            active={pathname?.startsWith('/dashboard/messages')}
-                                            badge={unreadBadgeEl}
-                                            onNavigate={onClose}
-                                        />
-                                    )}
-                                    <SheetRow
-                                        href="/account"
-                                        icon={IoPersonOutline}
-                                        label="Account"
-                                        active={isAccountHub && tab !== 'orders' && tab !== 'downloads'}
-                                        onNavigate={onClose}
-                                    />
-                                    <SheetRow
-                                        href="/account?tab=orders"
-                                        icon={IoBagHandleOutline}
-                                        label="Orders"
-                                        active={isAccountHub && tab === 'orders'}
-                                        onNavigate={onClose}
-                                    />
-                                    <SheetRow
-                                        href="/account?tab=downloads"
-                                        icon={IoDownloadOutline}
-                                        label="Downloads"
-                                        active={isAccountHub && tab === 'downloads'}
-                                        onNavigate={onClose}
-                                    />
-                                    <SheetRow
-                                        href="/account/prints"
-                                        icon={IoPrintOutline}
-                                        label="Print requests"
-                                        active={pathname?.startsWith('/account/prints')}
-                                        onNavigate={onClose}
-                                    />
-                                    <SheetRow
-                                        href="/account/subscription"
-                                        icon={IoCardOutline}
-                                        label="Subscription"
-                                        active={pathname?.startsWith('/account/subscription')}
-                                        badge={planBadgeEl}
-                                        onNavigate={onClose}
-                                    />
+                                    <GroupLabel>Account</GroupLabel>
+                                    {accountRows.map((row) => (
+                                        <SheetRow key={row.href} {...row} onNavigate={onClose} />
+                                    ))}
 
-                                    {((canAccessDashboard && !entitlementsLoading) || isAdmin) && (
-                                        <Separator />
-                                    )}
-                                    {canAccessDashboard && !entitlementsLoading && (
-                                        <SheetRow
-                                            href="/dashboard"
-                                            icon={IoGridOutline}
-                                            label="Dashboard"
-                                            active={
-                                                pathname?.startsWith('/dashboard') &&
-                                                !pathname?.startsWith('/dashboard/messages')
-                                            }
-                                            onNavigate={onClose}
-                                        />
-                                    )}
-                                    {isAdmin && (
-                                        <SheetRow
-                                            href="/admin"
-                                            icon={IoShieldOutline}
-                                            label="Admin dashboard"
-                                            active={pathname?.startsWith('/admin')}
-                                            onNavigate={onClose}
-                                        />
-                                    )}
+                                    {workspaceRows.length > 0 && <GroupLabel>Workspace</GroupLabel>}
+                                    {workspaceRows.map((row) => (
+                                        <SheetRow key={row.href} {...row} onNavigate={onClose} />
+                                    ))}
 
                                     <Separator />
                                     <SignOutButton redirectUrl="/">
-                                        <button
-                                            type="button"
-                                            className={`${rowCls(false)} cursor-pointer text-left`}
-                                        >
-                                            <IoLogOutOutline
-                                                size={18}
-                                                aria-hidden="true"
-                                                className="shrink-0"
-                                            />
+                                        <button type="button" className={`${rowCls(false)} cursor-pointer text-left`}>
+                                            <IoLogOutOutline size={18} aria-hidden="true" className="shrink-0" />
                                             Sign out
                                         </button>
                                     </SignOutButton>
                                 </>
                             ) : (
                                 <>
-                                    <SheetRow
-                                        href="/sign-in"
-                                        icon={IoLogInOutline}
-                                        label="Sign in"
-                                        onNavigate={onClose}
-                                    />
-                                    <SheetRow
-                                        href="/sign-up"
-                                        icon={IoPersonAddOutline}
-                                        label="Sign up"
-                                        onNavigate={onClose}
-                                    />
+                                    <GroupLabel>Account</GroupLabel>
+                                    <SheetRow href="/sign-in" icon={IoLogInOutline} label="Sign in" onNavigate={onClose} />
+                                    <SheetRow href="/sign-up" icon={IoPersonAddOutline} label="Sign up" onNavigate={onClose} />
                                 </>
                             )}
                         </nav>

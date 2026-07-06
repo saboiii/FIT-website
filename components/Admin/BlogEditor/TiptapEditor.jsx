@@ -39,22 +39,21 @@ const CodeModeContext = createContext({ openCode: () => {} })
 
 /**
  * NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js): renders the
- * raw markup read-only. Editing happens in the whole-article code view;
- * clicking the block floats a glass hint at the cursor (portaled to <body> so
- * it can never be clipped by the editor's scroll container) with a shortcut
- * into that view.
+ * raw markup read-only. Editing happens in the whole-article code view. The
+ * glass hint behaves like components/LinkToolTip.jsx: it appears on hover,
+ * follows the cursor (spring-smoothed) until it leaves the block, and is
+ * portaled to <body> so no scroll container can clip it. It is
+ * pointer-events-none like a real tooltip; clicking ANYWHERE on the block
+ * (including through the pill) opens the whole-article code view, and the
+ * click is intercepted so links inside imported sections cannot navigate the
+ * admin away.
  */
 function HtmlBlockView({ node, selected }) {
     const { openCode } = useContext(CodeModeContext)
-    const [hint, setHint] = useState(null) // viewport coords (fixed)
-    const hintTimer = useRef(null)
-    useEffect(() => () => clearTimeout(hintTimer.current), [])
+    const [hint, setHint] = useState(null) // viewport coords, follows cursor
 
-    const showHint = (e) => {
-        setHint({ x: e.clientX, y: e.clientY })
-        clearTimeout(hintTimer.current)
-        hintTimer.current = setTimeout(() => setHint(null), 2600)
-    }
+    const clampX = (x) => Math.min(Math.max(8, x + 14), (window.innerWidth || 1200) - 380)
+    const clampY = (y) => Math.min(y + 18, (window.innerHeight || 800) - 56)
 
     return (
         <NodeViewWrapper>
@@ -65,7 +64,12 @@ function HtmlBlockView({ node, selected }) {
                 }`}
             >
                 {node.attrs.html ? (
-                    <div onClick={showHint} dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
+                    <div
+                        onMouseMove={(e) => setHint({ x: e.clientX, y: e.clientY })}
+                        onMouseLeave={() => setHint(null)}
+                        onClickCapture={(e) => { e.preventDefault(); e.stopPropagation(); openCode() }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }}
+                    />
                 ) : (
                     <div className="text-[13px] text-[var(--dash-ink-soft)] border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-6 text-center">
                         Empty HTML block. Switch to code view to add markup.
@@ -76,23 +80,19 @@ function HtmlBlockView({ node, selected }) {
                 <AnimatePresence>
                     {hint && (
                         <motion.div
-                            initial={{ opacity: 0, y: 6, scale: 0.97 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 4, transition: swapExit }}
-                            transition={sheet}
-                            className="dash glass-warm fixed z-[60] flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap"
-                            style={{
-                                left: Math.min(Math.max(8, hint.x - 48), (window.innerWidth || 1200) - 380),
-                                top: Math.min(hint.y + 16, (window.innerHeight || 800) - 56),
-                                backgroundColor: 'transparent', // .dash paints opaque; glass-warm supplies the surface
-                            }}
+                            initial={{ opacity: 0, scale: 0.7, x: clampX(hint.x) - 40, y: clampY(hint.y) }}
+                            animate={{ opacity: 1, scale: 1, x: clampX(hint.x), y: clampY(hint.y) }}
+                            exit={{ opacity: 0, scale: 0.7, transition: swapExit }}
+                            transition={{ type: 'spring', stiffness: 400, damping: 50 }}
+                            className="dash-scrim glass-warm fixed z-[60] flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap shadow-[var(--dash-shadow-float)] shadow-md border border-white/40 pointer-events-none"
+                            style={{ left: 0, top: 0 }}
                         >
                             <span className="text-[12px] text-[var(--dash-ink-soft)]">
                                 This section is raw HTML and is edited as code
                             </span>
                             <button
                                 type="button"
-                                onClick={() => { setHint(null); openCode() }}
+                                tabIndex={-1}
                                 className="dash-hoverable rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
                             >
                                 Open code view

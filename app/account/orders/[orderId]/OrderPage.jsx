@@ -24,7 +24,18 @@ import {
     IoRefreshOutline,
     IoStarOutline,
     IoTimeOutline,
+    IoReceiptOutline,
+    IoCarOutline,
+    IoLocationOutline,
+    IoCallOutline,
+    IoMailOutline,
+    IoPersonOutline,
+    IoDocumentTextOutline,
+    IoWalletOutline,
+    IoCardOutline,
+    IoFlagOutline,
 } from 'react-icons/io5'
+import { FaCcVisa, FaCcMastercard, FaCcAmex, FaCcDiscover, FaCcDinersClub, FaCcJcb } from 'react-icons/fa'
 import { useToast } from '@/components/General/ToastProvider'
 import AccountShell from '@/components/Account/AccountShell'
 import { orderTone, money } from '@/components/Account/accountUi'
@@ -124,16 +135,51 @@ function OrderProgressSteps({ order, currentIndex }) {
 }
 
 // Quiet label/value row (client polish, 2026-07-06): 12px ink-soft label
-// left, value right. Replaces the dotted-leader rows; hairline dividers come
-// from the surrounding group, not the row.
-function QuietRow({ label, children, className = '' }) {
+// left (with an optional small icon), value right. Replaces the dotted-leader
+// rows; hairline dividers come from the surrounding group, not the row.
+function QuietRow({ label, icon: Icon, children, className = '' }) {
     return (
         <div className={`flex items-center justify-between gap-3 py-1 ${className}`}>
-            <span className="text-[12px] text-[var(--dash-ink-soft)] shrink-0">{label}</span>
+            <span className="flex items-center gap-1.5 text-[12px] text-[var(--dash-ink-soft)] shrink-0">
+                {Icon && <Icon size={13} aria-hidden="true" />}
+                {label}
+            </span>
             <span className="dash-data min-w-0 flex items-center justify-end gap-1.5 text-right">
                 {children}
             </span>
         </div>
+    )
+}
+
+// Card-brand logos for the Stripe payment method (client ask); wallet types
+// and unknown brands fall back to generic marks.
+const CARD_BRAND_ICONS = {
+    visa: FaCcVisa,
+    mastercard: FaCcMastercard,
+    amex: FaCcAmex,
+    'american express': FaCcAmex,
+    discover: FaCcDiscover,
+    diners: FaCcDinersClub,
+    jcb: FaCcJcb,
+}
+
+function PaymentMethodBadge({ paymentMethod, fallbackLabel }) {
+    if (paymentMethod?.type === 'card') {
+        const brand = String(paymentMethod.card?.brand || '').toLowerCase()
+        const BrandIcon = CARD_BRAND_ICONS[brand] || IoCardOutline
+        return (
+            <span className="flex items-center gap-1.5">
+                <BrandIcon size={20} aria-hidden="true" className="text-[var(--dash-ink-soft)]" />
+                <span className="capitalize">{paymentMethod.card?.brand || 'Card'}</span>
+                <span>•••• {paymentMethod.card?.last4}</span>
+            </span>
+        )
+    }
+    return (
+        <span className="flex items-center gap-1.5">
+            <IoWalletOutline size={15} aria-hidden="true" className="text-[var(--dash-ink-soft)]" />
+            {fallbackLabel}
+        </span>
     )
 }
 
@@ -197,14 +243,24 @@ function OrderPage({ orderId }) {
                 const statusRes = await fetch('/api/admin/settings')
                 const statusData = await statusRes.json()
 
-                // Fetch product details if productId exists
+                // Fetch product details if productId exists. Custom-print
+                // orders whose pseudo id cannot resolve fall back to the
+                // canonical custom-print product (its photos + creator).
                 if (orderData.order.cartItem?.productId) {
                     try {
-                        const productRes = await fetch(`/api/product?ids=${orderData.order.cartItem.productId}`)
-                        const productData = await productRes.json()
-                        if (productData.products && productData.products.length > 0) {
-                            setProduct(productData.products[0])
+                        const productId = String(orderData.order.cartItem.productId)
+                        let resolved = null
+                        if (/^[a-f\d]{24}$/i.test(productId)) {
+                            const productRes = await fetch(`/api/product?ids=${productId}`)
+                            const productData = await productRes.json()
+                            resolved = productData.products?.[0] || null
                         }
+                        if (!resolved && (orderData.order.cartItem.requestId || productId.startsWith('custom-print:'))) {
+                            const printRes = await fetch('/api/product?productType=print')
+                            const printData = await printRes.json()
+                            resolved = printData.products?.[0] || null
+                        }
+                        if (resolved) setProduct(resolved)
                     } catch (err) {
                         console.error('Error fetching product:', err)
                     }
@@ -314,7 +370,7 @@ function OrderPage({ orderId }) {
     const isCustomPrint =
         Boolean(cartItem.requestId) || String(cartItem.productId || '').startsWith('custom-print:')
     const displayTitle = isCustomPrint
-        ? `Custom 3D Print${cartItem.requestId ? ` - ${cartItem.requestId}` : ''}`
+        ? 'Custom 3D Print' // request ids are admin-facing only
         : product?.name || cartItem.productId
 
     const statusHistory = order.statusHistory || []
@@ -422,14 +478,7 @@ function OrderPage({ orderId }) {
                         <div>
                             <p className="dash-label">Payment method</p>
                             <p className="dash-data mt-0.5">
-                                {paymentMethod?.type === 'card' ? (
-                                    <span className="flex items-center gap-1.5">
-                                        <span className="capitalize">{paymentMethod.card?.brand || 'Card'}</span>
-                                        <span>•••• {paymentMethod.card?.last4}</span>
-                                    </span>
-                                ) : (
-                                    paymentLabel
-                                )}
+                                <PaymentMethodBadge paymentMethod={paymentMethod} fallbackLabel={paymentLabel} />
                             </p>
                         </div>
                         {/* Support area: message the seller + print the summary. */}
@@ -460,7 +509,7 @@ function OrderPage({ orderId }) {
                     <div className="lg:col-span-2 flex flex-col gap-4">
                         {/* Progress */}
                         <DashCard
-                            title="Order progress"
+                            title={<span className="flex items-center gap-2"><IoFlagOutline size={15} aria-hidden="true" className="text-[var(--dash-ink-soft)]" />Order progress</span>}
                             action={
                                 // The no-history fallback carries the pill itself.
                                 hasHistory ? (
@@ -471,7 +520,7 @@ function OrderPage({ orderId }) {
                             }
                         >
                             {order.trackingId && (
-                                <QuietRow label="Tracking ID" className="mb-4">
+                                <QuietRow label="Tracking ID" icon={IoLocationOutline} className="mb-4">
                                     {order.trackingId}
                                     <ActionIcon
                                         icon={IoCopyOutline}
@@ -510,7 +559,7 @@ function OrderPage({ orderId }) {
                         </DashCard>
 
                         {/* Items */}
-                        <DashCard title="Items">
+                        <DashCard title={<span className="flex items-center gap-2"><IoCubeOutline size={15} aria-hidden="true" className="text-[var(--dash-ink-soft)]" />Items</span>}>
                             <div className="flex flex-wrap items-center gap-3">
                                 <ItemThumb product={product} title={displayTitle} isCustomPrint={isCustomPrint} />
                                 <div className="min-w-0 flex-1">
@@ -564,7 +613,7 @@ function OrderPage({ orderId }) {
 
                         {cartItem.orderNote && (
                             <section className="bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-3 py-2.5">
-                                <h4 className="dash-label">Your note</h4>
+                                <h4 className="dash-label flex items-center gap-1.5"><IoDocumentTextOutline size={13} aria-hidden="true" />Your note</h4>
                                 <p className="mt-1 text-[13px] whitespace-pre-wrap leading-relaxed">
                                     {cartItem.orderNote}
                                 </p>
@@ -574,7 +623,7 @@ function OrderPage({ orderId }) {
 
                     <div className="flex flex-col gap-4">
                         {/* Cost summary */}
-                        <DashCard title="Order summary">
+                        <DashCard title={<span className="flex items-center gap-2"><IoReceiptOutline size={15} aria-hidden="true" className="text-[var(--dash-ink-soft)]" />Order summary</span>}>
                             <QuietRow label="Subtotal">
                                 {cartItem.currency || 'S'}$
                                 {money((cartItem.finalPrice || cartItem.price || 0) * (cartItem.quantity || 1))}
@@ -608,11 +657,11 @@ function OrderPage({ orderId }) {
                         </DashCard>
 
                         {/* Shipping & contact */}
-                        <DashCard title="Shipping">
+                        <DashCard title={<span className="flex items-center gap-2"><IoCarOutline size={15} aria-hidden="true" className="text-[var(--dash-ink-soft)]" />Shipping</span>}>
                             <div className="flex flex-col gap-4">
                                 {shippingAddress && (
                                     <section>
-                                        <h4 className="dash-label mb-1">Shipping address</h4>
+                                        <h4 className="dash-label mb-1 flex items-center gap-1.5"><IoLocationOutline size={13} aria-hidden="true" />Shipping address</h4>
                                         <div className="text-[13px] bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-3 py-2.5 leading-relaxed">
                                             {shippingAddress.street && <p>{shippingAddress.street}</p>}
                                             {shippingAddress.unitNumber && (
@@ -641,7 +690,7 @@ function OrderPage({ orderId }) {
 
                                 {customerDetails?.address && (
                                     <section>
-                                        <h4 className="dash-label mb-1">Billing address</h4>
+                                        <h4 className="dash-label mb-1 flex items-center gap-1.5"><IoHomeOutline size={13} aria-hidden="true" />Billing address</h4>
                                         <div className="text-[13px] bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-3 py-2.5 leading-relaxed">
                                             {customerDetails.address.line1 && <p>{customerDetails.address.line1}</p>}
                                             {customerDetails.address.line2 && (
@@ -666,21 +715,21 @@ function OrderPage({ orderId }) {
                                 )}
 
                                 <div>
-                                    <QuietRow label="Shipping method">
+                                    <QuietRow label="Shipping method" icon={IoCarOutline}>
                                         <span className="capitalize">
                                             {cartItem.chosenDeliveryType || 'Standard Delivery'}
                                         </span>
                                     </QuietRow>
                                     {customerDetails?.name && (
-                                        <QuietRow label="Name">{customerDetails.name}</QuietRow>
+                                        <QuietRow label="Name" icon={IoPersonOutline}>{customerDetails.name}</QuietRow>
                                     )}
                                     {customerDetails?.email && (
-                                        <QuietRow label="Email">
+                                        <QuietRow label="Email" icon={IoMailOutline}>
                                             <span className="break-all">{customerDetails.email}</span>
                                         </QuietRow>
                                     )}
                                     {customerDetails?.phone && (
-                                        <QuietRow label="Phone">{customerDetails.phone}</QuietRow>
+                                        <QuietRow label="Phone" icon={IoCallOutline}>{customerDetails.phone}</QuietRow>
                                     )}
                                 </div>
                             </div>

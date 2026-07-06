@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
-import { IoCopyOutline } from 'react-icons/io5'
 import AccountShell from '@/components/Account/AccountShell'
 import { printRequestTone, printStatusLabel, money } from '@/components/Account/accountUi'
 import { useToast } from '@/components/General/ToastProvider'
@@ -43,15 +42,6 @@ export default function AccountPrintRequestsPage() {
 
         load()
     }, [isLoaded, user])
-
-    const copyToClipboard = async (text) => {
-        try {
-            await navigator.clipboard.writeText(text)
-            showToast('Copied to clipboard!', 'success')
-        } catch (err) {
-            showToast('Failed to copy', 'error')
-        }
-    }
 
     const header = (
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
@@ -132,19 +122,8 @@ export default function AccountPrintRequestsPage() {
                                         </StatusPill>
                                     </div>
 
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="dash-data dash-soft">Request ID:</span>
-                                        <span className="dash-data font-mono truncate">{r.requestId}</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => copyToClipboard(r.requestId)}
-                                            title="Copy request ID"
-                                            aria-label="Copy request ID"
-                                            className="dash-hoverable rounded-full h-6 w-6 grid place-items-center border border-[var(--dash-line)] bg-[var(--dash-card)] cursor-pointer hover:bg-[var(--dash-canvas)] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)]"
-                                        >
-                                            <IoCopyOutline size={12} />
-                                        </button>
-                                    </div>
+                                    {/* Request ids are admin-facing only; the model name identifies
+                                        the job for the customer. */}
 
                                     {/* Quote breakdown, when a quote exists. */}
                                     {(r.status === 'quoted' || r.status === 'payment_pending') && quoted > 0 && (

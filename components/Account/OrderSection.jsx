@@ -139,6 +139,21 @@ function OrderSection() {
                         })
                     }
                 }
+                // Custom-print orders whose pseudo id cannot resolve borrow the
+                // canonical custom-print product (its photos + creator).
+                const needsPrintFallback = ordersArr.some((order) => {
+                    const pid = String(order.cartItem?.productId || '')
+                    return (order.cartItem?.requestId || pid.startsWith('custom-print:')) && !productsMap[pid]
+                })
+                if (needsPrintFallback) {
+                    try {
+                        const printRes = await fetch('/api/product?productType=print')
+                        if (printRes.ok) {
+                            const printData = await printRes.json()
+                            if (printData.products?.[0]) productsMap['custom-print'] = printData.products[0]
+                        }
+                    } catch { /* fallback tile covers it */ }
+                }
                 setProducts(productsMap)
             } catch (err) {
                 setError(err.message || 'Failed to load orders.')
@@ -195,9 +210,10 @@ function OrderSection() {
         const cartItem = order.cartItem || {}
         const isCustomPrint =
             Boolean(cartItem.requestId) || String(cartItem.productId || '').startsWith('custom-print:')
-        const product = products[cartItem.productId] || {}
+        const product =
+            products[cartItem.productId] || (isCustomPrint ? products['custom-print'] : null) || {}
         const displayTitle = isCustomPrint
-            ? `Custom 3D Print${cartItem.requestId ? ` - ${cartItem.requestId}` : ''}`
+            ? 'Custom 3D Print' // request ids are admin-facing only
             : product.name || cartItem.productId
         // "Delivered 10 May" facts come from the real statusHistory timestamp;
         // omitted honestly when no history entry exists.

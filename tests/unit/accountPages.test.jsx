@@ -440,8 +440,10 @@ describe('Account hub', () => {
         thumbs.forEach((img) =>
             expect(img).toHaveAttribute('src', `/api/proxy?key=${encodeURIComponent('products/benchy.png')}`),
         )
-        // The custom print order has no image: quiet icon tile, never a broken img.
-        expect(screen.getByRole('img', { name: 'Custom 3D Print - REQ-9' })).toBeInTheDocument()
+        // The custom print order borrows the canonical print product's photo
+        // and shows no request id (admin-facing only).
+        expect(screen.getByAltText('Custom 3D Print')).toBeInTheDocument()
+        expect(screen.queryByText(/REQ-9/)).toBeNull()
         expect(screen.getByRole('link', { name: 'Track print' })).toHaveAttribute(
             'href',
             '/account/prints',
@@ -517,10 +519,10 @@ describe('Account hub', () => {
         try {
             render(<Account />)
             await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
-            // The two catalogue orders get the CTA; the custom print order's
-            // pseudo product id never resolves, so its seller is unknown.
+            // All three orders get the CTA: catalogue products directly, the
+            // custom print via the canonical print product's creator.
             const buttons = screen.getAllByRole('button', { name: 'Message seller' })
-            expect(buttons.length).toBe(2)
+            expect(buttons.length).toBe(3)
             fireEvent.click(buttons[0])
             expect(events).toEqual([
                 { targetUserId: CREATOR_ID, displayName: 'Seller', imageUrl: null },
@@ -612,7 +614,8 @@ describe('Prints page', () => {
         expect(await screen.findByText('benchy.stl')).toBeInTheDocument()
         // Status pill + timeline entry both carry the label.
         expect(screen.getAllByText('Quote received').length).toBeGreaterThanOrEqual(2)
-        expect(screen.getByText('REQ-123')).toBeInTheDocument()
+        // Request ids are admin-facing only and never render for customers.
+        expect(screen.queryByText('REQ-123')).toBeNull()
         expect(screen.getByText('Base price')).toBeInTheDocument()
         expect(screen.getByText('Print fee')).toBeInTheDocument()
         expect(document.body.textContent).toContain('SGD 15.00')

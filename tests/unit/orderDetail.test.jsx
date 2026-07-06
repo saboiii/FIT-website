@@ -326,14 +326,16 @@ describe('Message seller', () => {
         expect(screen.queryByRole('button', { name: 'Message seller' })).toBeNull()
     })
 
-    it('hides the CTA when the product id cannot resolve to a seller', async () => {
+    it('resolves custom prints to the canonical print product for the CTA and image', async () => {
         stubFetch({
             ...baseOrder,
             cartItem: { ...baseOrder.cartItem, productId: 'custom-print:REQ-9', requestId: 'REQ-9' },
         })
         render(<OrderPage orderId={ORDER_ID} />)
         await screen.findByText('Order progress')
-        expect(screen.queryByRole('button', { name: 'Message seller' })).toBeNull()
+        // Pseudo ids fall back to /api/product?productType=print, whose
+        // creator becomes the seller and whose first photo the row shows.
+        expect(await screen.findByRole('button', { name: 'Message seller' })).toBeInTheDocument()
         // The custom print capability stays reachable.
         expect(screen.getByRole('link', { name: 'Track print' })).toHaveAttribute(
             'href',

@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useEditor, EditorContent, useEditorState } from '@tiptap/react'
+import { useEditor, EditorContent, useEditorState, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
@@ -15,11 +15,87 @@ import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import { Sheet } from '@/components/dashboard-ui'
 import { useToast } from '@/components/General/ToastProvider'
+import { HtmlBlock, sanitizeHtmlBlock } from '@/lib/blog/htmlBlock'
 import {
     LuBold, LuItalic, LuUnderline, LuStrikethrough, LuList, LuListOrdered,
     LuQuote, LuLink, LuImage, LuAlignLeft, LuAlignCenter, LuAlignRight,
     LuMinus, LuHighlighter, LuHeading2, LuHeading3, LuCheck, LuUnlink,
+    LuCode,
 } from 'react-icons/lu'
+
+/**
+ * Read-only NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js).
+ * The raw markup in attrs.html is shown via dangerouslySetInnerHTML and only
+ * ever edited as a plain string in a textarea, so ProseMirror never parses it
+ * (imported legacy posts can carry up to ~700KB of hand-authored HTML).
+ */
+function HtmlBlockView({ node, updateAttributes }) {
+    const [editing, setEditing] = useState(() => !node.attrs.html)
+    const [draft, setDraft] = useState(node.attrs.html || '')
+
+    const openEditor = () => {
+        setDraft(node.attrs.html || '')
+        setEditing(true)
+    }
+
+    const apply = () => {
+        updateAttributes({ html: draft })
+        setEditing(false)
+    }
+
+    return (
+        <NodeViewWrapper>
+            <div
+                contentEditable={false}
+                className="group relative my-2 rounded-[var(--dash-r-inner)] outline outline-1 outline-transparent outline-offset-4 hover:outline-[var(--dash-line)] transition-[outline-color]"
+            >
+                {node.attrs.html ? (
+                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
+                ) : (
+                    <div className="text-[13px] text-[var(--dash-ink-soft)] border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-6 text-center">
+                        Empty HTML block
+                    </div>
+                )}
+                <button
+                    type="button"
+                    onClick={openEditor}
+                    className={`dash-hoverable absolute top-2 right-2 rounded-full px-3 py-1 text-[12px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer shadow-[var(--dash-shadow-float)] transition-opacity ${editing ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
+                >
+                    Edit HTML
+                </button>
+                {editing && (
+                    <div className="mt-2 flex flex-col gap-2 border border-[var(--dash-line)] bg-[var(--dash-card)] rounded-[var(--dash-r-inner)] p-3">
+                        <textarea
+                            autoFocus
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            spellCheck={false}
+                            aria-label="HTML source"
+                            placeholder="<section>Paste or write raw HTML</section>"
+                            className="w-full h-56 dash-scroll resize-y font-mono text-xs leading-relaxed bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] p-3 outline-none"
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setEditing(false)}
+                                className="dash-hoverable rounded-full px-4 py-1.5 text-[13px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={apply}
+                                className="dash-hoverable rounded-full px-4 py-1.5 text-[13px] font-medium bg-[var(--dash-ink)] text-[var(--dash-canvas)] cursor-pointer active:scale-[0.97]"
+                            >
+                                Apply
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </NodeViewWrapper>
+    )
+}
 
 // Node names/attrs must stay in sync with lib/blog/renderTiptap.js.
 const extensions = [
@@ -32,6 +108,11 @@ const extensions = [
     Color,
     Highlight.configure({ multicolor: true }),
     Placeholder.configure({ placeholder: 'Write your post…' }),
+    HtmlBlock.extend({
+        addNodeView() {
+            return ReactNodeViewRenderer(HtmlBlockView)
+        },
+    }),
 ]
 
 async function uploadImage(file) {
@@ -327,6 +408,7 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <MenuButton title="Quote" onClick={() => editor.chain().focus().toggleBlockquote().run()}><LuQuote /></MenuButton>
                 <MenuButton title="Divider" onClick={() => editor.chain().focus().setHorizontalRule().run()}><LuMinus /></MenuButton>
                 <MenuButton title="Insert image" onClick={() => fileInputRef.current?.click()}><LuImage /></MenuButton>
+                <MenuButton title="HTML block" onClick={() => editor.chain().focus().insertContent({ type: 'htmlBlock', attrs: { html: '' } }).run()}><LuCode /></MenuButton>
             </FloatingMenu>
 
             {/* Grows with the page until very long, then scrolls internally. */}

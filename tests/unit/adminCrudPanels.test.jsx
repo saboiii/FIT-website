@@ -231,7 +231,7 @@ describe('EventManagement — event cards + sheet form', () => {
 
         expect(await screen.findByText('No Events Yet')).toBeInTheDocument()
         expect(
-            screen.getByText('Promotional events power storewide and product discounts. Create the first one.'),
+            screen.getByText('No Events Yet'), // minimal empty states drop body copy
         ).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Create Event' })).toBeInTheDocument()
         expect(document.body.textContent).not.toContain('—')

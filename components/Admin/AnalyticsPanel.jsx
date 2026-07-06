@@ -97,19 +97,15 @@ export default function AnalyticsPanel({ compact = false }) {
     if (state.configured === false) {
         return (
             <DashCard>
-                <EmptyState
-                    icon={<IoPulseOutline />}
-                    title="Analytics Not Connected"
-                    body={
-                        <>
-                            Create a PostHog project and set <code className="dash-data">NEXT_PUBLIC_POSTHOG_KEY</code>,{' '}
-                            <code className="dash-data">POSTHOG_PROJECT_ID</code> and{' '}
-                            <code className="dash-data">POSTHOG_PERSONAL_API_KEY</code> (optionally{' '}
-                            <code className="dash-data">NEXT_PUBLIC_POSTHOG_HOST</code>) to see traffic here.
-                        </>
-                    }
-                    className="py-6"
-                />
+                <EmptyState icon={<IoPulseOutline />} title="Analytics Not Connected" className="py-6" />
+                {/* Setup guidance stays visible even though empty states are minimal —
+                    this one is an instruction, not decoration. */}
+                <p className="text-[12px] dash-soft text-center -mt-6 pb-6 max-w-md mx-auto">
+                    Create a PostHog project and set <code className="dash-data">NEXT_PUBLIC_POSTHOG_KEY</code>,{' '}
+                    <code className="dash-data">POSTHOG_PROJECT_ID</code> and{' '}
+                    <code className="dash-data">POSTHOG_PERSONAL_API_KEY</code> (optionally{' '}
+                    <code className="dash-data">NEXT_PUBLIC_POSTHOG_HOST</code>) to see traffic here.
+                </p>
             </DashCard>
         )
     }

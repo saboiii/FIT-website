@@ -170,7 +170,7 @@ describe('MessagesInbox', () => {
         stubFetch({ channels: [] })
         render(<MessagesInbox />)
         expect(await screen.findByText('Messages From Your Customers')).toBeInTheDocument()
-        expect(screen.getByText(/land here/)).toBeInTheDocument()
+        expect(screen.getByText("Messages From Your Customers")).toBeInTheDocument() // body copy no longer renders (minimal empty states)
     })
 
     it('renders an informational EmptyState when messaging is not entitled', async () => {
@@ -182,7 +182,7 @@ describe('MessagesInbox', () => {
             await screen.findByText('Messaging Requires an Active Subscription'),
         ).toBeInTheDocument()
         expect(
-            screen.getByText('Messaging is only available to creators with an active subscription.'),
+            screen.getByText('Messaging Requires an Active Subscription'), // minimal empty states drop body copy
         ).toBeInTheDocument()
         // Gated users never hit the inbox API.
         const inboxCalls = global.fetch.mock.calls.filter(([u]) => String(u).startsWith('/api/chat/inbox'))

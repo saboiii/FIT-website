@@ -90,7 +90,7 @@ export default function RootLayout({ children }) {
                     <div className="flex flex-row items-center justify-center bg-baseColor">
                       <div className="flex flex-col md:w-[90vw] lg:w-[85vw] max-w-[1350px] w-screen border-l border-r border-borderColor transition-all duration-300 ease-in-out overflow-hidden bg-background">
                         <Navbar />
-                        <div className='lg:hidden flex h-16 w-full bg-background' />
+                        <div className='lg:hidden flex h-14 w-full bg-background' />
                         {children}
                         <Footer />
                       </div>

@@ -8,6 +8,8 @@ import ProductSearch from './CMSFields/ProductSearch'
 import CategoryInput from './CMSFields/CategoryInput'
 import BooleanField from './CMSFields/BooleanField'
 import RangeField from './CMSFields/RangeField'
+import NavMenuPagesField from './CMSFields/NavMenuPagesField'
+import BlogPostPicker from './CMSFields/BlogPostPicker'
 import { DashCard, GlassBar, SkeletonRow, ViewTabs, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import { labelCls, quietBtnCls, InfoStrip } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 import { IoRefresh } from 'react-icons/io5'
@@ -76,6 +78,12 @@ const defaultContentSections = [
         fields: ['bannerImage']
     },
     {
+        id: 'navigation/mega-menu',
+        name: 'Navigation - Mega Menu',
+        description: 'Explore page links (icon, label, description) and featured blog articles shown inside the navbar dropdown panels',
+        fields: ['menuPages', 'featuredPosts']
+    },
+    {
         id: 'terms/content',
         name: 'Terms of Service',
         description: 'Complete terms of service content',
@@ -103,6 +111,7 @@ const REGION_META = {
     'about/benefits': { label: 'Benefits', hint: 'The benefit cards near the bottom of the About page.', h: 'h-12' },
     'shop/banner': { label: 'Shop banner', hint: 'The wide image across the top of the shop page.', h: 'h-16' },
     'prints/banner': { label: 'Prints banner', hint: 'The wide image across the top of the prints page.', h: 'h-16' },
+    'navigation/mega-menu': { label: 'Navbar mega menu', hint: 'The page links and featured blog articles inside the Shop and Prints dropdown panels. Leave empty to use the built-in defaults.', h: 'h-12' },
     'terms/content': { label: 'Terms of service', hint: 'The full terms of service document.', h: 'h-24' },
     'privacy/content': { label: 'Privacy policy', hint: 'The full privacy policy document.', h: 'h-24' },
 }
@@ -125,6 +134,11 @@ const PAGE_TABS = [
         key: 'shop', label: 'Shop & Prints', pages: [
             { title: 'Shop page', regions: ['shop/banner', { fixed: 'Product grid', h: 'h-20' }] },
             { title: 'Prints page', regions: ['prints/banner', { fixed: 'Product grid', h: 'h-20' }] },
+        ],
+    },
+    {
+        key: 'navigation', label: 'Navigation', pages: [
+            { title: 'Navbar', regions: [{ fixed: 'Menu bar', h: 'h-8' }, 'navigation/mega-menu'] },
         ],
     },
     {
@@ -241,6 +255,33 @@ export default function ContentManagement() {
     }
 
     const renderField = (field, value, onChange) => {
+        // Navbar mega-menu fields carry structured arrays with dedicated
+        // editors; they must be matched before the generic array detection.
+        if (field === 'menuPages') {
+            return (
+                <NavMenuPagesField
+                    key={field}
+                    label="Menu pages"
+                    value={Array.isArray(value) ? value : []}
+                    onChange={onChange}
+                    maxItems={8}
+                    helpText="Ordered page links shown in the navbar panel's Explore list. Leave empty to use the built-in defaults."
+                />
+            )
+        }
+        if (field === 'featuredPosts') {
+            return (
+                <BlogPostPicker
+                    key={field}
+                    label="Featured articles"
+                    value={Array.isArray(value) ? value : []}
+                    onChange={onChange}
+                    maxItems={4}
+                    helpText="Blog posts featured in the navbar panel's From the blog rail. Leave empty to show the newest published posts."
+                />
+            )
+        }
+
         const isContentField = field === 'content'
         const isComplexContent = selectedSection.includes('terms') || selectedSection.includes('privacy')
 
@@ -511,6 +552,7 @@ export default function ContentManagement() {
         if (sectionId.startsWith('dashboard/')) return '/dashboard'
         if (sectionId.startsWith('onboarding/')) return '/onboarding'
         if (sectionId.startsWith('account/')) return '/account'
+        if (sectionId.startsWith('navigation/')) return '/'
         return '/'
     }
 

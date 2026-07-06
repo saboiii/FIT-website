@@ -2,7 +2,11 @@
 //
 // Desktop: primary links (Creators/About) render with hrefs; Shop and Prints
 // are mega-panel triggers (aria-expanded) whose panels carry the category ->
-// subcategory links with exact query-param hrefs plus the one featured tile;
+// subcategory links with exact query-param hrefs plus the Browse-all and
+// Print-your-model icon rows; the right rail shows CMS featured articles
+// (falling back to the newest published posts from /api/blog) and the CMS
+// Explore page links (falling back to the hardcoded defaults); the whole nav
+// is flat and untracked (no gradient or letter-spacing classes anywhere);
 // Escape closes the panel and returns focus to its trigger; cart/messages
 // icons keep their destinations and entitlement gating; signed-out shows
 // Sign in / Sign up instead of the account dropdown.
@@ -72,10 +76,22 @@ const categoriesFixture = [
     },
 ]
 
+const blogPostsFixture = [
+    { slug: 'first-post', title: 'First post' },
+    { slug: 'second-post', title: 'Second post' },
+    { slug: 'third-post', title: 'Third post' },
+    { slug: 'fourth-post', title: 'Fourth post' },
+]
+
+// Frontmatter served by the public content API for 'navigation/mega-menu';
+// null means no CMS block saved (the API 404s and fallbacks kick in).
+let mockNavContent = null
+
 const okJson = (body) => Promise.resolve({ ok: true, json: async () => body })
 
 beforeEach(() => {
     mockIsAdmin = false
+    mockNavContent = null
     mockEntitlements = {
         loading: false,
         canAccessDashboard: true,
@@ -97,6 +113,12 @@ beforeEach(() => {
         const u = String(url)
         if (u.startsWith('/api/categories')) return okJson({ categories: categoriesFixture })
         if (u.startsWith('/api/chat/inbox')) return okJson({ channels: [] })
+        if (u.startsWith('/api/content')) {
+            if (mockNavContent) return okJson({ frontmatter: mockNavContent, content: '' })
+            return Promise.resolve({ ok: false, status: 404, json: async () => ({}) })
+        }
+        if (u.startsWith('/api/blog')) return okJson({ ok: true, posts: blogPostsFixture })
+        if (u.startsWith('/api/subscription/info')) return okJson({ productName: 'Pro' })
         return okJson({})
     })
 })
@@ -133,7 +155,7 @@ describe('Navbar desktop bar', () => {
         expect(screen.getByTestId('account-dropdown')).toBeInTheDocument()
     })
 
-    it('opens the Shop mega panel on click with category columns and the featured tile', async () => {
+    it('opens the Shop mega panel on click with category columns and flat icon rows', async () => {
         render(<Navbar />)
         const trigger = screen.getByRole('button', { name: 'Shop' })
         fireEvent.click(trigger)
@@ -144,14 +166,77 @@ describe('Navbar desktop bar', () => {
             'href',
             '/shop?productType=shop&productCategory=Figurines&productSubCategory=Anime',
         )
+        // The old featured tile is now a plain icon row; hrefs are unchanged.
         expect(within(panel).getByRole('link', { name: /Print your model/ })).toHaveAttribute(
             'href',
             '/products/custom-print-request',
         )
-        expect(within(panel).getByRole('link', { name: 'Browse all shop' })).toHaveAttribute(
+        expect(within(panel).getByRole('link', { name: /Browse all shop/ })).toHaveAttribute(
             'href',
             '/shop',
         )
+    })
+
+    it('fills the right rail with the newest published posts and default page links when no CMS block exists', async () => {
+        render(<Navbar />)
+        fireEvent.click(screen.getByRole('button', { name: 'Shop' }))
+        const panel = await screen.findByRole('region', { name: 'Shop menu' })
+
+        // Fallback articles: 3 newest published posts, linked to /blog/{slug}.
+        expect(await within(panel).findByRole('link', { name: /First post/ })).toHaveAttribute(
+            'href',
+            '/blog/first-post',
+        )
+        expect(within(panel).getByRole('link', { name: /Third post/ })).toHaveAttribute(
+            'href',
+            '/blog/third-post',
+        )
+        expect(within(panel).queryByRole('link', { name: /Fourth post/ })).toBeNull()
+
+        // Fallback Explore rows: the hardcoded default page links.
+        ;[
+            ['Blog', '/blog'],
+            ['Creators', '/creators'],
+            ['About', '/about'],
+            ['Custom 3D print', '/products/custom-print-request'],
+            ['Print requests', '/account/prints'],
+        ].forEach(([name, href]) => {
+            expect(within(panel).getByRole('link', { name })).toHaveAttribute('href', href)
+        })
+    })
+
+    it('renders CMS-configured featured articles and page links instead of the fallbacks', async () => {
+        mockNavContent = {
+            menuPages: [
+                { icon: 'mail', label: 'Contact', description: 'Say hello.', href: '/contact' },
+            ],
+            featuredPosts: [{ slug: 'cms-pick', title: 'CMS pick' }],
+        }
+        render(<Navbar />)
+        fireEvent.click(screen.getByRole('button', { name: 'Shop' }))
+        const panel = await screen.findByRole('region', { name: 'Shop menu' })
+
+        expect(await within(panel).findByRole('link', { name: /CMS pick/ })).toHaveAttribute(
+            'href',
+            '/blog/cms-pick',
+        )
+        expect(within(panel).getByRole('link', { name: 'Contact' })).toHaveAttribute(
+            'href',
+            '/contact',
+        )
+        // CMS content replaces both fallbacks entirely.
+        expect(within(panel).queryByRole('link', { name: /First post/ })).toBeNull()
+        expect(within(panel).queryByRole('link', { name: 'Blog' })).toBeNull()
+    })
+
+    it('carries no gradient or letter-spacing classes anywhere in the nav', async () => {
+        render(<Navbar />)
+        fireEvent.click(screen.getByRole('button', { name: 'Shop' }))
+        await screen.findByRole('region', { name: 'Shop menu' })
+        fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+        await screen.findByRole('dialog', { name: 'Menu' })
+        expect(document.querySelector('[class*="gradient"]')).toBeNull()
+        expect(document.querySelector('[class*="tracking-"]')).toBeNull()
     })
 
     it('opens the Prints mega panel with print category links', async () => {
@@ -256,6 +341,19 @@ describe('Navbar mobile menu', () => {
             'href',
             '/shop?productType=shop&productCategory=Figurines&productSubCategory=Anime',
         )
+    })
+
+    it('shows the paid plan as a flat amber chip with ink text', async () => {
+        mockEntitlements = {
+            ...mockEntitlements,
+            isPaidTier: true,
+            subscription: { priceId: 'price_pro' },
+        }
+        const sheet = await openMobileMenu()
+        const badge = await within(sheet).findByText('Pro')
+        expect(badge.className).toContain('bg-amber-300')
+        expect(badge.className).toContain('text-textColor')
+        expect(badge.className).not.toContain('gradient')
     })
 
     it('does not render Dashboard or Messages rows when not entitled', async () => {

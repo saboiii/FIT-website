@@ -1,24 +1,29 @@
 'use client'
-// Storefront navbar: an Apple-style fixed translucent bar (backdrop blur,
-// hairline bottom border) carrying Nixon-style uppercase letter-spaced links
-// whose active item is a thin ink underline, and Descript-style rounded mega
+// Storefront navbar: a flat fixed translucent bar (backdrop blur, hairline
+// bottom border, 56px tall) carrying quiet 13px medium links whose active
+// item is a thin sliding ink underline, and Untitled-UI style rounded mega
 // panels for Shop and Prints (see docs/navbar/). The bar is position:fixed
 // (an overflow-hidden layout ancestor defeats position:sticky here) with an
 // in-flow spacer so pages keep their offset; the small-screen spacer already
 // lives in app/layout.jsx. Panels open on hover intent, click or ArrowDown;
 // Escape closes and refocuses the trigger; outside click, focus leaving the
 // bar and route changes all close. Mobile keeps the full MobileMenu sheet.
+// Panel content (Explore icon rows + featured blog articles) comes from the
+// public content API path 'navigation/mega-menu' (same useContent hook as
+// Main.jsx), falling back to DEFAULT_MENU_PAGES and the 3 newest published
+// posts from /api/blog so zero CMS config still renders a complete panel.
 import Link from 'next/link'
 import Logo from '../Logo'
 import { useUser } from '@clerk/nextjs'
 import AccountDropdown from './AccountDropdown'
 import MobileMenu from './MobileMenu'
-import NavPanel, { navItemCls, NavUnderline } from './NavPanel'
+import NavPanel, { navItemCls, NavUnderline, DEFAULT_MENU_PAGES } from './NavPanel'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, useReducedMotion } from 'framer-motion'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { IoCartOutline, IoChatbubblesOutline, IoMenuOutline } from 'react-icons/io5'
 import useEntitlements from '@/utils/useEntitlements'
+import { useContent } from '@/utils/useContent'
 
 // Shop and Prints open a mega panel; the rest are plain routes. `key` doubles
 // as the productType segment in panel subcategory hrefs.
@@ -41,6 +46,7 @@ function Navbar() {
     const [openPanel, setOpenPanel] = useState(null) // 'shop' | 'prints' | null
     const [shopCategories, setShopCategories] = useState([])
     const [printCategories, setPrintCategories] = useState([])
+    const [fallbackPosts, setFallbackPosts] = useState([])
     const headerRef = useRef(null)
     const hoverTimer = useRef(null)
     const triggerRefs = useRef({})
@@ -68,6 +74,37 @@ function Navbar() {
     }, [pathname, searchKey])
 
     useEffect(() => () => clearTimeout(hoverTimer.current), [])
+
+    // CMS-driven panel content, fetched once on mount from the same public
+    // content API Main.jsx uses. Malformed or missing entries fall back to
+    // the hardcoded defaults so the panel never renders half-configured.
+    const { content: navContent, isLoading: navContentLoading } = useContent('navigation/mega-menu', {})
+    const cmsMenuPages = Array.isArray(navContent?.menuPages)
+        ? navContent.menuPages.filter((page) => page && page.label && page.href).slice(0, 8)
+        : []
+    const cmsFeaturedPosts = Array.isArray(navContent?.featuredPosts)
+        ? navContent.featuredPosts.filter((post) => post && post.slug && post.title).slice(0, 4)
+        : []
+    const menuPages = cmsMenuPages.length > 0 ? cmsMenuPages : DEFAULT_MENU_PAGES
+    const featuredArticles = cmsFeaturedPosts.length > 0 ? cmsFeaturedPosts : fallbackPosts
+
+    // No CMS-picked articles: fall back to the 3 newest published posts.
+    useEffect(() => {
+        if (navContentLoading || cmsFeaturedPosts.length > 0) return undefined
+        let cancelled = false
+        fetch('/api/blog')
+            .then((res) => (res.ok ? res.json() : { posts: [] }))
+            .then((data) => {
+                if (cancelled) return
+                setFallbackPosts(
+                    (data.posts || []).slice(0, 3).map((post) => ({ slug: post.slug, title: post.title })),
+                )
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [navContentLoading, cmsFeaturedPosts.length])
 
     useEffect(() => {
         const fetchCategories = async () => {
@@ -140,8 +177,8 @@ function Navbar() {
     if (!isLoaded) {
         return (
             <div className="flex w-full flex-col">
-                <div className={`h-16 ${barCls}`} />
-                <div className="hidden h-16 w-full lg:block" />
+                <div className={`h-14 ${barCls}`} />
+                <div className="hidden h-14 w-full lg:block" />
             </div>
         )
     }
@@ -163,7 +200,7 @@ function Navbar() {
                 }}
                 className={barCls}
             >
-                <nav aria-label="Primary" className="relative flex h-16 items-center justify-between px-6 lg:px-8">
+                <nav aria-label="Primary" className="relative flex h-14 items-center justify-between px-5 lg:px-6">
                     <Link
                         href="/"
                         aria-label="Home"
@@ -172,7 +209,7 @@ function Navbar() {
                         <Logo width={28} height={28} />
                     </Link>
 
-                    <ul className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 flex-row items-center gap-9 lg:flex">
+                    <ul className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 flex-row items-center gap-7 lg:flex">
                         {PRIMARY.map((item) => (
                             <li key={item.key} className="relative flex">
                                 {item.href ? (
@@ -230,7 +267,7 @@ function Navbar() {
                                     >
                                         <IoChatbubblesOutline size={18} aria-hidden="true" />
                                         {unreadMessages > 0 && (
-                                            <span className="absolute -right-2 -top-2 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                                            <span className="absolute -right-2 -top-2 rounded-full bg-amber-300 px-1.5 py-0.5 text-[9px] font-semibold text-textColor">
                                                 {unreadMessages > 9 ? '9+' : unreadMessages}
                                             </span>
                                         )}
@@ -249,7 +286,7 @@ function Navbar() {
                                 </Link>
                                 <Link
                                     href="/sign-up"
-                                    className="flex items-center rounded-full bg-textColor px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-background transition-opacity duration-200 ease-in-out hover:opacity-85"
+                                    className="flex items-center rounded-full bg-textColor px-3.5 py-1.5 text-[13px] font-medium text-background transition-opacity duration-200 ease-in-out hover:opacity-85"
                                 >
                                     Sign up
                                 </Link>
@@ -276,6 +313,8 @@ function Navbar() {
                             type={openItem.key}
                             label={openItem.label}
                             categories={openItem.key === 'shop' ? shopCategories : printCategories}
+                            menuPages={menuPages}
+                            articles={featuredArticles}
                             reduceMotion={reduceMotion}
                             onMouseEnter={cancelTimer}
                             onMouseLeave={scheduleClose}
@@ -286,7 +325,7 @@ function Navbar() {
             </header>
 
             {/* In-flow spacer for the fixed desktop bar. */}
-            <div className="hidden h-16 w-full lg:block" />
+            <div className="hidden h-14 w-full lg:block" />
 
             <MobileMenu
                 open={isOpen}

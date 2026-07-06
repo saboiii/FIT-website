@@ -1,10 +1,12 @@
 'use client'
 // Mobile navigation sheet, the small-screen counterpart of AccountDropdown
 // and the desktop mega panels: a full-height right sheet with soft rounded
-// corners, layered shadow, Nixon-style uppercase hairline-underlined group
-// headers and icon + label rows at comfortable touch size. Rows are
-// entitlement-gated (Dashboard, Admin, Messages) and mirror the desktop nav
-// (Home, Shop, Prints, Creators, About) plus every account destination.
+// corners, layered shadow, small uppercase hairline-underlined group headers
+// (default tracking, matching the flat desktop panel) and compact icon +
+// label rows. Rows are entitlement-gated (Dashboard, Admin, Messages) and
+// mirror the desktop nav (Home, Shop, Prints, Creators, About) plus every
+// account destination. Flat theme: ink, grey, hairlines and a single flat
+// amber-300 chip for the paid plan badge; no gradients anywhere.
 // Storefront vocabulary only (borderColor/baseColor/lightColor/textColor).
 // Esc and backdrop close; Esc returns focus to the hamburger trigger; body
 // scroll is locked while open; reduced motion collapses the slide to a fade.
@@ -39,7 +41,7 @@ import {
 } from 'react-icons/io5'
 
 const rowCls = (active) =>
-    `flex w-full min-h-[44px] items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150 ease-in-out ${
+    `flex w-full min-h-[40px] items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-in-out ${
         active
             ? 'bg-black/[0.05] text-textColor'
             : 'text-lightColor hover:bg-black/[0.03] hover:text-textColor'
@@ -55,11 +57,11 @@ function SheetRow({ href, icon: Icon, label, active = false, badge = null, onNav
     )
 }
 
-// Uppercase letter-spaced header over a hairline, matching the desktop mega
-// panel's column headers.
+// Small uppercase grey header over a hairline (default tracking), matching
+// the desktop mega panel's column headers.
 function GroupLabel({ children }) {
     return (
-        <p className="mx-3 mb-1 mt-4 border-b border-borderColor pb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-lightColor">
+        <p className="mx-3 mb-1 mt-3 border-b border-borderColor pb-1 text-[11px] font-medium uppercase text-lightColor">
             {children}
         </p>
     )
@@ -104,13 +106,13 @@ function CategoryDisclosure({ id, icon: Icon, label, browseHref, productType, ca
                             <Link
                                 href={browseHref}
                                 onClick={onNavigate}
-                                className="flex min-h-[44px] items-center rounded-lg px-2 text-[13px] font-medium text-lightColor transition-colors duration-150 ease-in-out hover:bg-black/[0.03] hover:text-textColor"
+                                className="flex min-h-[40px] items-center rounded-lg px-2 text-[13px] font-medium text-lightColor transition-colors duration-150 ease-in-out hover:bg-black/[0.03] hover:text-textColor"
                             >
                                 Browse all {label.toLowerCase()}
                             </Link>
                             {categories.map((category) => (
-                                <div key={category.name} className="pt-2">
-                                    <p className="mx-2 border-b border-borderColor pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-lightColor">
+                                <div key={category.name} className="pt-1.5">
+                                    <p className="mx-2 border-b border-borderColor pb-1 text-[11px] font-medium uppercase text-lightColor">
                                         {category.displayName}
                                     </p>
                                     {(category.subcategories || [])
@@ -120,7 +122,7 @@ function CategoryDisclosure({ id, icon: Icon, label, browseHref, productType, ca
                                                 key={sub.name}
                                                 href={`/${productType}?productType=${productType}&productCategory=${encodeURIComponent(category.displayName)}&productSubCategory=${encodeURIComponent(sub.displayName)}`}
                                                 onClick={onNavigate}
-                                                className="flex min-h-[44px] items-center rounded-lg px-2 text-[13px] text-lightColor transition-colors duration-150 ease-in-out hover:bg-black/[0.03] hover:text-textColor"
+                                                className="flex min-h-[40px] items-center rounded-lg px-2 text-[13px] text-lightColor transition-colors duration-150 ease-in-out hover:bg-black/[0.03] hover:text-textColor"
                                             >
                                                 {sub.displayName}
                                             </Link>
@@ -204,11 +206,12 @@ function MobileMenu({ open, onClose, triggerRef, shopCategories = [], printCateg
 
     const isAccountHub = pathname === '/account'
     const badgeText = subscription?.priceId ? planBadge || 'Member' : 'Free'
+    // Flat plan chip: the paid tier is the one amber accent, ink on yellow.
     const planBadgeEl = (
         <span
-            className={`ml-auto max-w-[88px] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+            className={`ml-auto max-w-[88px] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
                 isPaidTier
-                    ? 'bg-gradient-to-br from-amber-300 to-red-400 text-white'
+                    ? 'bg-amber-300 text-textColor'
                     : 'border border-borderColor bg-baseColor text-lightColor'
             }`}
         >
@@ -217,7 +220,7 @@ function MobileMenu({ open, onClose, triggerRef, shopCategories = [], printCateg
     )
     const unreadBadgeEl =
         unreadMessages > 0 ? (
-            <span className="ml-auto shrink-0 rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+            <span className="ml-auto shrink-0 rounded-full bg-amber-300 px-1.5 py-0.5 text-[9px] font-semibold text-textColor">
                 {unreadMessages > 9 ? '9+' : unreadMessages}
             </span>
         ) : null
@@ -269,7 +272,7 @@ function MobileMenu({ open, onClose, triggerRef, shopCategories = [], printCateg
                         transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
                         className="fixed right-0 top-0 z-[70] flex h-dvh w-[85vw] max-w-sm flex-col overflow-hidden rounded-l-2xl border-l border-borderColor bg-background shadow-[0_2px_6px_rgba(17,17,17,0.05),0_16px_40px_rgba(17,17,17,0.10)]"
                     >
-                        <div className="flex items-center justify-between gap-3 border-b border-borderColor bg-white/80 px-4 pb-3 pt-4 backdrop-blur-md">
+                        <div className="flex items-center justify-between gap-3 border-b border-borderColor bg-white/80 px-4 py-3 backdrop-blur-md">
                             {signedIn ? (
                                 <div className="flex min-w-0 items-center gap-3">
                                     <span className="flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-borderColor">
@@ -306,7 +309,7 @@ function MobileMenu({ open, onClose, triggerRef, shopCategories = [], printCateg
                             </button>
                         </div>
 
-                        <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-2 pb-8 pt-1">
+                        <nav aria-label="Mobile" className="flex-1 overflow-y-auto px-2 pb-6 pt-1">
                             <GroupLabel>Browse</GroupLabel>
                             <SheetRow href="/" icon={IoHomeOutline} label="Home" active={pathname === '/'} onNavigate={onClose} />
                             <CategoryDisclosure

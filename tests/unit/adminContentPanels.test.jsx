@@ -18,6 +18,8 @@ vi.mock('@/components/Admin/CMSFields/ImageUpload', () => ({ default: ({ label }
 vi.mock('@/components/Admin/CMSFields/ProductSearch', () => ({ default: ({ label }) => <div>PS:{label}</div> }))
 vi.mock('@/components/Admin/CMSFields/CategoryInput', () => ({ default: ({ label }) => <div>CAT:{label}</div> }))
 vi.mock('@/components/Admin/CMSFields/ArrayField', () => ({ default: ({ label }) => <div>ARR:{label}</div> }))
+vi.mock('@/components/Admin/CMSFields/NavMenuPagesField', () => ({ default: ({ label }) => <div>NAVPAGES:{label}</div> }))
+vi.mock('@/components/Admin/CMSFields/BlogPostPicker', () => ({ default: ({ label }) => <div>BLOGPICK:{label}</div> }))
 
 // Shared product-form field groups (owned elsewhere) reduced to markers.
 vi.mock('@/components/DashboardComponents/ProductFormFields/PricingFields', () => ({ default: () => <div>PricingFieldsMock</div> }))
@@ -77,6 +79,50 @@ describe('ContentManagement — spatial page map picker', () => {
         expect(decodeURIComponent(window.location.search)).toContain('sub=home/hero-banner')
     })
 
+    it('shows the Navigation tab whose mega-menu region renders the nav CMS fields', async () => {
+        render(<ContentManagement />)
+        await screen.findByRole('button', { name: 'Featured products' })
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Navigation' }))
+
+        await waitFor(() => {
+            expect(global.fetch).toHaveBeenCalledWith('/api/admin/content?path=navigation/mega-menu')
+        })
+        expect(screen.getByRole('button', { name: 'Navbar mega menu', pressed: true })).toBeInTheDocument()
+        // Fixed context block so the map reads spatially.
+        expect(screen.getByText('Menu bar')).toBeInTheDocument()
+        // Both dedicated field editors render for the region.
+        expect(await screen.findByText('NAVPAGES:Menu pages')).toBeInTheDocument()
+        expect(screen.getByText('BLOGPICK:Featured articles')).toBeInTheDocument()
+    })
+
+    it('saving the mega-menu region PUTs menuPages and featuredPosts', async () => {
+        const menuPages = [{ icon: 'mail', label: 'Contact', description: 'Say hello.', href: '/contact' }]
+        const featuredPosts = [{ slug: 'cms-pick', title: 'CMS pick' }]
+        global.fetch = vi.fn((url, init) => {
+            const u = String(url)
+            if (u.includes('/api/admin/content') && init?.method === 'PUT') return ok({ success: true })
+            if (u.includes('/api/admin/content')) return ok({ frontmatter: { menuPages, featuredPosts }, content: '' })
+            return ok({})
+        })
+
+        render(<ContentManagement />)
+        await screen.findByRole('button', { name: 'Featured products' })
+        fireEvent.click(screen.getByRole('tab', { name: 'Navigation' }))
+        await screen.findByText('NAVPAGES:Menu pages')
+
+        fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }))
+
+        await waitFor(() => {
+            const putCall = global.fetch.mock.calls.find(([, init]) => init?.method === 'PUT')
+            expect(putCall).toBeTruthy()
+            const body = JSON.parse(putCall[1].body)
+            expect(body.contentPath).toBe('navigation/mega-menu')
+            expect(body.frontmatter.menuPages).toEqual(menuPages)
+            expect(body.frontmatter.featuredPosts).toEqual(featuredPosts)
+        })
+    })
+
     it('switching to the Legal tab lands on the terms document', async () => {
         render(<ContentManagement />)
         await screen.findByRole('button', { name: 'Featured products' })
@@ -88,6 +134,77 @@ describe('ContentManagement — spatial page map picker', () => {
         })
         expect(screen.getByRole('button', { name: 'Terms of service', pressed: true })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Privacy policy' })).toBeInTheDocument()
+    })
+})
+
+describe('Nav CMS field editors (actual components)', () => {
+    it('NavMenuPagesField renders the curated icon picker and validates hrefs', async () => {
+        const { default: NavMenuPagesField } = await vi.importActual(
+            '@/components/Admin/CMSFields/NavMenuPagesField',
+        )
+        const onChange = vi.fn()
+        render(
+            <NavMenuPagesField
+                label="Menu pages"
+                value={[{ icon: 'mail', label: 'Contact', description: '', href: 'contact' }]}
+                onChange={onChange}
+            />,
+        )
+
+        // Curated named set: 12 visual icon buttons, current one pressed.
+        expect(screen.getAllByRole('button', { name: /icon$/ })).toHaveLength(12)
+        expect(screen.getByRole('button', { name: 'mail icon', pressed: true })).toBeInTheDocument()
+
+        // href without a leading / or http(s) is flagged inline.
+        expect(screen.getByText(/must start with \/ or http/i)).toBeInTheDocument()
+
+        // Picking another icon writes the icon name back through onChange.
+        fireEvent.click(screen.getByRole('button', { name: 'home icon' }))
+        expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ icon: 'home' })])
+    })
+
+    it('NavMenuPagesField caps the list at maxItems', async () => {
+        const { default: NavMenuPagesField } = await vi.importActual(
+            '@/components/Admin/CMSFields/NavMenuPagesField',
+        )
+        const items = Array.from({ length: 8 }, (_, i) => ({
+            icon: 'home',
+            label: `Page ${i}`,
+            description: '',
+            href: '/',
+        }))
+        render(<NavMenuPagesField label="Menu pages" value={items} onChange={vi.fn()} maxItems={8} />)
+        expect(screen.getByRole('button', { name: 'Add page link' })).toBeDisabled()
+    })
+
+    it('BlogPostPicker fetches the published lean list on focus and adds a selection', async () => {
+        global.fetch = vi.fn(() =>
+            ok({ ok: true, posts: [{ slug: 'alpha-post', title: 'Alpha' }, { slug: 'beta-post', title: 'Beta' }] }),
+        )
+        const { default: BlogPostPicker } = await vi.importActual(
+            '@/components/Admin/CMSFields/BlogPostPicker',
+        )
+        const onChange = vi.fn()
+        render(<BlogPostPicker label="Featured articles" value={[]} onChange={onChange} />)
+
+        fireEvent.focus(screen.getByPlaceholderText(/search published posts/i))
+        expect(global.fetch).toHaveBeenCalledWith('/api/admin/blog?all=1&status=published')
+
+        fireEvent.click(await screen.findByRole('button', { name: /Alpha/ }))
+        expect(onChange).toHaveBeenCalledWith([{ slug: 'alpha-post', title: 'Alpha' }])
+    })
+
+    it('BlogPostPicker disables search at the 4-article cap and removes selections', async () => {
+        const { default: BlogPostPicker } = await vi.importActual(
+            '@/components/Admin/CMSFields/BlogPostPicker',
+        )
+        const selected = Array.from({ length: 4 }, (_, i) => ({ slug: `post-${i}`, title: `Post ${i}` }))
+        const onChange = vi.fn()
+        render(<BlogPostPicker label="Featured articles" value={selected} onChange={onChange} />)
+
+        expect(screen.getByPlaceholderText(/maximum of 4 articles/i)).toBeDisabled()
+        fireEvent.click(screen.getByRole('button', { name: 'Remove Post 0' }))
+        expect(onChange).toHaveBeenCalledWith(selected.slice(1))
     })
 })
 

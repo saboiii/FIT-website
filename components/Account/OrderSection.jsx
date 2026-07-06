@@ -3,8 +3,9 @@
 // order-history-1.png): each order is a white card with a canvas facts header
 // (Order placed / Total / Items + order number and actions on the right), a
 // status line ("Delivered 10 May 2026" when the timestamp is known), thumbnail
-// item rows with per-item actions (Buy it again | View product), and a quiet
-// rate-your-experience strip on delivered orders. Above the cards: status
+// item rows with one quiet meta line and icon actions (Buy again | View
+// product | Message seller), and a one-line rate nudge on delivered orders.
+// Above the cards: status
 // ViewTabs (All / In progress / Delivered / Cancelled) and a time filter, both
 // client-side. The PeekPanel keeps every legacy field (variants, fees,
 // discounts, notes, delivery, custom-print tracking). Fetch logic is
@@ -14,8 +15,16 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { IoCopyOutline, IoCubeOutline, IoStarOutline } from 'react-icons/io5'
-import { ActionIcon, DottedRow, EmptyState, PeekPanel, StatusPill, SkeletonRow, ViewTabs } from '@/components/dashboard-ui'
+import { useUser } from '@clerk/nextjs'
+import {
+    IoChatbubbleEllipsesOutline,
+    IoCopyOutline,
+    IoCubeOutline,
+    IoOpenOutline,
+    IoRefreshOutline,
+    IoStarOutline,
+} from 'react-icons/io5'
+import { ActionIcon, EmptyState, PeekPanel, StatusPill, SkeletonRow, ViewTabs } from '@/components/dashboard-ui'
 import { useOrderStatuses, getStatusDisplayName } from '@/utils/useOrderStatuses'
 import { useToast } from '../General/ToastProvider'
 import { orderTone, money } from './accountUi'
@@ -70,6 +79,20 @@ function ItemThumb({ product, title, isCustomPrint, size = 56 }) {
     )
 }
 
+// Quiet label/value row (client polish, 2026-07-06): 12px ink-soft label
+// left, value right. Replaces the dotted-leader rows in the orders UI;
+// hairline dividers come from the surrounding group, not the row.
+function QuietRow({ label, children, className = '' }) {
+    return (
+        <div className={`flex items-center justify-between gap-3 py-1 ${className}`}>
+            <span className="text-[12px] text-[var(--dash-ink-soft)] shrink-0">{label}</span>
+            <span className="dash-data min-w-0 flex items-center justify-end gap-1.5 text-right">
+                {children}
+            </span>
+        </div>
+    )
+}
+
 function OrderSection() {
     const [orders, setOrders] = useState([])
     const [products, setProducts] = useState({})
@@ -80,6 +103,8 @@ function OrderSection() {
     const [timeFilter, setTimeFilter] = useState('all')
     const { orderStatuses } = useOrderStatuses() // Get all order statuses
     const { showToast } = useToast()
+    const { user } = useUser()
+    const viewerUserId = user?.id ? String(user.id) : null
 
     const isObjectIdString = (value) => typeof value === 'string' && /^[0-9a-fA-F]{24}$/.test(value)
 
@@ -129,6 +154,42 @@ function OrderSection() {
         } catch (err) {
             showToast('Failed to copy', 'error')
         }
+    }
+
+    // Message-seller CTA: only for catalogue products that still resolve, and
+    // never when the buyer IS the creator. Custom prints are fulfilled by the
+    // store itself and have no per-order seller chat surface (the global
+    // "Chat with us" launcher is the store contact), so they get no CTA.
+    const canMessageSeller = (d) => {
+        if (d.isCustomPrint) return false
+        const creatorId = d.product?.creatorUserId ? String(d.product.creatorUserId) : null
+        if (!creatorId) return false
+        return !(viewerUserId && viewerUserId === creatorId)
+    }
+
+    // The global ChatLauncher (app/layout.jsx) listens for this event. Products
+    // fetched via /api/product?ids= carry creatorUserId but no display name, so
+    // fall back to 'Seller'.
+    const messageSeller = (d) => {
+        if (typeof window === 'undefined') return
+        window.dispatchEvent(
+            new CustomEvent('fit:openCreatorChat', {
+                detail: {
+                    targetUserId: String(d.product.creatorUserId),
+                    displayName: d.product.creatorDisplayName || 'Seller',
+                    imageUrl: null,
+                },
+            }),
+        )
+    }
+
+    // One quiet meta line under the item name: variant summary + quantity.
+    const metaLine = (cartItem) => {
+        const variants =
+            cartItem.selectedVariants && Object.keys(cartItem.selectedVariants).length > 0
+                ? Object.values(cartItem.selectedVariants).join(', ')
+                : null
+        return [variants, `Qty ${cartItem.quantity || 1}`].filter(Boolean).join(', ')
     }
 
     const decorate = (order) => {
@@ -207,12 +268,7 @@ function OrderSection() {
     return (
         <div className="flex flex-col gap-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                    <h2 className="dash-title">Orders</h2>
-                    <p className="text-[13px] dash-soft mt-1">
-                        Everything you have bought, with live status and full detail.
-                    </p>
-                </div>
+                <h2 className="dash-title">Orders</h2>
                 {!loading && sorted.length > 0 && (
                     <div className="flex items-center gap-5">
                         <div>
@@ -342,12 +398,13 @@ function OrderSection() {
                                             )}
                                             {order.trackingId && (
                                                 <span className="dash-data dash-soft">
-                                                    Tracking <span className="font-mono">{order.trackingId}</span>
+                                                    Tracking {order.trackingId}
                                                 </span>
                                             )}
                                         </div>
 
-                                        {/* Item row: thumbnail, name, per-item actions. */}
+                                        {/* Item row: thumbnail + name lead; one quiet meta line;
+                                            quiet icon actions. */}
                                         <div className="flex flex-wrap items-center gap-3">
                                             <ItemThumb
                                                 product={d.product}
@@ -356,46 +413,59 @@ function OrderSection() {
                                             />
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-[13px] font-medium truncate">{d.displayTitle}</p>
-                                                {d.product?.description && (
-                                                    <p className="dash-data dash-soft truncate mt-0.5">
-                                                        {d.product.description}
-                                                    </p>
-                                                )}
-                                                <p className="dash-data dash-soft mt-0.5">
-                                                    Qty {d.cartItem.quantity || 1}
+                                                <p className="dash-data dash-soft truncate mt-0.5">
+                                                    {metaLine(d.cartItem)}
                                                 </p>
                                             </div>
-                                            <div className="flex items-center gap-2 shrink-0">
+                                            <div className="flex flex-wrap items-center gap-2 shrink-0">
                                                 {canBuyAgain && (
                                                     <Link href={`/products/${d.product.slug}`} className={rowActionCls}>
-                                                        Buy it again
+                                                        <IoRefreshOutline size={13} aria-hidden="true" className="mr-1.5" />
+                                                        Buy again
                                                     </Link>
                                                 )}
                                                 {canBuyAgain && (
-                                                    <Link
-                                                        href={`/products/${d.product.slug}`}
-                                                        className="text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)]"
-                                                    >
+                                                    <Link href={`/products/${d.product.slug}`} className={rowActionCls}>
+                                                        <IoOpenOutline size={13} aria-hidden="true" className="mr-1.5" />
                                                         View product
                                                     </Link>
                                                 )}
                                                 {d.isCustomPrint && (
                                                     <Link href="/account/prints" className={rowActionCls}>
-                                                        Track custom print
+                                                        <IoCubeOutline size={13} aria-hidden="true" className="mr-1.5" />
+                                                        Track print
                                                     </Link>
+                                                )}
+                                                {canMessageSeller(d) && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => messageSeller(d)}
+                                                        className={`${rowActionCls} cursor-pointer`}
+                                                    >
+                                                        <IoChatbubbleEllipsesOutline
+                                                            size={13}
+                                                            aria-hidden="true"
+                                                            className="mr-1.5"
+                                                        />
+                                                        Message seller
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
 
-                                        {/* Quiet rate nudge on delivered shop orders. */}
+                                        {/* One short line + one action on delivered shop orders. */}
                                         {DELIVERED_STATUSES.has(order.status) && canBuyAgain && (
-                                            <Link
-                                                href={`/products/${d.product.slug}#reviews`}
-                                                className="dash-hoverable flex items-center gap-2 rounded-[var(--dash-r-inner)] bg-[var(--dash-sun-soft)] px-3 py-2 text-[12px] font-medium text-[var(--dash-ink)]"
-                                            >
-                                                <IoStarOutline size={14} aria-hidden="true" className="shrink-0" />
-                                                How was it? Rate your experience with {d.displayTitle}.
-                                            </Link>
+                                            <div className="flex items-center gap-2 border-t border-[var(--dash-line)] pt-3">
+                                                <IoStarOutline
+                                                    size={14}
+                                                    aria-hidden="true"
+                                                    className="shrink-0 text-[var(--dash-ink-soft)]"
+                                                />
+                                                <p className="min-w-0 flex-1 text-[12px] dash-soft">How was it?</p>
+                                                <Link href={`/products/${d.product.slug}#reviews`} className={rowActionCls}>
+                                                    Rate it
+                                                </Link>
+                                            </div>
                                         )}
                                     </div>
                                 </article>
@@ -452,38 +522,32 @@ function OrderSection() {
 
                         <section>
                             <h4 className="dash-label mb-1">Order</h4>
-                            <DottedRow label="Order ID">
-                                <span className="font-mono">#{peek.order._id?.slice(-8).toUpperCase()}</span>
-                                <button
-                                    type="button"
+                            <QuietRow label="Order ID">
+                                #{peek.order._id?.slice(-8).toUpperCase()}
+                                <ActionIcon
+                                    icon={IoCopyOutline}
+                                    label="Copy order ID"
                                     onClick={() => copyToClipboard(peek.order._id)}
-                                    title="Copy order ID"
-                                    aria-label="Copy order ID"
-                                    className="dash-hoverable rounded-full h-6 w-6 grid place-items-center border border-[var(--dash-line)] bg-[var(--dash-card)] cursor-pointer hover:bg-[var(--dash-canvas)] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)]"
-                                >
-                                    <IoCopyOutline size={12} />
-                                </button>
-                            </DottedRow>
-                            <DottedRow label="Placed">
+                                    className="h-6 w-6"
+                                />
+                            </QuietRow>
+                            <QuietRow label="Placed">
                                 {peek.order.createdAt ? dayjs(peek.order.createdAt).format('D MMM YYYY, HH:mm') : 'Unknown'}
-                            </DottedRow>
-                            <DottedRow label="Quantity">{peek.cartItem.quantity}</DottedRow>
-                            <DottedRow label="Delivery">
+                            </QuietRow>
+                            <QuietRow label="Quantity">{peek.cartItem.quantity}</QuietRow>
+                            <QuietRow label="Delivery">
                                 <span className="capitalize">{peek.cartItem.chosenDeliveryType || 'Not specified'}</span>
-                            </DottedRow>
+                            </QuietRow>
                             {peek.order.trackingId && (
-                                <DottedRow label="Tracking ID">
-                                    <span className="font-mono">{peek.order.trackingId}</span>
-                                    <button
-                                        type="button"
+                                <QuietRow label="Tracking ID">
+                                    {peek.order.trackingId}
+                                    <ActionIcon
+                                        icon={IoCopyOutline}
+                                        label="Copy tracking ID"
                                         onClick={() => copyToClipboard(peek.order.trackingId)}
-                                        title="Copy tracking ID"
-                                        aria-label="Copy tracking ID"
-                                        className="dash-hoverable rounded-full h-6 w-6 grid place-items-center border border-[var(--dash-line)] bg-[var(--dash-card)] cursor-pointer hover:bg-[var(--dash-canvas)] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)]"
-                                    >
-                                        <IoCopyOutline size={12} />
-                                    </button>
-                                </DottedRow>
+                                        className="h-6 w-6"
+                                    />
+                                </QuietRow>
                             )}
                         </section>
 
@@ -497,10 +561,10 @@ function OrderSection() {
                                     )
                                     const fee = variantInfoItem?.additionalFee || 0
                                     return (
-                                        <DottedRow key={type} label={type}>
+                                        <QuietRow key={type} label={type}>
                                             {option}
                                             {fee > 0 ? ` (+S$${money(fee)})` : ''}
-                                        </DottedRow>
+                                        </QuietRow>
                                     )
                                 })}
                             </section>
@@ -511,22 +575,22 @@ function OrderSection() {
                             peek.cartItem.variantId && (
                                 <section>
                                     <h4 className="dash-label mb-1">Options</h4>
-                                    <DottedRow label="Variant">{peek.cartItem.variantId}</DottedRow>
+                                    <QuietRow label="Variant">{peek.cartItem.variantId}</QuietRow>
                                 </section>
                             )}
 
                         <section>
                             <h4 className="dash-label mb-1">Payment</h4>
                             {peek.cartItem.basePrice > 0 && (
-                                <DottedRow label="Base price">S${money(peek.cartItem.basePrice)}</DottedRow>
+                                <QuietRow label="Base price">S${money(peek.cartItem.basePrice)}</QuietRow>
                             )}
                             {variantFees > 0 && (
-                                <DottedRow label="Option fees">+S${money(variantFees)}</DottedRow>
+                                <QuietRow label="Option fees">+S${money(variantFees)}</QuietRow>
                             )}
                             {peek.cartItem.priceBeforeDiscount &&
                                 peek.cartItem.finalPrice &&
                                 peek.cartItem.priceBeforeDiscount !== peek.cartItem.finalPrice && (
-                                    <DottedRow label="Discount">
+                                    <QuietRow label="Discount">
                                         <span className="text-[var(--dash-ok)]">
                                             -
                                             {(
@@ -536,53 +600,68 @@ function OrderSection() {
                                             ).toFixed(0)}
                                             %
                                         </span>
-                                    </DottedRow>
+                                    </QuietRow>
                                 )}
-                            <DottedRow label="Paid">
+                            <QuietRow label="Paid">
                                 {peek.cartItem.currency || 'S'}$
                                 {money(
                                     (peek.cartItem.finalPrice || peek.cartItem.price || 0) *
                                         (peek.cartItem.quantity || 1),
                                 )}
-                            </DottedRow>
+                            </QuietRow>
                             {peek.cartItem.deliveryFee > 0 && (
-                                <DottedRow label="Delivery fee">
+                                <QuietRow label="Delivery fee">
                                     +S${money(peek.cartItem.deliveryFee * (peek.cartItem.quantity || 1))}
-                                </DottedRow>
+                                </QuietRow>
                             )}
-                            <DottedRow label="Total">
-                                <span className="font-medium">
+                            {/* Total: plain row, emphasized value (15px/600). */}
+                            <div className="mt-1 flex items-center justify-between gap-3 border-t border-[var(--dash-line)] pt-2">
+                                <span className="text-[12px] font-medium text-[var(--dash-ink)]">Total</span>
+                                <span className="text-[15px] font-semibold tabular-nums">
                                     {peek.cartItem.currency || 'S'}$
                                     {money((peek.cartItem.price || 0) * (peek.cartItem.quantity || 1))}
                                 </span>
-                            </DottedRow>
+                            </div>
                         </section>
 
                         {peek.cartItem.orderNote && (
-                            <section className="bg-[var(--dash-sun-soft)] rounded-[var(--dash-r-inner)] px-3 py-2.5">
+                            <section className="bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-3 py-2.5">
                                 <h4 className="dash-label">Your note</h4>
                                 <p className="mt-1 text-[13px] whitespace-pre-wrap">{peek.cartItem.orderNote}</p>
                             </section>
                         )}
 
-                        {peek.isCustomPrint && (
-                            <Link
-                                href="/account/prints"
-                                className="dash-hoverable inline-flex w-fit items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
-                            >
-                                Track custom print
-                            </Link>
-                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {peek.isCustomPrint && (
+                                <Link
+                                    href="/account/prints"
+                                    className="dash-hoverable inline-flex w-fit items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                >
+                                    Track print
+                                </Link>
+                            )}
 
-                        {/* Delivered shop orders get a one-tap route back to the product. */}
-                        {peek.order.status === 'delivered' && peek.product?.slug && (
-                            <Link
-                                href={`/products/${peek.product.slug}`}
-                                className="dash-hoverable inline-flex w-fit items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
-                            >
-                                Order again
-                            </Link>
-                        )}
+                            {/* Delivered shop orders get a one-tap route back to the product. */}
+                            {peek.order.status === 'delivered' && peek.product?.slug && (
+                                <Link
+                                    href={`/products/${peek.product.slug}`}
+                                    className="dash-hoverable inline-flex w-fit items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                >
+                                    Order again
+                                </Link>
+                            )}
+
+                            {canMessageSeller(peek) && (
+                                <button
+                                    type="button"
+                                    onClick={() => messageSeller(peek)}
+                                    className="dash-hoverable inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 py-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                >
+                                    <IoChatbubbleEllipsesOutline size={13} aria-hidden="true" />
+                                    Message seller
+                                </button>
+                            )}
+                        </div>
                     </div>
                 )}
             </PeekPanel>

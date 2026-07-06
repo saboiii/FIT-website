@@ -140,6 +140,8 @@ const hubOrders = [
     },
 ]
 
+const CREATOR_ID = 'user_creator_9'
+
 const products = [
     {
         _id: PRODUCT_ID,
@@ -147,6 +149,9 @@ const products = [
         images: ['products/benchy.png'],
         description: 'A little boat',
         slug: 'benchy',
+        // /api/product?ids= returns creatorUserId but NO creator display name
+        // (only the ?slug= path enriches), so message-seller falls back to 'Seller'.
+        creatorUserId: CREATOR_ID,
     },
 ]
 
@@ -437,7 +442,7 @@ describe('Account hub', () => {
         )
         // The custom print order has no image: quiet icon tile, never a broken img.
         expect(screen.getByRole('img', { name: 'Custom 3D Print - REQ-9' })).toBeInTheDocument()
-        expect(screen.getByRole('link', { name: 'Track custom print' })).toHaveAttribute(
+        expect(screen.getByRole('link', { name: 'Track print' })).toHaveAttribute(
             'href',
             '/account/prints',
         )
@@ -467,12 +472,12 @@ describe('Account hub', () => {
         expect(screen.getByText(`#${ORDER_A.slice(-8).toUpperCase()}`)).toBeInTheDocument()
     })
 
-    it('delivered orders carry buy-again, delivered date and the rate-your-experience nudge', async () => {
+    it('delivered orders carry buy-again, delivered date and the one-line rate nudge', async () => {
         mockTabParam = 'orders'
         render(<Account />)
         await screen.findByText(`#${ORDER_B.slice(-8).toUpperCase()}`)
-        // Buy it again + View product link to the product page (product still exists).
-        screen.getAllByRole('link', { name: 'Buy it again' }).forEach((link) => {
+        // Buy again + View product link to the product page (product still exists).
+        screen.getAllByRole('link', { name: 'Buy again' }).forEach((link) => {
             expect(link).toHaveAttribute('href', '/products/benchy')
         })
         expect(screen.getAllByRole('link', { name: 'View product' })[0]).toHaveAttribute(
@@ -481,11 +486,56 @@ describe('Account hub', () => {
         )
         // The status line shows the real delivered date from statusHistory.
         expect(screen.getByText(`on ${dayjs(DAY_A).format('D MMM YYYY')}`)).toBeInTheDocument()
-        // Quiet rate nudge routes to the product page's reviews section.
-        expect(screen.getByRole('link', { name: /Rate your experience/ })).toHaveAttribute(
+        // Rate strip: one short line + one action into the reviews section.
+        expect(screen.getByText('How was it?')).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Rate it' })).toHaveAttribute(
             'href',
             '/products/benchy#reviews',
         )
+    })
+
+    it('renders no dotted leaders and keeps mono to order numbers only', async () => {
+        mockTabParam = 'orders'
+        render(<Account />)
+        await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
+        // Open the peek too: its rows are plain label/value, not leader dots.
+        fireEvent.click(screen.getAllByRole('button', { name: 'Quick view' })[0])
+        await screen.findByRole('link', { name: 'View full order' })
+        expect(document.querySelector('.dash-leader')).toBeNull()
+        expect(document.querySelector('.dash-leader-dots')).toBeNull()
+        // font-mono only on the facts-strip order numbers (one per card).
+        const monos = Array.from(document.querySelectorAll('.font-mono'))
+        expect(monos.length).toBe(hubOrders.length)
+        monos.forEach((el) => expect(el.textContent).toMatch(/^#[0-9A-Z]{8}$/))
+    })
+
+    it('message seller dispatches fit:openCreatorChat with the creator user id', async () => {
+        mockTabParam = 'orders'
+        const events = []
+        const handler = (e) => events.push(e.detail)
+        window.addEventListener('fit:openCreatorChat', handler)
+        try {
+            render(<Account />)
+            await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
+            // Only the two catalogue orders get the CTA; the custom print order
+            // has no seller chat surface (the store is the global launcher).
+            const buttons = screen.getAllByRole('button', { name: 'Message seller' })
+            expect(buttons.length).toBe(2)
+            fireEvent.click(buttons[0])
+            expect(events).toEqual([
+                { targetUserId: CREATOR_ID, displayName: 'Seller', imageUrl: null },
+            ])
+        } finally {
+            window.removeEventListener('fit:openCreatorChat', handler)
+        }
+    })
+
+    it('hides message seller when the buyer IS the creator', async () => {
+        mockTabParam = 'orders'
+        mockUser.id = CREATOR_ID
+        render(<Account />)
+        await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
+        expect(screen.queryByRole('button', { name: 'Message seller' })).toBeNull()
     })
 
     it('quick view opens the peek with the full detail, note, copy id and order-again', async () => {

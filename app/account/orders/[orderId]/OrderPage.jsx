@@ -12,18 +12,23 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import dayjs from 'dayjs'
+import { useUser } from '@clerk/nextjs'
 import {
     IoBagCheckOutline,
+    IoChatbubbleEllipsesOutline,
     IoConstructOutline,
     IoCopyOutline,
     IoCubeOutline,
     IoHomeOutline,
     IoPrintOutline,
+    IoRefreshOutline,
+    IoStarOutline,
+    IoTimeOutline,
 } from 'react-icons/io5'
 import { useToast } from '@/components/General/ToastProvider'
 import AccountShell from '@/components/Account/AccountShell'
 import { orderTone, money } from '@/components/Account/accountUi'
-import { ActionIcon, DashCard, DottedRow, EmptyState, StatusPill, Timeline, SkeletonTile } from '@/components/dashboard-ui'
+import { ActionIcon, DashCard, EmptyState, StatusPill, Timeline, SkeletonTile } from '@/components/dashboard-ui'
 
 // The canonical fulfilment flow, mapped from the real status set
 // (models/User.js). Statuses outside this flow (cancelled, refunds, holds)
@@ -34,28 +39,28 @@ const FLOW_STEPS = [
         matches: ['pending', 'confirmed'],
         icon: IoBagCheckOutline,
         title: 'Order confirmed',
-        desc: 'Order placed and payment received.',
+        desc: 'Order placed',
     },
     {
         key: 'processing',
         matches: ['processing', 'printing', 'printed'],
         icon: IoConstructOutline,
         title: 'Processing',
-        desc: 'Your items are being prepared.',
+        desc: 'Being prepared',
     },
     {
         key: 'shipped',
         matches: ['shipped'],
         icon: IoCubeOutline,
         title: 'Shipped',
-        desc: 'Handed to the courier.',
+        desc: 'On its way',
     },
     {
         key: 'delivered',
         matches: ['delivered'],
         icon: IoHomeOutline,
         title: 'Delivered',
-        desc: 'Package delivered to you.',
+        desc: 'Delivered',
     },
 ]
 const EXCEPTION_STATUSES = new Set(['cancelled', 'refunded', 'partially_refunded', 'failed', 'on_hold'])
@@ -107,12 +112,28 @@ function OrderProgressSteps({ order, currentIndex }) {
                                     </time>
                                 )}
                             </div>
-                            <p className="dash-data dash-soft mt-0.5">{step.desc}</p>
+                            {step.desc !== step.title && (
+                                <p className="dash-data dash-soft mt-0.5">{step.desc}</p>
+                            )}
                         </div>
                     </li>
                 )
             })}
         </ol>
+    )
+}
+
+// Quiet label/value row (client polish, 2026-07-06): 12px ink-soft label
+// left, value right. Replaces the dotted-leader rows; hairline dividers come
+// from the surrounding group, not the row.
+function QuietRow({ label, children, className = '' }) {
+    return (
+        <div className={`flex items-center justify-between gap-3 py-1 ${className}`}>
+            <span className="text-[12px] text-[var(--dash-ink-soft)] shrink-0">{label}</span>
+            <span className="dash-data min-w-0 flex items-center justify-end gap-1.5 text-right">
+                {children}
+            </span>
+        </div>
     )
 }
 
@@ -159,6 +180,8 @@ function OrderPage({ orderId }) {
     const [paymentMethod, setPaymentMethod] = useState(null)
     const [customerDetails, setCustomerDetails] = useState(null)
     const { showToast } = useToast()
+    const { user } = useUser()
+    const viewerUserId = user?.id ? String(user.id) : null
 
     useEffect(() => {
         const fetchOrder = async () => {
@@ -262,11 +285,6 @@ function OrderPage({ orderId }) {
                 Back to orders
             </Link>
             <h1 className="dash-title mt-2">{order ? `Order #${shortId}` : 'Your order'}</h1>
-            {order && (
-                <p className="dash-data dash-soft mt-1">
-                    Placed on {dayjs(order.createdAt).format('D MMMM YYYY')}
-                </p>
-            )}
         </div>
     )
 
@@ -330,6 +348,40 @@ function OrderPage({ orderId }) {
     const shippingAddress = order.contact?.address || customerDetails?.savedContact?.address || null
     const shippingPhone = order.contact?.phone || customerDetails?.savedContact?.phone || null
 
+    // Message-seller CTA: catalogue products that still resolve, never when the
+    // buyer IS the creator. Custom prints are fulfilled by the store itself and
+    // have no per-order seller chat surface (the global "Chat with us" launcher
+    // is the store contact), so they get no CTA.
+    const creatorUserId = product?.creatorUserId ? String(product.creatorUserId) : null
+    const canMessageSeller =
+        !isCustomPrint && Boolean(creatorUserId) && !(viewerUserId && viewerUserId === creatorUserId)
+
+    // The global ChatLauncher (app/layout.jsx) listens for this event. The
+    // ?ids= product fetch carries creatorUserId but no display name, so fall
+    // back to 'Seller'.
+    const messageSeller = () => {
+        if (typeof window === 'undefined' || !creatorUserId) return
+        window.dispatchEvent(
+            new CustomEvent('fit:openCreatorChat', {
+                detail: {
+                    targetUserId: creatorUserId,
+                    displayName: product?.creatorDisplayName || 'Seller',
+                    imageUrl: null,
+                },
+            }),
+        )
+    }
+
+    // One quiet meta line under the item name: variant summary + quantity.
+    const itemMeta = [
+        cartItem.selectedVariants && Object.keys(cartItem.selectedVariants).length > 0
+            ? Object.values(cartItem.selectedVariants).join(', ')
+            : null,
+        `Qty ${cartItem.quantity || 1}`,
+    ]
+        .filter(Boolean)
+        .join(', ')
+
     return (
         <AccountShell active="orders" header={header}>
             {/* Print-friendly order summary: printing this page shows only the
@@ -371,21 +423,34 @@ function OrderPage({ orderId }) {
                                 {paymentMethod?.type === 'card' ? (
                                     <span className="flex items-center gap-1.5">
                                         <span className="capitalize">{paymentMethod.card?.brand || 'Card'}</span>
-                                        <span className="font-mono">•••• {paymentMethod.card?.last4}</span>
+                                        <span>•••• {paymentMethod.card?.last4}</span>
                                     </span>
                                 ) : (
                                     paymentLabel
                                 )}
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => window.print()}
-                            className="dash-print-hidden dash-hoverable ml-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)] cursor-pointer"
-                        >
-                            <IoPrintOutline size={14} aria-hidden="true" />
-                            Print summary
-                        </button>
+                        {/* Support area: message the seller + print the summary. */}
+                        <div className="dash-print-hidden ml-auto flex items-center gap-2">
+                            {canMessageSeller && (
+                                <button
+                                    type="button"
+                                    onClick={messageSeller}
+                                    className="dash-hoverable inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                >
+                                    <IoChatbubbleEllipsesOutline size={14} aria-hidden="true" />
+                                    Message seller
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => window.print()}
+                                className="dash-hoverable inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                            >
+                                <IoPrintOutline size={14} aria-hidden="true" />
+                                Print summary
+                            </button>
+                        </div>
                     </div>
                 </DashCard>
 
@@ -395,23 +460,24 @@ function OrderPage({ orderId }) {
                         <DashCard
                             title="Order progress"
                             action={
-                                <StatusPill tone={orderTone(order.status)}>
-                                    {getStatusInfo(order.status).displayName}
-                                </StatusPill>
+                                // The no-history fallback carries the pill itself.
+                                hasHistory ? (
+                                    <StatusPill tone={orderTone(order.status)}>
+                                        {getStatusInfo(order.status).displayName}
+                                    </StatusPill>
+                                ) : null
                             }
                         >
                             {order.trackingId && (
-                                <div className="mb-4">
-                                    <DottedRow label="Tracking ID">
-                                        <span className="font-mono">{order.trackingId}</span>
-                                        <ActionIcon
-                                            icon={IoCopyOutline}
-                                            label="Copy tracking ID"
-                                            onClick={() => copyToClipboard(order.trackingId)}
-                                            className="dash-print-hidden h-6 w-6"
-                                        />
-                                    </DottedRow>
-                                </div>
+                                <QuietRow label="Tracking ID" className="mb-4">
+                                    {order.trackingId}
+                                    <ActionIcon
+                                        icon={IoCopyOutline}
+                                        label="Copy tracking ID"
+                                        onClick={() => copyToClipboard(order.trackingId)}
+                                        className="dash-print-hidden h-6 w-6"
+                                    />
+                                </QuietRow>
                             )}
 
                             {showStepper ? (
@@ -419,10 +485,25 @@ function OrderPage({ orderId }) {
                             ) : hasHistory ? (
                                 <Timeline items={timelineItems} />
                             ) : (
-                                <p className="text-[13px] dash-soft">
-                                    This is the current status of your order. A step-by-step history will
-                                    appear here as it progresses.
-                                </p>
+                                // Single-status fallback: grey icon in a hairline
+                                // circle + the status pill + one honest line.
+                                <div className="flex items-start gap-3">
+                                    <span
+                                        aria-hidden="true"
+                                        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[var(--dash-line)] text-[var(--dash-ink-soft)]"
+                                    >
+                                        <IoTimeOutline size={16} />
+                                    </span>
+                                    <div className="min-w-0">
+                                        <StatusPill tone={orderTone(order.status)}>
+                                            {getStatusInfo(order.status).displayName}
+                                        </StatusPill>
+                                        <p className="dash-data dash-soft mt-2">
+                                            This is the current status of your order. A step-by-step
+                                            history will appear here as it progresses.
+                                        </p>
+                                    </div>
+                                </div>
                             )}
                         </DashCard>
 
@@ -432,15 +513,7 @@ function OrderPage({ orderId }) {
                                 <ItemThumb product={product} title={displayTitle} isCustomPrint={isCustomPrint} />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[13px] font-medium truncate">{displayTitle}</p>
-                                    {cartItem.selectedVariants &&
-                                        Object.keys(cartItem.selectedVariants).length > 0 && (
-                                            <p className="dash-data dash-soft mt-0.5 truncate">
-                                                {Object.entries(cartItem.selectedVariants)
-                                                    .map(([type, option]) => `${type}: ${option}`)
-                                                    .join(', ')}
-                                            </p>
-                                        )}
-                                    <p className="dash-data dash-soft mt-0.5">Qty {cartItem.quantity || 1}</p>
+                                    <p className="dash-data dash-soft mt-0.5 truncate">{itemMeta}</p>
                                 </div>
                                 <div className="shrink-0 text-right">
                                     <p className="dash-data font-medium">
@@ -455,19 +528,21 @@ function OrderPage({ orderId }) {
                                 </div>
                             </div>
                             {product?.slug && !isCustomPrint && (
-                                <div className="dash-print-hidden mt-4 pt-3 border-t border-[var(--dash-line)] flex items-center gap-2">
+                                <div className="dash-print-hidden mt-4 pt-3 border-t border-[var(--dash-line)] flex flex-wrap items-center gap-2">
                                     <Link
                                         href={`/products/${product.slug}`}
-                                        className="dash-hoverable inline-flex h-7 items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                        className="dash-hoverable inline-flex h-7 items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
                                     >
-                                        Buy it again
+                                        <IoRefreshOutline size={13} aria-hidden="true" />
+                                        Buy again
                                     </Link>
                                     {order.status === 'delivered' && (
                                         <Link
                                             href={`/products/${product.slug}#reviews`}
-                                            className="text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)]"
+                                            className="inline-flex items-center gap-1.5 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)]"
                                         >
-                                            Rate your experience
+                                            <IoStarOutline size={13} aria-hidden="true" />
+                                            Rate it
                                         </Link>
                                     )}
                                 </div>
@@ -476,16 +551,17 @@ function OrderPage({ orderId }) {
                                 <div className="dash-print-hidden mt-4 pt-3 border-t border-[var(--dash-line)]">
                                     <Link
                                         href="/account/prints"
-                                        className="dash-hoverable inline-flex h-7 items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
+                                        className="dash-hoverable inline-flex h-7 items-center gap-1.5 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 text-[12px] font-medium dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)]"
                                     >
-                                        Track custom print
+                                        <IoCubeOutline size={13} aria-hidden="true" />
+                                        Track print
                                     </Link>
                                 </div>
                             )}
                         </DashCard>
 
                         {cartItem.orderNote && (
-                            <section className="bg-[var(--dash-sun-soft)] rounded-[var(--dash-r-inner)] px-3 py-2.5">
+                            <section className="bg-[var(--dash-canvas)] border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-3 py-2.5">
                                 <h4 className="dash-label">Your note</h4>
                                 <p className="mt-1 text-[13px] whitespace-pre-wrap leading-relaxed">
                                     {cartItem.orderNote}
@@ -497,19 +573,19 @@ function OrderPage({ orderId }) {
                     <div className="flex flex-col gap-4">
                         {/* Cost summary */}
                         <DashCard title="Order summary">
-                            <DottedRow label="Subtotal">
+                            <QuietRow label="Subtotal">
                                 {cartItem.currency || 'S'}$
                                 {money((cartItem.finalPrice || cartItem.price || 0) * (cartItem.quantity || 1))}
-                            </DottedRow>
+                            </QuietRow>
                             {cartItem.deliveryFee > 0 && (
-                                <DottedRow label={`Shipping (${cartItem.chosenDeliveryType})`}>
+                                <QuietRow label={`Shipping (${cartItem.chosenDeliveryType})`}>
                                     {cartItem.currency || 'S'}${money(cartItem.deliveryFee)}
-                                </DottedRow>
+                                </QuietRow>
                             )}
                             {cartItem.priceBeforeDiscount &&
                                 cartItem.finalPrice &&
                                 cartItem.priceBeforeDiscount !== cartItem.finalPrice && (
-                                    <DottedRow label="Discount">
+                                    <QuietRow label="Discount">
                                         <span className="text-[var(--dash-ok)]">
                                             -{cartItem.currency || 'S'}$
                                             {money(
@@ -517,15 +593,15 @@ function OrderPage({ orderId }) {
                                                     (cartItem.quantity || 1),
                                             )}
                                         </span>
-                                    </DottedRow>
+                                    </QuietRow>
                                 )}
-                            <div className="mt-1 pt-1 border-t border-[var(--dash-line)]">
-                                <DottedRow label="Total">
-                                    <span className="font-medium">
-                                        {cartItem.currency || 'S'}$
-                                        {money((cartItem.price || 0) * (cartItem.quantity || 1))}
-                                    </span>
-                                </DottedRow>
+                            {/* Total: plain row, emphasized value (15px/600). */}
+                            <div className="mt-1 flex items-center justify-between gap-3 border-t border-[var(--dash-line)] pt-2">
+                                <span className="text-[12px] font-medium text-[var(--dash-ink)]">Total</span>
+                                <span className="text-[15px] font-semibold tabular-nums">
+                                    {cartItem.currency || 'S'}$
+                                    {money((cartItem.price || 0) * (cartItem.quantity || 1))}
+                                </span>
                             </div>
                         </DashCard>
 
@@ -588,25 +664,21 @@ function OrderPage({ orderId }) {
                                 )}
 
                                 <div>
-                                    <DottedRow label="Shipping method">
+                                    <QuietRow label="Shipping method">
                                         <span className="capitalize">
                                             {cartItem.chosenDeliveryType || 'Standard Delivery'}
                                         </span>
-                                    </DottedRow>
-                                    {(customerDetails?.name || customerDetails?.email || customerDetails?.phone) && (
-                                        <>
-                                            {customerDetails?.name && (
-                                                <DottedRow label="Name">{customerDetails.name}</DottedRow>
-                                            )}
-                                            {customerDetails?.email && (
-                                                <DottedRow label="Email">
-                                                    <span className="break-all">{customerDetails.email}</span>
-                                                </DottedRow>
-                                            )}
-                                            {customerDetails?.phone && (
-                                                <DottedRow label="Phone">{customerDetails.phone}</DottedRow>
-                                            )}
-                                        </>
+                                    </QuietRow>
+                                    {customerDetails?.name && (
+                                        <QuietRow label="Name">{customerDetails.name}</QuietRow>
+                                    )}
+                                    {customerDetails?.email && (
+                                        <QuietRow label="Email">
+                                            <span className="break-all">{customerDetails.email}</span>
+                                        </QuietRow>
+                                    )}
+                                    {customerDetails?.phone && (
+                                        <QuietRow label="Phone">{customerDetails.phone}</QuietRow>
                                     )}
                                 </div>
                             </div>
@@ -616,8 +688,8 @@ function OrderPage({ orderId }) {
 
                 <div className="flex items-center gap-2">
                     <p className="dash-data dash-soft">
-                        Need help? Contact support with your order ID:{' '}
-                        <span className="font-mono font-medium text-[var(--dash-ink)]">{shortId}</span>
+                        Need help? Quote order{' '}
+                        <span className="font-medium text-[var(--dash-ink)]">#{shortId}</span>
                     </p>
                     <ActionIcon
                         icon={IoCopyOutline}

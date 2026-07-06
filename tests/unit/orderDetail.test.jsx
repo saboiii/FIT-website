@@ -26,6 +26,13 @@ vi.mock('next/navigation', () => ({
     useSearchParams: () => ({ get: () => null }),
 }))
 
+// The page compares the Clerk viewer id to the product's creatorUserId to
+// decide whether the message-seller CTA may show.
+let mockViewerId = 'user_buyer_1'
+vi.mock('@clerk/nextjs', () => ({
+    useUser: () => ({ user: mockViewerId ? { id: mockViewerId } : null, isLoaded: true }),
+}))
+
 vi.mock('next/image', () => ({
     // eslint-disable-next-line @next/next/no-img-element
     default: ({ src, alt }) => <img src={typeof src === 'string' ? src : ''} alt={alt} />,
@@ -42,12 +49,17 @@ const PLACED_AT = '2026-07-01T09:00:00Z'
 const SHIPPED_AT = '2026-07-02T10:00:00Z'
 const DELIVERED_AT = '2026-07-05T03:00:00Z'
 
+const CREATOR_ID = 'user_creator_9'
+
 const product = {
     _id: PRODUCT_ID,
     name: 'Benchy',
     images: ['products/benchy.png'],
     description: 'A little boat',
     slug: 'benchy',
+    // /api/product?ids= returns creatorUserId but NO creator display name
+    // (only the ?slug= path enriches), so message-seller falls back to 'Seller'.
+    creatorUserId: CREATOR_ID,
 }
 
 const baseOrder = {
@@ -123,6 +135,7 @@ function stubFetch(order) {
 }
 
 beforeEach(() => {
+    mockViewerId = 'user_buyer_1'
     stubFetch(baseOrder)
 })
 
@@ -134,9 +147,11 @@ afterEach(() => {
 describe('Order detail facts strip', () => {
     it('shows order date, order ID with copy, and the Stripe payment method', async () => {
         render(<OrderPage orderId={ORDER_ID} />)
-        expect(await screen.findByText('Order placed')).toBeInTheDocument()
+        // 'Order placed' is both the facts-strip label and a step description.
+        expect((await screen.findAllByText('Order placed')).length).toBeGreaterThanOrEqual(1)
         expect(screen.getByText('1 Jul 2026')).toBeInTheDocument()
-        expect(screen.getByText(`#${ORDER_ID.slice(-8).toUpperCase()}`)).toBeInTheDocument()
+        // Facts strip + the support footer both carry the short id.
+        expect(screen.getAllByText(`#${ORDER_ID.slice(-8).toUpperCase()}`).length).toBeGreaterThanOrEqual(1)
         expect(screen.getByRole('button', { name: 'Copy order ID' })).toBeInTheDocument()
         // Payment method comes from the existing Stripe payment-method fetch.
         expect(await screen.findByText('visa')).toBeInTheDocument()
@@ -154,10 +169,21 @@ describe('Order detail facts strip', () => {
         render(<OrderPage orderId={ORDER_ID} />)
         expect(await screen.findByText('5 Jul 2026')).toBeInTheDocument()
         // Delivered shop orders also nudge back to the product's reviews.
-        expect(screen.getByRole('link', { name: 'Rate your experience' })).toHaveAttribute(
+        expect(screen.getByRole('link', { name: 'Rate it' })).toHaveAttribute(
             'href',
             '/products/benchy#reviews',
         )
+    })
+
+    it('renders no dotted leaders and keeps mono to the order number only', async () => {
+        render(<OrderPage orderId={ORDER_ID} />)
+        await screen.findByText('Order progress')
+        await screen.findByText('visa')
+        expect(document.querySelector('.dash-leader')).toBeNull()
+        expect(document.querySelector('.dash-leader-dots')).toBeNull()
+        const monos = Array.from(document.querySelectorAll('.font-mono'))
+        expect(monos.length).toBe(1)
+        expect(monos[0].textContent).toBe(`#${ORDER_ID.slice(-8).toUpperCase()}`)
     })
 })
 
@@ -165,12 +191,18 @@ describe('Order progress', () => {
     it('renders icon steps from the real flow with statusHistory timestamps and the status chip', async () => {
         render(<OrderPage orderId={ORDER_ID} />)
         expect(await screen.findByText('Order progress')).toBeInTheDocument()
-        // Canonical steps, each with a plain-language description.
+        // Canonical steps, each with a short (<= 5 words) description.
         ;['Order confirmed', 'Processing', 'Shipped', 'Delivered'].forEach((step) => {
             expect(screen.getByText(step)).toBeInTheDocument()
         })
-        expect(screen.getByText('Order placed and payment received.')).toBeInTheDocument()
-        expect(screen.getByText('Handed to the courier.')).toBeInTheDocument()
+        ;['Order placed', 'Being prepared', 'On its way'].forEach((desc) => {
+            expect(desc.split(' ').length).toBeLessThanOrEqual(5)
+            // 'Order placed' also labels the facts strip, so allow >= 1.
+            expect(screen.getAllByText(desc).length).toBeGreaterThanOrEqual(1)
+        })
+        // No sentence-length step copy survives.
+        expect(screen.queryByText(/payment received/)).toBeNull()
+        expect(screen.queryByText(/courier/)).toBeNull()
         // Timestamps come from statusHistory (shipped entry), not invented.
         expect(document.body.textContent).toContain('2 Jul')
         // The chip carries the admin display name for the current status.
@@ -192,19 +224,25 @@ describe('Order progress', () => {
         render(<OrderPage orderId={ORDER_ID} />)
         expect(await screen.findByText('Order progress')).toBeInTheDocument()
         // No fabricated fulfilment steps for a cancelled order.
-        expect(screen.queryByText('Handed to the courier.')).toBeNull()
+        expect(screen.queryByText('On its way')).toBeNull()
         // The raw history renders with admin display names.
         expect(screen.getAllByText('Cancelled').length).toBeGreaterThanOrEqual(2)
         expect(screen.getByText('Order Placed')).toBeInTheDocument()
     })
 
-    it('keeps the honest single-status fallback when no history exists', async () => {
+    it('keeps the honest single-status fallback: icon, pill and the exact copy', async () => {
         stubFetch({ ...baseOrder, statusHistory: [] })
         render(<OrderPage orderId={ORDER_ID} />)
         expect(await screen.findByText('Order progress')).toBeInTheDocument()
+        // EXACTLY this copy, nothing more.
         expect(
-            screen.getByText(/A step-by-step history will appear here as it progresses/),
+            screen.getByText(
+                'This is the current status of your order. A step-by-step history will appear here as it progresses.',
+            ),
         ).toBeInTheDocument()
+        // The status pill sits beside the copy (single occurrence, no duplicate
+        // header chip).
+        expect(screen.getAllByText('Shipped Out').length).toBe(1)
         expect(screen.queryByText('Order confirmed')).toBeNull()
     })
 })
@@ -231,8 +269,8 @@ describe('Order items, cost summary and addresses', () => {
         expect(document.body.textContent).not.toContain('Taxes')
         // The customer's note survives.
         expect(screen.getByText('Leave at the door')).toBeInTheDocument()
-        // Buy it again routes back to the live product.
-        expect(screen.getByRole('link', { name: 'Buy it again' })).toHaveAttribute(
+        // Buy again routes back to the live product.
+        expect(screen.getByRole('link', { name: 'Buy again' })).toHaveAttribute(
             'href',
             '/products/benchy',
         )
@@ -255,6 +293,47 @@ describe('Print-friendly summary', () => {
         const button = await screen.findByRole('button', { name: /Print summary/ })
         fireEvent.click(button)
         expect(window.print).toHaveBeenCalled()
+    })
+})
+
+describe('Message seller', () => {
+    it('dispatches fit:openCreatorChat with the creator user id (next to Print summary)', async () => {
+        const events = []
+        const handler = (e) => events.push(e.detail)
+        window.addEventListener('fit:openCreatorChat', handler)
+        try {
+            render(<OrderPage orderId={ORDER_ID} />)
+            const button = await screen.findByRole('button', { name: 'Message seller' })
+            fireEvent.click(button)
+            expect(events).toEqual([
+                { targetUserId: CREATOR_ID, displayName: 'Seller', imageUrl: null },
+            ])
+        } finally {
+            window.removeEventListener('fit:openCreatorChat', handler)
+        }
+    })
+
+    it('hides the CTA when the buyer IS the creator', async () => {
+        mockViewerId = CREATOR_ID
+        render(<OrderPage orderId={ORDER_ID} />)
+        await screen.findByText('Order progress')
+        await screen.findByText('visa')
+        expect(screen.queryByRole('button', { name: 'Message seller' })).toBeNull()
+    })
+
+    it('hides the CTA for custom print orders (the store is the global chat launcher)', async () => {
+        stubFetch({
+            ...baseOrder,
+            cartItem: { ...baseOrder.cartItem, productId: 'custom-print:REQ-9', requestId: 'REQ-9' },
+        })
+        render(<OrderPage orderId={ORDER_ID} />)
+        await screen.findByText('Order progress')
+        expect(screen.queryByRole('button', { name: 'Message seller' })).toBeNull()
+        // The custom print capability stays reachable.
+        expect(screen.getByRole('link', { name: 'Track print' })).toHaveAttribute(
+            'href',
+            '/account/prints',
+        )
     })
 })
 

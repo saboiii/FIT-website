@@ -29,14 +29,28 @@ function mongoUri() {
 const conn = await mongoose.connect(mongoUri())
 const col = conn.connection.db.collection('blogposts')
 
-const candidates = await col
+// Targets: anything still legacy-formatted, plus earlier conversions that
+// became ONE giant htmlBlock (pre-segmentation) — those re-normalize from the
+// preserved `content` backup into the segmented doc.
+const isSingleHtmlBlock = (doc) =>
+    Array.isArray(doc?.content) && doc.content.length === 1 && doc.content[0]?.type === 'htmlBlock'
+
+const all = await col
     .find(
-        { contentFormat: { $ne: 'tiptap' } },
-        { projection: { title: 1, slug: 1, content: 1, contentFormat: 1 } },
+        {
+            $or: [
+                { contentFormat: { $ne: 'tiptap' } },
+                { contentFormat: 'tiptap', 'contentJson.content.0.type': 'htmlBlock', content: { $regex: /^\s*</ } },
+            ],
+        },
+        { projection: { title: 1, slug: 1, content: 1, contentFormat: 1, contentJson: 1 } },
     )
     .toArray()
+const candidates = all.filter(
+    (p) => p.contentFormat !== 'tiptap' || isSingleHtmlBlock(p.contentJson),
+)
 
-console.log(`${candidates.length} legacy post(s)${apply ? '' : ' (dry run, pass --apply to write)'}`)
+console.log(`${candidates.length} post(s) to normalize${apply ? '' : ' (dry run, pass --apply to write)'}`)
 
 let converted = 0
 for (const post of candidates) {
@@ -44,7 +58,8 @@ for (const post of candidates) {
     const kind = String(post.content || '').trimStart().startsWith('<') ? 'html' : 'markdown'
     console.log(`- ${post.slug} | ${kind} | ${String(post.title).slice(0, 60)} | ${(size / 1024).toFixed(0)}KB`)
     if (!apply) continue
-    const normalized = normalizeToTiptap(post)
+    // Force re-normalization from the raw source, not the existing doc.
+    const normalized = normalizeToTiptap({ contentFormat: 'legacy', content: post.content })
     await col.updateOne(
         { _id: post._id },
         {

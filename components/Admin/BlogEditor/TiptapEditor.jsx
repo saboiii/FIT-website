@@ -24,24 +24,42 @@ import {
     LuCode,
 } from 'react-icons/lu'
 
-// Same source editor the legacy markdown posts use — code pane only, no
-// markdown preview/toolbar. It holds the raw HTML as plain text with syntax
-// colouring, so nothing re-parses or reformats the markup.
-const SourceEditor = dynamic(() => import('@uiw/react-md-editor'), { ssr: false })
+// Proper HTML code editor: CodeMirror with the HTML language (syntax
+// colouring, line numbers, bracket matching, tag/attribute autocompletion and
+// auto-closing tags). Loaded lazily — admin editor only.
+const CodeMirror = dynamic(() => import('@uiw/react-codemirror'), { ssr: false })
 
 /**
  * NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js). Two modes,
  * swapped IN PLACE (client directive): the rendered HTML, or the code editor
  * occupying the same spot. The raw markup lives in attrs.html and is only
- * ever edited as a plain string, so ProseMirror never parses it (imported
- * legacy posts can carry up to ~700KB of hand-authored HTML).
+ * ever edited as a plain string, so ProseMirror never parses it. Since
+ * content is segmented on import, one block is one complex section — plain
+ * text blocks around it are ordinary editable TipTap nodes. Clicking the
+ * rendered block shows a hint near the cursor that this section is edited in
+ * code view.
  */
-function HtmlBlockView({ node, updateAttributes }) {
+function HtmlBlockView({ node, updateAttributes, selected }) {
     const [editing, setEditing] = useState(() => !node.attrs.html)
     const [draft, setDraft] = useState(node.attrs.html || '')
+    const [hint, setHint] = useState(null) // { x, y } within the wrapper
+    const [langExtensions, setLangExtensions] = useState(null)
+    const hintTimer = useRef(null)
+    useEffect(() => () => clearTimeout(hintTimer.current), [])
+
+    // @codemirror/lang-html loads with the editor, not with the admin bundle.
+    useEffect(() => {
+        if (!editing || langExtensions) return
+        let cancelled = false
+        import('@codemirror/lang-html').then((m) => {
+            if (!cancelled) setLangExtensions([m.html({ autoCloseTags: true, matchClosingTags: true })])
+        })
+        return () => { cancelled = true }
+    }, [editing, langExtensions])
 
     const startEditing = () => {
         setDraft(node.attrs.html || '')
+        setHint(null)
         setEditing(true)
     }
 
@@ -50,11 +68,20 @@ function HtmlBlockView({ node, updateAttributes }) {
         setEditing(false)
     }
 
+    const showHint = (e) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        setHint({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+        clearTimeout(hintTimer.current)
+        hintTimer.current = setTimeout(() => setHint(null), 2600)
+    }
+
     return (
         <NodeViewWrapper>
             <div
                 contentEditable={false}
-                className="group relative my-2 rounded-[var(--dash-r-inner)] outline outline-1 outline-transparent outline-offset-4 hover:outline-[var(--dash-line)] transition-[outline-color]"
+                className={`group relative my-2 rounded-[var(--dash-r-inner)] outline outline-1 outline-offset-4 transition-[outline-color] ${
+                    selected ? 'outline-[var(--dash-focus-line)]' : 'outline-transparent hover:outline-[var(--dash-line)]'
+                }`}
             >
                 <button
                     type="button"
@@ -63,20 +90,43 @@ function HtmlBlockView({ node, updateAttributes }) {
                 >
                     {editing ? 'Done' : 'Edit HTML'}
                 </button>
+                {hint && !editing && (
+                    <div
+                        className="absolute z-20 flex items-center gap-2 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 py-1.5 shadow-[var(--dash-shadow-float)] text-[12px] whitespace-nowrap"
+                        style={{ left: Math.max(0, hint.x - 40), top: hint.y + 14 }}
+                    >
+                        <span className="dash-soft">This section is raw HTML and is edited as code.</span>
+                        <button
+                            type="button"
+                            onClick={startEditing}
+                            className="font-medium text-[var(--dash-ink)] underline underline-offset-2 cursor-pointer"
+                        >
+                            Open code view
+                        </button>
+                    </div>
+                )}
                 {editing ? (
-                    <div data-color-mode="light" className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden">
-                        <SourceEditor
+                    <div className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden text-[13px] [&_.cm-editor]:outline-none [&_.cm-scroller]:font-mono">
+                        <CodeMirror
                             value={draft}
                             onChange={(v) => setDraft(v ?? '')}
-                            preview="edit"
-                            hideToolbar
-                            visibleDragbar
-                            height={Math.min(720, Math.max(280, Math.ceil((node.attrs.html || '').length / 60) * 18))}
-                            textareaProps={{ spellCheck: false, 'aria-label': 'HTML source', placeholder: '<section>Paste or write raw HTML</section>' }}
+                            extensions={langExtensions || []}
+                            maxHeight="640px"
+                            minHeight="220px"
+                            basicSetup={{
+                                lineNumbers: true,
+                                foldGutter: true,
+                                highlightActiveLine: true,
+                                bracketMatching: true,
+                                closeBrackets: true,
+                                autocompletion: true,
+                                indentOnInput: true,
+                            }}
+                            aria-label="HTML source"
                         />
                     </div>
                 ) : node.attrs.html ? (
-                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
+                    <div onClick={showHint} dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
                 ) : (
                     <div className="text-[13px] text-[var(--dash-ink-soft)] border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-6 text-center">
                         Empty HTML block. Use Edit HTML to add markup.

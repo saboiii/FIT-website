@@ -40,3 +40,28 @@ describe('normalizeToTiptap', () => {
         expect(markdownToHtml('## Hey')).toContain('<h2>Hey</h2>')
     })
 })
+
+describe('htmlToSegmentedDoc', () => {
+    it('splits top-level content: plain text blocks become editable nodes, complex ones stay htmlBlocks', async () => {
+        const { htmlToSegmentedDoc } = await import('@/lib/blog/normalizeContent')
+        const html = '<h2>Editable heading</h2><p>Editable <strong>text</strong></p>'
+            + '<section style="border:1px solid"><p>Styled designed section</p><button>CTA</button></section>'
+            + '<p>Tail paragraph</p>'
+        const doc = htmlToSegmentedDoc(html)
+        const types = doc.content.map((n) => n.type)
+        expect(types).toEqual(['heading', 'paragraph', 'htmlBlock', 'paragraph'])
+        expect(doc.content[2].attrs.html).toContain('Styled designed section')
+        const rendered = renderTiptapHtml(doc)
+        expect(rendered).toContain('<h2>Editable heading</h2>')
+        expect(rendered).toContain('<strong>text</strong>')
+        expect(rendered).toContain('<button>CTA</button>')
+    })
+
+    it('one backspace-sized unit per complex top-level element, never one giant block', async () => {
+        const { htmlToSegmentedDoc } = await import('@/lib/blog/normalizeContent')
+        const html = '<section><div>A</div></section><section><div>B</div></section><section><div>C</div></section>'
+        const doc = htmlToSegmentedDoc(html)
+        expect(doc.content).toHaveLength(3)
+        expect(doc.content.every((n) => n.type === 'htmlBlock')).toBe(true)
+    })
+})

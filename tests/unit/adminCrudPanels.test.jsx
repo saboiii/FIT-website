@@ -108,9 +108,18 @@ describe('OrderStatusManagement — sheet form + built-in protection', () => {
         await screen.findByText('Processing')
 
         expect(screen.getByText('Built-in')).toBeInTheDocument()
-        // Only the custom row carries Edit/Delete.
-        expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(1)
-        expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(1)
+        // Only the custom row carries Edit/Delete — as labelled ActionIcons.
+        expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(1)
+        expect(screen.getAllByRole('button', { name: /^Delete / })).toHaveLength(1)
+        const edit = screen.getByRole('button', { name: 'Edit Awaiting Pickup' })
+        expect(edit.className).toContain('h-7')
+        expect(edit.className).toContain('w-7')
+        expect(edit.textContent.trim()).toBe('')
+        expect(edit.querySelector('svg')).toBeTruthy()
+        // No raw-text Edit/Delete buttons remain in rows.
+        const rawText = Array.from(document.querySelectorAll('button')).filter((b) =>
+            ['Edit', 'Delete'].includes(b.textContent.trim()))
+        expect(rawText).toHaveLength(0)
         // Pipeline step meta: mono status key + display-order number, no middots.
         expect(screen.getByText('awaiting_pickup #2')).toBeInTheDocument()
     })
@@ -120,7 +129,7 @@ describe('OrderStatusManagement — sheet form + built-in protection', () => {
         render(<OrderStatusManagement />)
         await screen.findByText('Awaiting Pickup')
 
-        fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Delete Awaiting Pickup' }))
         expect(screen.getByText('Delete this status?')).toBeInTheDocument()
         fireEvent.click(screen.getByRole('button', { name: 'Delete status' }))
 
@@ -150,8 +159,12 @@ describe('CategoryManagement — tree rows + ConfirmDialog delete', () => {
         expect(screen.getByText('Built-in')).toBeInTheDocument()
         // The slug (URL variant of the name) renders beside the display name.
         expect(screen.getByText('gadgets')).toBeInTheDocument()
-        // Only the non-built-in category is deletable.
-        expect(screen.getAllByRole('button', { name: 'Delete category' })).toHaveLength(1)
+        // Only the non-built-in category is deletable, via a labelled ActionIcon.
+        expect(screen.getAllByRole('button', { name: /^Delete / })).toHaveLength(1)
+        const del = screen.getByRole('button', { name: 'Delete Gadgets' })
+        expect(del.className).toContain('h-7')
+        expect(del.className).toContain('w-7')
+        expect(del.textContent.trim()).toBe('')
     })
 
     it('opens ONE sheet with the category/subcategory toggle', async () => {
@@ -171,7 +184,7 @@ describe('CategoryManagement — tree rows + ConfirmDialog delete', () => {
         render(<CategoryManagement />)
         await screen.findByText('Gadgets')
 
-        fireEvent.click(screen.getByRole('button', { name: 'Delete category' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Delete Gadgets' }))
         const dialog = await screen.findByRole('dialog')
         expect(within(dialog).getByText('Delete this category?')).toBeInTheDocument()
         fireEvent.click(within(dialog).getByRole('button', { name: 'Delete category' }))
@@ -202,6 +215,12 @@ describe('EventManagement — event cards + sheet form', () => {
         expect(screen.getByText('Global')).toBeInTheDocument()
         expect(screen.getByText('Window')).toBeInTheDocument()
         expect(screen.getByText(/Locations: SG, Online/)).toBeInTheDocument()
+        // Row actions are labelled ActionIcons, never raw-text buttons.
+        expect(screen.getByRole('button', { name: 'Edit Christmas Sale' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Delete Christmas Sale' })).toBeInTheDocument()
+        const rawText = Array.from(document.querySelectorAll('button')).filter((b) =>
+            ['Edit', 'Delete'].includes(b.textContent.trim()))
+        expect(rawText).toHaveLength(0)
         // The redundant mid-page explainer is gone (client directive).
         expect(screen.queryByText(/Time-bound sales like Christmas/)).toBeNull()
     })
@@ -238,7 +257,7 @@ describe('EventManagement — event cards + sheet form', () => {
         render(<EventManagement />)
         await screen.findByText('Christmas Sale')
 
-        fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Delete Christmas Sale' }))
         expect(screen.getByText('Delete this event?')).toBeInTheDocument()
         fireEvent.click(screen.getByRole('button', { name: 'Delete event' }))
 

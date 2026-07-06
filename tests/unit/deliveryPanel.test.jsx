@@ -107,8 +107,16 @@ describe('DeliveryTypeManagement — list cards', () => {
         expect(within(courier).getByText('courier')).toBeInTheDocument() // url chip
         expect(screen.getByText('Built-in')).toBeInTheDocument()
         expect(within(courier).getByText('Print')).toBeInTheDocument()
-        expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2)
-        expect(screen.getAllByLabelText('Delete delivery type')).toHaveLength(2)
+        // Row actions are labelled ActionIcons (icon-only, fixed 28px).
+        expect(screen.getAllByRole('button', { name: /^Edit / })).toHaveLength(2)
+        expect(screen.getAllByRole('button', { name: /^Delete / })).toHaveLength(2)
+        const edit = screen.getByRole('button', { name: 'Edit Courier' })
+        expect(edit.className).toContain('h-7')
+        expect(edit.className).toContain('w-7')
+        expect(edit.textContent.trim()).toBe('')
+        const rawText = Array.from(document.querySelectorAll('button')).filter((b) =>
+            ['Edit', 'Delete'].includes(b.textContent.trim()))
+        expect(rawText).toHaveLength(0)
     })
 })
 
@@ -170,7 +178,7 @@ describe('DeliveryTypeManagement — stepped edit sheet', () => {
         render(<DeliveryTypeManagement />)
         await screen.findByText('Courier')
 
-        fireEvent.click(within(cardOf('Courier')).getByRole('button', { name: 'Edit' }))
+        fireEvent.click(within(cardOf('Courier')).getByRole('button', { name: 'Edit Courier' }))
         const dialog = await screen.findByRole('dialog')
 
         // Step 1: identity only — pricing inputs are not on this screen.
@@ -324,7 +332,7 @@ describe('DeliveryTypeManagement — delete', () => {
         render(<DeliveryTypeManagement />)
         await screen.findByText('Courier')
 
-        fireEvent.click(within(cardOf('Courier')).getByLabelText('Delete delivery type'))
+        fireEvent.click(within(cardOf('Courier')).getByLabelText('Delete Courier'))
         expect(screen.getByText('Delete this delivery type?')).toBeInTheDocument()
         fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
 

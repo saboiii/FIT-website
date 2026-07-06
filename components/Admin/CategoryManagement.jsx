@@ -1,11 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { BsPlus, BsChevronDown, BsChevronRight } from 'react-icons/bs'
-import { IoTrashOutline, IoPricetagsOutline } from 'react-icons/io5'
+import { IoAddOutline, IoChevronDown, IoChevronForward, IoTrashOutline, IoPricetagsOutline } from 'react-icons/io5'
 import {
+    ActionIcon,
     DashCard,
     StatusPill,
+    Tag,
     ViewTabs,
     Sheet,
     ConfirmDialog,
@@ -13,7 +14,7 @@ import {
     SkeletonRow,
 } from '@/components/dashboard-ui'
 import { inputCls, labelCls, DashSelect, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
-import { sunBtnCls, inkBtnCls } from './dashPanelUi'
+import { sunBtnCls, inkBtnCls, rowBtnCls } from './dashPanelUi'
 
 /**
  * Categories (§5.10): tree rows where each trailing element has ONE visual
@@ -26,9 +27,6 @@ import { sunBtnCls, inkBtnCls } from './dashPanelUi'
 // Monospaced slug (the URL variant of the display name, e.g. power-tools).
 const slugCls = 'font-mono text-[12px] font-medium dash-soft truncate'
 
-// Flat muted scope tag (shop/print) — deliberately NOT a pill so it cannot be
-// confused with the Active status pill or the Deactivate button.
-const scopeTagCls = 'dash-label shrink-0'
 export default function CategoryManagement() {
     const [categories, setCategories] = useState([])
     const [loading, setLoading] = useState(true)
@@ -241,21 +239,18 @@ export default function CategoryManagement() {
     )
 
     const toggleBtn = (isActive, onClick) => (
-        <button type="button" onClick={onClick} className={`${quietBtnCls} px-3 py-1`}>
+        <button type="button" onClick={onClick} className={rowBtnCls}>
             {isActive ? 'Deactivate' : 'Activate'}
         </button>
     )
 
     const deleteBtn = (target) => (
-        <button
-            type="button"
+        <ActionIcon
+            icon={IoTrashOutline}
+            tone="bad"
+            label={`Delete ${target.label}`}
             onClick={() => setDeleteTarget(target)}
-            aria-label={target.kind === 'subcategory' ? 'Delete subcategory' : 'Delete category'}
-            title={target.kind === 'subcategory' ? 'Delete subcategory' : 'Delete category'}
-            className="dash-hoverable h-7 w-7 grid place-items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-bad)] cursor-pointer hover:bg-[var(--dash-bad-bg)] shrink-0"
-        >
-            <IoTrashOutline size={14} aria-hidden="true" />
-        </button>
+        />
     )
 
     if (loading) {
@@ -282,14 +277,14 @@ export default function CategoryManagement() {
                             onClick={() => openSheet('subcategory')}
                             className={`${quietBtnCls} flex items-center gap-1`}
                         >
-                            <BsPlus size={16} aria-hidden="true" /> New subcategory
+                            <IoAddOutline size={16} aria-hidden="true" /> New subcategory
                         </button>
                         <button
                             type="button"
                             onClick={() => openSheet('category')}
                             className={`${sunBtnCls} flex items-center gap-1`}
                         >
-                            <BsPlus size={16} aria-hidden="true" /> New category
+                            <IoAddOutline size={16} aria-hidden="true" /> New category
                         </button>
                     </div>
                 )}
@@ -313,15 +308,12 @@ export default function CategoryManagement() {
                                 <div key={cat.name || idx}>
                                     <div className="flex items-center gap-3 py-2.5">
                                         {hasSubs ? (
-                                            <button
-                                                type="button"
+                                            <ActionIcon
+                                                icon={expanded ? IoChevronDown : IoChevronForward}
+                                                label={expanded ? 'Collapse' : 'Expand'}
                                                 onClick={() => toggleCategory(cat.name)}
-                                                aria-label={expanded ? 'Collapse' : 'Expand'}
                                                 aria-expanded={Boolean(expanded)}
-                                                className="dash-hoverable h-7 w-7 grid place-items-center rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] hover:bg-[var(--dash-canvas)] cursor-pointer shrink-0"
-                                            >
-                                                {expanded ? <BsChevronDown size={13} aria-hidden="true" /> : <BsChevronRight size={13} aria-hidden="true" />}
-                                            </button>
+                                            />
                                         ) : (
                                             <span className="h-7 w-7 shrink-0" aria-hidden="true" />
                                         )}
@@ -337,7 +329,7 @@ export default function CategoryManagement() {
                                             )}
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                                            <span className={scopeTagCls}>{cat.type}</span>
+                                            <Tag>{cat.type}</Tag>
                                             {cat.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
                                             {activePill(cat.isActive)}
                                             {toggleBtn(cat.isActive, () => handleToggleActive(cat.name, cat.isActive))}

@@ -4,6 +4,7 @@ import { IoSearchOutline, IoStarOutline, IoTrashOutline } from 'react-icons/io5'
 import Image from 'next/image';
 import { useToast } from '../General/ToastProvider';
 import {
+    ActionIcon,
     GlassBar,
     StatusPill,
     ConfirmDialog,
@@ -11,7 +12,7 @@ import {
     SkeletonRow,
     FreshnessStamp,
 } from '@/components/dashboard-ui';
-import { barSelectCls, quietPillCls } from './dashPanelUi';
+import { barSelectCls, rowBtnCls } from './dashPanelUi';
 
 // Rating rendered as ink dots (§5.9) — ●●●●○ — with the value for a11y.
 function RatingDots({ value }) {
@@ -299,15 +300,13 @@ function ReviewManagement() {
                                                         </div>
                                                     </div>
 
-                                                    <button
+                                                    <ActionIcon
+                                                        icon={IoTrashOutline}
+                                                        tone="bad"
+                                                        label="Delete review"
                                                         onClick={() => setDeleteTarget({ productId: selectedProduct._id, reviewId: review._id })}
                                                         disabled={deleting === review._id}
-                                                        aria-label="Delete review"
-                                                        title="Delete review"
-                                                        className="dash-hoverable h-7 w-7 grid place-items-center rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-bad)] cursor-pointer hover:bg-[var(--dash-bad-bg)] disabled:opacity-50 shrink-0"
-                                                    >
-                                                        <IoTrashOutline size={14} aria-hidden="true" />
-                                                    </button>
+                                                    />
                                                 </div>
 
                                                 {/* Rating */}
@@ -351,7 +350,7 @@ function ReviewManagement() {
                                                         type="button"
                                                         disabled
                                                         title="Reply to reviews, coming soon"
-                                                        className={`${quietPillCls} ml-auto px-3 py-1`}
+                                                        className={`${rowBtnCls} ml-auto`}
                                                     >
                                                         Reply
                                                     </button>

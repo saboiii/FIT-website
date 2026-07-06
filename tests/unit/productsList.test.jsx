@@ -123,6 +123,32 @@ describe('Creator products list', () => {
         expect(container.querySelector('a[href="/products/alpha-widget"]')).toBeTruthy()
     })
 
+    it('row actions are fixed-size labelled ActionIcons, never raw-text buttons', async () => {
+        const { container } = render(<MyProducts />)
+        await screen.findByText('Alpha Widget')
+
+        // One icon per action per row (3 rows), labelled for a11y.
+        expect(screen.getAllByRole('button', { name: 'Performance' })).toHaveLength(3)
+        expect(screen.getAllByRole('link', { name: 'View in store' })).toHaveLength(3)
+        expect(screen.getAllByRole('button', { name: 'Duplicate' })).toHaveLength(3)
+
+        const perf = screen.getAllByRole('button', { name: 'Performance' })[0]
+        expect(perf.className).toContain('h-7')
+        expect(perf.className).toContain('w-7')
+        expect(perf.textContent.trim()).toBe('')
+        expect(perf.querySelector('svg')).toBeTruthy()
+
+        // No raw-text action buttons/links remain in rows.
+        const rawText = Array.from(container.querySelectorAll('button, a')).filter((el) =>
+            ['Performance', 'Duplicate', 'View in store', 'Edit', 'Delete'].includes(el.textContent.trim()))
+        expect(rawText).toHaveLength(0)
+
+        // The Performance icon still opens the analytics peek, not the edit page.
+        fireEvent.click(perf)
+        expect(await screen.findByText('Product Performance Coming Soon')).toBeInTheDocument()
+        expect(push).not.toHaveBeenCalled()
+    })
+
     it('shows the guide empty state with the sun CTA when there are no products', async () => {
         global.fetch = vi.fn(() => Promise.resolve({ ok: true, json: async () => ({ products: [] }) }))
         render(<MyProducts />)

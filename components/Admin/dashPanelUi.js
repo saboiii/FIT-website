@@ -14,6 +14,11 @@ export const inkBtnCls =
 export const quietPillCls =
     'dash-hoverable rounded-full px-3.5 py-1.5 text-[13px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-ink)] cursor-pointer hover:bg-[var(--dash-canvas)] disabled:opacity-50 disabled:cursor-not-allowed'
 
+// Fixed-height quiet pill for in-row TEXT actions (pill discipline §10.3):
+// h-7 to line up with ActionIcon and sit one step above the h-6 StatusPill.
+export const rowBtnCls =
+    'dash-hoverable inline-flex h-7 shrink-0 items-center rounded-full px-3 text-[12px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] text-[var(--dash-ink)] cursor-pointer hover:bg-[var(--dash-canvas)] disabled:opacity-50 disabled:cursor-not-allowed'
+
 // Rounded select used inside GlassBars (filters as chips/selects).
 export const barSelectCls =
     'rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 py-1.5 text-[13px] text-[var(--dash-ink)] cursor-pointer outline-none'

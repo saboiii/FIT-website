@@ -3,6 +3,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import {
+    ActionIcon,
     DashProvider,
     DashCard,
     StatTile,
@@ -16,7 +17,9 @@ import {
     PeekPanel,
     EmptyState,
     LedgerTable,
+    Tag,
 } from '@/components/dashboard-ui'
+import { IoPencilOutline, IoTrashOutline } from 'react-icons/io5'
 
 afterEach(cleanup)
 
@@ -85,6 +88,56 @@ describe('dashboard-ui primitives', () => {
             expect(tab.className).toContain('items-center')
             expect(tab.className).not.toContain('py-')
         }
+    })
+
+    it('ActionIcon is a fixed-size icon-only button labelled via aria-label and title', () => {
+        const onClick = vi.fn()
+        render(<ActionIcon icon={IoTrashOutline} tone="bad" label="Delete review" onClick={onClick} />)
+        const btn = screen.getByRole('button', { name: 'Delete review' })
+        // Fixed 28px circle — the one row-action size everywhere.
+        expect(btn.className).toContain('h-7')
+        expect(btn.className).toContain('w-7')
+        expect(btn.className).toContain('rounded-full')
+        expect(btn).toHaveAttribute('title', 'Delete review')
+        // Icon-only: a glyph, never raw text.
+        expect(btn.textContent.trim()).toBe('')
+        expect(btn.querySelector('svg')).toBeTruthy()
+        // Destructive intent revealed on hover, never screaming at rest.
+        expect(btn.className).toContain('text-[var(--dash-ink-soft)]')
+        expect(btn.className).toContain('hover:bg-[var(--dash-bad-bg)]')
+        expect(btn.className).toContain('hover:text-[var(--dash-bad)]')
+        fireEvent.click(btn)
+        expect(onClick).toHaveBeenCalled()
+    })
+
+    it('ActionIcon quiet tone rests ink-soft and washes sun-soft on hover; disabled blocks clicks', () => {
+        const onClick = vi.fn()
+        render(<ActionIcon icon={IoPencilOutline} label="Edit status" onClick={onClick} disabled />)
+        const btn = screen.getByRole('button', { name: 'Edit status' })
+        expect(btn).toBeDisabled()
+        expect(btn.className).toContain('hover:bg-[var(--dash-sun-soft)]')
+        fireEvent.click(btn)
+        expect(onClick).not.toHaveBeenCalled()
+    })
+
+    it('ActionIcon with href renders an identically styled labelled link', () => {
+        render(<ActionIcon icon={IoPencilOutline} label="View in store" href="/products/benchy" />)
+        const link = screen.getByRole('link', { name: 'View in store' })
+        expect(link).toHaveAttribute('href', '/products/benchy')
+        expect(link.className).toContain('h-7')
+        expect(link.className).toContain('w-7')
+    })
+
+    it('Tag is a flat non-interactive fixed-height meta label', () => {
+        render(<Tag>shop</Tag>)
+        const tag = screen.getByText('shop')
+        expect(tag.tagName).toBe('SPAN')
+        expect(tag.className).toContain('h-6')
+        expect(tag.className).toContain('items-center')
+        expect(tag.className).toContain('uppercase')
+        // Flat: no fill, no status tone — distinct from StatusPill and buttons.
+        expect(tag.className).not.toContain('bg-')
+        expect(tag.className).toContain('text-[var(--dash-ink-soft)]')
     })
 
     it('StatusPill renders at a fixed height regardless of content', () => {

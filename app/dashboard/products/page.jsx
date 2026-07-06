@@ -11,13 +11,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import React, { useEffect, useMemo, useState } from 'react'
 import { GoChevronDown, GoChevronUp, GoPlus } from 'react-icons/go'
-import { IoStatsChartOutline, IoStorefrontOutline } from 'react-icons/io5'
-import { ComingSoon, EmptyState, PeekPanel, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
+import { IoCopyOutline, IoStatsChartOutline, IoStorefrontOutline } from 'react-icons/io5'
+import { ActionIcon, ComingSoon, EmptyState, PeekPanel, SkeletonRow, StatusPill, ViewTabs } from '@/components/dashboard-ui'
 import { currencyPrefix, formatMoney } from '@/components/DashboardComponents/format'
 
 // Tailwind needs literal class strings (no runtime interpolation of variants).
-const HEAD_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_230px]'
-const ROW_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px] md:grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_230px]'
+const HEAD_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_110px]'
+const ROW_COLS = 'grid-cols-[40px_minmax(0,1fr)_110px] md:grid-cols-[40px_minmax(0,1fr)_110px_70px_70px_110px_110px]'
 
 // Out of stock: not infinite AND (all per-option stocks 0 when options carry
 // stock, otherwise total stock 0).
@@ -245,32 +245,30 @@ function MyProducts() {
                                             <span className="dash-data text-right hidden md:block">{stockDisplay(product)}</span>
                                             <span className="dash-data text-right hidden md:block">{product.numberSold || 0}</span>
                                             <span className="dash-data text-right text-[var(--dash-ink-soft)] hidden md:block">{created}</span>
-                                            <span className="hidden md:flex justify-end items-center gap-3">
+                                            <span className="hidden md:flex justify-end items-center gap-1">
                                                 {product.slug && (
-                                                    <Link
+                                                    <ActionIcon
+                                                        icon={IoStorefrontOutline}
+                                                        label="View in store"
                                                         href={`/products/${product.slug}`}
                                                         onClick={(e) => e.stopPropagation()}
-                                                        className="text-[13px] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 whitespace-nowrap"
-                                                    >
-                                                        View in store
-                                                    </Link>
+                                                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                                                    />
                                                 )}
-                                                <button
-                                                    type="button"
+                                                <ActionIcon
+                                                    icon={IoStatsChartOutline}
+                                                    label="Performance"
                                                     onClick={(e) => { e.stopPropagation(); setPeekProduct(product) }}
-                                                    className="text-[13px] text-[var(--dash-ink-soft)] hover:text-[var(--dash-ink)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 whitespace-nowrap cursor-pointer"
-                                                >
-                                                    Performance
-                                                </button>
+                                                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                                                />
                                                 {/* Honest stub (openspec add-listing-manager-extras): no duplicate endpoint yet. */}
-                                                <button
-                                                    type="button"
-                                                    disabled
+                                                <ActionIcon
+                                                    icon={IoCopyOutline}
+                                                    label="Duplicate"
                                                     title="Needs backend, coming soon"
-                                                    className="text-[13px] text-[var(--dash-ink-soft)] opacity-0 group-hover:opacity-40 whitespace-nowrap cursor-not-allowed"
-                                                >
-                                                    Duplicate
-                                                </button>
+                                                    disabled
+                                                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                                                />
                                             </span>
                                         </div>
                                     )

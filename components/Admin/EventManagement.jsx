@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useToast } from "../General/ToastProvider";
-import { BsPlus } from "react-icons/bs";
-import { IoCalendarOutline } from "react-icons/io5";
+import { IoAddOutline, IoCalendarOutline, IoPencilOutline, IoTrashOutline } from "react-icons/io5";
 import {
+    ActionIcon,
     DashCard,
     StatusPill,
     DottedRow,
@@ -12,6 +12,7 @@ import {
     ConfirmDialog,
     EmptyState,
     SkeletonRow,
+    Tag,
 } from "@/components/dashboard-ui";
 import { inputCls, labelCls, quietBtnCls } from "@/components/DashboardComponents/ProductFormFields/dashFormUi";
 import { sunBtnCls, inkBtnCls } from "./dashPanelUi";
@@ -177,7 +178,7 @@ export default function EventManagement() {
             {events.length > 0 && (
                 <div className="flex justify-end mb-4">
                     <button type="button" onClick={openCreate} className={`${sunBtnCls} flex items-center gap-1`}>
-                        <BsPlus size={16} aria-hidden="true" /> New event
+                        <IoAddOutline size={16} aria-hidden="true" /> New event
                     </button>
                 </div>
             )}
@@ -205,7 +206,7 @@ export default function EventManagement() {
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-[13px] font-semibold truncate">{ev.name}</span>
                                         <StatusPill tone="ink">{ev.percentage}% off</StatusPill>
-                                        {ev.isGlobal && <StatusPill tone="paper">Global</StatusPill>}
+                                        {ev.isGlobal && <Tag>Global</Tag>}
                                         {!ev.isActive && <StatusPill tone="hatch">Inactive</StatusPill>}
                                     </div>
                                     {ev.description && (
@@ -226,20 +227,17 @@ export default function EventManagement() {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                        type="button"
+                                    <ActionIcon
+                                        icon={IoPencilOutline}
+                                        label={`Edit ${ev.name}`}
                                         onClick={() => handleEdit(ev)}
-                                        className={`${quietBtnCls} px-3 py-1`}
-                                    >
-                                        Edit
-                                    </button>
-                                    <button
-                                        type="button"
+                                    />
+                                    <ActionIcon
+                                        icon={IoTrashOutline}
+                                        tone="bad"
+                                        label={`Delete ${ev.name}`}
                                         onClick={() => setDeleteTarget(ev)}
-                                        className="text-[13px] font-medium text-[var(--dash-bad)] cursor-pointer hover:underline px-1.5"
-                                    >
-                                        Delete
-                                    </button>
+                                    />
                                 </div>
                             </div>
                         </DashCard>

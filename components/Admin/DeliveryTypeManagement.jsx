@@ -1,10 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { IoAddOutline, IoTrashOutline } from 'react-icons/io5'
+import { IoAddOutline, IoPencilOutline, IoTrashOutline } from 'react-icons/io5'
 import { TbTruck } from 'react-icons/tb'
-import { DashCard, ConfirmDialog, StatusPill, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
-import { quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
+import { ActionIcon, DashCard, ConfirmDialog, StatusPill, Tag, EmptyState, SkeletonRow, CoachMarks, useTourOffer, TourOfferStrip, TourHelpButton, TOURS } from '@/components/dashboard-ui'
 import DeliveryTypeFormSheet from './DeliveryTypeFormSheet'
 import { DeliverySwitch, DeliveryTypeIcon, PricingStrip, sunBtnCls } from './deliveryTypeUi'
 
@@ -306,12 +305,10 @@ export default function DeliveryTypeManagement() {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-[14px] font-semibold text-[var(--dash-ink)]">{dt.displayName}</span>
-                                                <span className="dash-data rounded-full border border-[var(--dash-line)] bg-[var(--dash-canvas)] px-2 py-0.5 text-[var(--dash-ink-soft)]">
-                                                    {dt.name}
-                                                </span>
+                                                <span className="font-mono text-[12px] font-medium dash-soft">{dt.name}</span>
                                                 {dt.isHardcoded && <StatusPill tone="hatch">Built-in</StatusPill>}
                                                 {dt.applicableToProductTypes?.map(type => (
-                                                    <StatusPill key={type} tone="paper">{TYPE_LABELS[type] || type}</StatusPill>
+                                                    <Tag key={type}>{TYPE_LABELS[type] || type}</Tag>
                                                 ))}
                                             </div>
                                             <div className="mt-2">
@@ -332,16 +329,17 @@ export default function DeliveryTypeManagement() {
                                         />
                                         {!dt.isHardcoded && (
                                             <>
-                                                <button onClick={() => openEdit(dt)} className={quietBtnCls}>
-                                                    Edit
-                                                </button>
-                                                <button
+                                                <ActionIcon
+                                                    icon={IoPencilOutline}
+                                                    label={`Edit ${dt.displayName}`}
+                                                    onClick={() => openEdit(dt)}
+                                                />
+                                                <ActionIcon
+                                                    icon={IoTrashOutline}
+                                                    tone="bad"
+                                                    label={`Delete ${dt.displayName}`}
                                                     onClick={() => setDeleteTarget(dt)}
-                                                    className="dash-hoverable p-2 rounded-full text-[var(--dash-ink-soft)] hover:text-[var(--dash-bad)] hover:bg-[var(--dash-bad-bg)] cursor-pointer shrink-0"
-                                                    aria-label="Delete delivery type"
-                                                >
-                                                    <IoTrashOutline size={14} aria-hidden="true" />
-                                                </button>
+                                                />
                                             </>
                                         )}
                                     </div>

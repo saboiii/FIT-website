@@ -1,12 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/General/ToastProvider'
-import { MdAdd } from 'react-icons/md'
+import { IoAddOutline, IoPencilOutline, IoTrashOutline } from 'react-icons/io5'
 import { TbTruckDelivery, TbPackage, TbBox, TbChecks, TbClock } from 'react-icons/tb'
 import { FiPackage, FiTruck } from 'react-icons/fi'
 import { BiPackage } from 'react-icons/bi'
 import { IoMdCheckmarkCircleOutline, IoMdPrint } from 'react-icons/io'
 import {
+    ActionIcon,
     DashCard,
     StatusPill,
     Sheet,
@@ -220,20 +221,17 @@ export default function OrderStatusManagement() {
                     )}
                     {!isBuiltIn && (
                         <>
-                            <button
-                                type="button"
+                            <ActionIcon
+                                icon={IoPencilOutline}
+                                label={`Edit ${status.displayName}`}
                                 onClick={() => startEdit(status)}
-                                className={`${quietBtnCls} px-3 py-1`}
-                            >
-                                Edit
-                            </button>
-                            <button
-                                type="button"
+                            />
+                            <ActionIcon
+                                icon={IoTrashOutline}
+                                tone="bad"
+                                label={`Delete ${status.displayName}`}
                                 onClick={() => setDeleteTarget(status)}
-                                className="text-[13px] font-medium text-[var(--dash-bad)] cursor-pointer hover:underline px-1.5"
-                            >
-                                Delete
-                            </button>
+                            />
                         </>
                     )}
                 </div>
@@ -272,7 +270,7 @@ export default function OrderStatusManagement() {
                     onClick={() => { resetForm(); setShowForm(true) }}
                     className={`${sunBtnCls} flex items-center gap-1.5`}
                 >
-                    <MdAdd size={16} aria-hidden="true" /> Add status
+                    <IoAddOutline size={16} aria-hidden="true" /> Add status
                 </button>
             </div>
 

@@ -12,7 +12,7 @@ import {
     handleImageDrop as handleImageDropHelper,
     handleRemoveImage as handleRemoveImageHelper,
 } from '@/utils/formHelpers'
-import { GlassBar, SkeletonRow } from '@/components/dashboard-ui'
+import { GlassBar, SkeletonRow, Tag } from '@/components/dashboard-ui'
 import { inputCls, labelCls, quietBtnCls } from '@/components/DashboardComponents/ProductFormFields/dashFormUi'
 import { sunBtnCls } from './dashPanelUi'
 
@@ -60,7 +60,7 @@ function Chapter({ id, num, title, blurb, done, optional, first = false, childre
                     {num}
                 </span>
                 <h3 className="dash-section">{title}</h3>
-                {optional && <span className="dash-label">Optional</span>}
+                {optional && <Tag>Optional</Tag>}
             </div>
             <p className="text-[13px] dash-soft mt-1.5 mb-4">{blurb}</p>
             {children}

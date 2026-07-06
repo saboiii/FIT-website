@@ -876,9 +876,10 @@ function ProductPage() {
                                 </div>
                             </div>
 
-                            {/* Reviews Section */}
+                            {/* Reviews Section (id anchors the account area's
+                                "rate your experience" nudge: /products/<slug>#reviews) */}
                             {product && (
-                                <div className="mt-8 pt-8 border-t border-borderColor">
+                                <div id="reviews" className="mt-8 pt-8 border-t border-borderColor scroll-mt-24">
                                     <ReviewSection product={product} userOrders={userOrders} />
                                 </div>
                             )}

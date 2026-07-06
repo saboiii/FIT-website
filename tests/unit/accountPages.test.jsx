@@ -13,7 +13,6 @@ import { render, screen, cleanup, fireEvent, within, waitFor } from '@testing-li
 import dayjs from 'dayjs'
 import Account from '@/app/account/[[...rest]]/Account'
 import AccountPrintRequestsPage from '@/app/account/prints/page'
-import OrderPage from '@/app/account/orders/[orderId]/OrderPage'
 import AccountDropdown from '@/components/General/AccountDropdown'
 
 // jsdom has no ResizeObserver (ViewTabs observes its scroll strip).
@@ -84,8 +83,10 @@ vi.mock('@/utils/useOrderStatuses', () => ({
 const PRODUCT_ID = '507f1f77bcf86cd799439011'
 const ORDER_A = 'a1b2c3d4e5f6a7b8c9d0e1f2'
 const ORDER_B = 'b1b2c3d4e5f6a7b8c9d0e1f3'
+const ORDER_C = 'c1b2c3d4e5f6a7b8c9d0e1f4'
 const DAY_A = '2026-07-02T09:00:00Z'
 const DAY_B = '2026-07-01T09:00:00Z'
+const DAY_C = '2026-04-01T09:00:00Z' // outside the past-30-days window
 
 const hubOrders = [
     {
@@ -107,6 +108,10 @@ const hubOrders = [
         _id: ORDER_B,
         createdAt: DAY_B,
         status: 'delivered',
+        statusHistory: [
+            { status: 'pending', timestamp: DAY_B },
+            { status: 'delivered', timestamp: DAY_A },
+        ],
         orderType: 'order',
         cartItem: {
             productId: PRODUCT_ID,
@@ -116,31 +121,34 @@ const hubOrders = [
             currency: 'S',
         },
     },
+    {
+        // Custom print order: no catalogue product, so the thumbnail must be
+        // the quiet icon fallback and the row action routes to /account/prints.
+        _id: ORDER_C,
+        createdAt: DAY_C,
+        status: 'processing',
+        orderType: 'printOrder',
+        printStatus: 'printing',
+        cartItem: {
+            productId: 'custom-print:REQ-9',
+            requestId: 'REQ-9',
+            quantity: 1,
+            price: 30,
+            chosenDeliveryType: 'standard',
+            currency: 'S',
+        },
+    },
 ]
 
 const products = [
-    { _id: PRODUCT_ID, name: 'Benchy', images: [], description: 'A little boat', slug: 'benchy' },
-]
-
-const detailOrder = {
-    _id: '665f1f77bcf86cd799439099',
-    createdAt: DAY_B,
-    status: 'shipped',
-    trackingId: 'SPX123456789',
-    statusHistory: [
-        { status: 'pending', timestamp: DAY_B },
-        { status: 'shipped', timestamp: DAY_A },
-    ],
-    cartItem: {
-        productId: PRODUCT_ID,
-        quantity: 1,
-        price: 25,
-        finalPrice: 25,
-        chosenDeliveryType: 'standard',
-        currency: 'S',
+    {
+        _id: PRODUCT_ID,
+        name: 'Benchy',
+        images: ['products/benchy.png'],
+        description: 'A little boat',
+        slug: 'benchy',
     },
-    contact: null,
-}
+]
 
 const printRequests = [
     {
@@ -163,7 +171,6 @@ const failJson = () => Promise.resolve({ ok: false, json: async () => ({}) })
 function stubFetch() {
     global.fetch = vi.fn((url) => {
         const u = String(url)
-        if (u.startsWith('/api/user/orders?orderId=')) return okJson({ order: detailOrder, userDetails: null })
         if (u.startsWith('/api/user/orders')) return okJson({ orders: hubOrders })
         if (u.startsWith('/api/product')) return okJson({ products })
         if (u.startsWith('/api/asset/storage'))
@@ -411,24 +418,82 @@ describe('Account hub', () => {
         })
     })
 
-    it('orders section groups by day with collapsible strips and a peek carrying the detail link', async () => {
+    it('orders section renders card-per-order with facts header, thumbnails and detail links', async () => {
         mockTabParam = 'orders'
         render(<Account />)
-        const dayA = dayjs(DAY_A).format('D MMM YYYY')
-        const dayB = dayjs(DAY_B).format('D MMM YYYY')
-        expect(await screen.findByText(dayA)).toBeInTheDocument()
-        expect(screen.getByText(dayB)).toBeInTheDocument()
-        expect(screen.getAllByText('Benchy').length).toBe(2)
-        expect(screen.getAllByText('1 order').length).toBe(2)
+        // One card per order, newest first, each with a facts header.
+        expect(await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)).toBeInTheDocument()
+        expect(screen.getByText(`#${ORDER_B.slice(-8).toUpperCase()}`)).toBeInTheDocument()
+        expect(screen.getAllByText('Order placed').length).toBe(3)
+        expect(screen.getByText(dayjs(DAY_A).format('D MMM YYYY'))).toBeInTheDocument()
+        // Header strip carries total item count + spend across the history.
+        expect(screen.getByText('4')).toBeInTheDocument()
+        expect(screen.getByText('S$80.00')).toBeInTheDocument()
+        // Catalogue product rows show the S3 thumbnail through the proxy.
+        const thumbs = screen.getAllByAltText('Benchy')
+        expect(thumbs.length).toBe(2)
+        thumbs.forEach((img) =>
+            expect(img).toHaveAttribute('src', `/api/proxy?key=${encodeURIComponent('products/benchy.png')}`),
+        )
+        // The custom print order has no image: quiet icon tile, never a broken img.
+        expect(screen.getByRole('img', { name: 'Custom 3D Print - REQ-9' })).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Track custom print' })).toHaveAttribute(
+            'href',
+            '/account/prints',
+        )
+        // Every card links to its full order page.
+        expect(screen.getAllByRole('link', { name: 'View order' })[0]).toHaveAttribute(
+            'href',
+            `/account/orders/${ORDER_A}`,
+        )
+    })
 
-        // Collapsing a day hides its rows.
-        const dayStrip = screen.getByText(dayB).closest('button')
-        fireEvent.click(dayStrip)
-        expect(screen.getAllByText('Benchy').length).toBe(1)
-        fireEvent.click(dayStrip)
+    it('status tabs and the time filter narrow the order cards client-side', async () => {
+        mockTabParam = 'orders'
+        render(<Account />)
+        await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
+        // Delivered tab keeps only the delivered order.
+        fireEvent.click(screen.getByRole('tab', { name: /Delivered/ }))
+        expect(screen.queryByText(`#${ORDER_A.slice(-8).toUpperCase()}`)).toBeNull()
+        expect(screen.getByText(`#${ORDER_B.slice(-8).toUpperCase()}`)).toBeInTheDocument()
+        // Cancelled tab matches nothing here.
+        fireEvent.click(screen.getByRole('tab', { name: /Cancelled/ }))
+        expect(screen.getByText('No orders match this view.')).toBeInTheDocument()
+        // Back to all, then the time filter drops the old April order.
+        fireEvent.click(screen.getByRole('tab', { name: /All/ }))
+        expect(screen.getByText(`#${ORDER_C.slice(-8).toUpperCase()}`)).toBeInTheDocument()
+        fireEvent.change(screen.getByLabelText('Filter orders by time'), { target: { value: '30d' } })
+        expect(screen.queryByText(`#${ORDER_C.slice(-8).toUpperCase()}`)).toBeNull()
+        expect(screen.getByText(`#${ORDER_A.slice(-8).toUpperCase()}`)).toBeInTheDocument()
+    })
 
-        // Row click opens the peek with order facts + the full detail link.
-        fireEvent.click(screen.getAllByText('Benchy')[0].closest('button'))
+    it('delivered orders carry buy-again, delivered date and the rate-your-experience nudge', async () => {
+        mockTabParam = 'orders'
+        render(<Account />)
+        await screen.findByText(`#${ORDER_B.slice(-8).toUpperCase()}`)
+        // Buy it again + View product link to the product page (product still exists).
+        screen.getAllByRole('link', { name: 'Buy it again' }).forEach((link) => {
+            expect(link).toHaveAttribute('href', '/products/benchy')
+        })
+        expect(screen.getAllByRole('link', { name: 'View product' })[0]).toHaveAttribute(
+            'href',
+            '/products/benchy',
+        )
+        // The status line shows the real delivered date from statusHistory.
+        expect(screen.getByText(`on ${dayjs(DAY_A).format('D MMM YYYY')}`)).toBeInTheDocument()
+        // Quiet rate nudge routes to the product page's reviews section.
+        expect(screen.getByRole('link', { name: /Rate your experience/ })).toHaveAttribute(
+            'href',
+            '/products/benchy#reviews',
+        )
+    })
+
+    it('quick view opens the peek with the full detail, note, copy id and order-again', async () => {
+        mockTabParam = 'orders'
+        render(<Account />)
+        await screen.findByText(`#${ORDER_A.slice(-8).toUpperCase()}`)
+        // Newest card first: ORDER_A's quick view carries its note + detail link.
+        fireEvent.click(screen.getAllByRole('button', { name: 'Quick view' })[0])
         expect(await screen.findByRole('link', { name: 'View full order' })).toHaveAttribute(
             'href',
             `/account/orders/${ORDER_A}`,
@@ -437,12 +502,12 @@ describe('Account hub', () => {
         expect(screen.getByRole('button', { name: 'Copy order ID' })).toBeInTheDocument()
     })
 
-    it('delivered orders offer an order-again link back to the product page', async () => {
+    it('the delivered order peek offers an order-again link back to the product page', async () => {
         mockTabParam = 'orders'
         render(<Account />)
-        await screen.findAllByText('Benchy')
-        // Second row is the delivered ORDER_B.
-        fireEvent.click(screen.getAllByText('Benchy')[1].closest('button'))
+        await screen.findByText(`#${ORDER_B.slice(-8).toUpperCase()}`)
+        // Second card is the delivered ORDER_B.
+        fireEvent.click(screen.getAllByRole('button', { name: 'Quick view' })[1])
         expect(await screen.findByRole('link', { name: 'Order again' })).toHaveAttribute(
             'href',
             '/products/benchy',
@@ -488,20 +553,8 @@ describe('Navbar account dropdown', () => {
     })
 })
 
-describe('Order detail page', () => {
-    it('shows a status timeline from statusHistory plus tracking and totals', async () => {
-        render(<OrderPage orderId={detailOrder._id} />)
-        expect(await screen.findByText('Order progress')).toBeInTheDocument()
-        // Status names come from the admin settings, newest first.
-        expect(screen.getByText('Shipped Out')).toBeInTheDocument()
-        expect(screen.getByText('Order Placed')).toBeInTheDocument()
-        expect(screen.getByText('SPX123456789')).toBeInTheDocument()
-        expect(screen.getByText('Total')).toBeInTheDocument()
-        expect(document.body.textContent).toContain('S$25.00')
-        // Rail present with a route back to the hub sections.
-        expect(screen.getByRole('navigation', { name: 'Account' })).toBeInTheDocument()
-    })
-})
+// The order detail page (facts strip, progress steps, cost summary, print
+// button) is covered in tests/unit/orderDetail.test.jsx.
 
 describe('Prints page', () => {
     it('shows each request with status, quote breakdown, progress and actions', async () => {
@@ -541,14 +594,9 @@ describe('Punctuation law (§10.1)', () => {
         })
     })
 
-    it('prints page and order detail render no em dash or middot', async () => {
+    it('prints page renders no em dash or middot', async () => {
         render(<AccountPrintRequestsPage />)
         await screen.findByText('benchy.stl')
-        expect(document.body.textContent).not.toMatch(NO_EM_DASH_OR_MIDDOT)
-        cleanup()
-
-        render(<OrderPage orderId={detailOrder._id} />)
-        await screen.findByText('Order progress')
         expect(document.body.textContent).not.toMatch(NO_EM_DASH_OR_MIDDOT)
     })
 })

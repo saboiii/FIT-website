@@ -72,6 +72,44 @@ const ContactSchema = new mongoose.Schema({
     },
 });
 
+// Creator shop customisation (public /creators/[id] page). Everything is
+// optional; images are S3 keys under shops/<userId>/ (enforced by the
+// /api/user/shop routes), never full URLs.
+const ShopLinkSchema = new mongoose.Schema(
+    {
+        label: { type: String, required: true, maxlength: 40 },
+        url: { type: String, required: true, maxlength: 300 },
+    },
+    { _id: false }
+);
+
+const ShopSchema = new mongoose.Schema(
+    {
+        bannerImage: { type: String, default: "", maxlength: 300 },
+        logoImage: { type: String, default: "", maxlength: 300 },
+        description: { type: String, default: "", maxlength: 600 },
+        links: {
+            type: [ShopLinkSchema],
+            default: [],
+            validate: [(arr) => arr.length <= 6, "At most 6 shop links"],
+        },
+        featuredProductIds: {
+            type: [String],
+            default: [],
+            validate: [(arr) => arr.length <= 8, "At most 8 featured products"],
+        },
+        accentColor: {
+            type: String,
+            default: "",
+            validate: {
+                validator: (v) => v === "" || /^#[0-9a-fA-F]{6}$/.test(v),
+                message: "accentColor must be a #rrggbb hex value",
+            },
+        },
+    },
+    { _id: false }
+);
+
 const UserSchema = new mongoose.Schema({
     userId: { type: String, required: true, unique: true },
     orderHistory: { type: [OrderSchema], default: [] },
@@ -83,6 +121,7 @@ const UserSchema = new mongoose.Schema({
             displayName: { type: String, required: false },
             autoReplyMessage: { type: String },
     },
+    shop: { type: ShopSchema, required: false, default: undefined },
     creatorBannerUrl: { type: String, default: undefined },
     creatorProducts: { type: [String], default: [] },
     schemaVersion: { type: Number, default: 1 },

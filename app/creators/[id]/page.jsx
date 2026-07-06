@@ -86,7 +86,9 @@ export default async function CreatorPage(props) {
 	// Backward compatibility:
 	// - if the slug matches a known userId, use it
 	// - otherwise, resolve by metadata.displayName
-	const baseProjection = { "metadata.displayName": 1, "metadata.role": 1, userId: 1, _id: 0 };
+	// Public-safe fields ONLY: display name, role, and the shop customisation
+	// subdocument. Never widen this projection to carts/orders/contact details.
+	const baseProjection = { "metadata.displayName": 1, "metadata.role": 1, userId: 1, shop: 1, _id: 0 };
 	const byUserId = await User.findOne({ userId: normalizedSlug }, baseProjection).lean();
 	const byDisplayName = !byUserId
 		? await User.findOne(
@@ -118,11 +120,41 @@ export default async function CreatorPage(props) {
 
 	const displayName = sanitizeDisplayName(mongoUser?.metadata?.displayName, 'Unnamed Store');
 
+	// Shop customisation — an explicit public allowlist (never spread the raw
+	// subdocument, which could grow private fields later).
+	const rawShop = mongoUser?.shop || {};
+	const shop = {
+		bannerImage: typeof rawShop.bannerImage === 'string' ? rawShop.bannerImage : '',
+		logoImage: typeof rawShop.logoImage === 'string' ? rawShop.logoImage : '',
+		description: typeof rawShop.description === 'string' ? rawShop.description : '',
+		links: Array.isArray(rawShop.links)
+			? rawShop.links
+				.filter((l) => l && typeof l.label === 'string' && typeof l.url === 'string' && /^https?:\/\//i.test(l.url))
+				.slice(0, 6)
+				.map((l) => ({ label: l.label, url: l.url }))
+			: [],
+		featuredProductIds: Array.isArray(rawShop.featuredProductIds)
+			? rawShop.featuredProductIds.slice(0, 8).map(String)
+			: [],
+		accentColor: typeof rawShop.accentColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(rawShop.accentColor)
+			? rawShop.accentColor
+			: '',
+	};
+
+	const joinedYear = (() => {
+		const ts = profile?.createdAt;
+		if (!ts) return null;
+		const year = new Date(ts).getFullYear();
+		return Number.isFinite(year) ? year : null;
+	})();
+
 	const creator = {
 		id: resolvedUserId,
 		displayName,
 		imageUrl: profile?.imageUrl || null,
 		role: mongoUser?.metadata?.role || 'Customer',
+		joinedYear,
+		shop,
 	};
 
 	const safeProducts = serializeForClient(products || []);

@@ -10,7 +10,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useUser } from '@clerk/nextjs'
-import { IoPencilOutline } from 'react-icons/io5'
+import { IoPencilOutline, IoStorefrontOutline } from 'react-icons/io5'
 import { DashProvider } from '@/components/dashboard-ui'
 import useAccess from '@/utils/useAccess'
 import NotificationsBell from './NotificationsBell'
@@ -23,6 +23,7 @@ export const useShopIdentity = () => useContext(ShopIdentityContext)
 export const NAV_LINKS = [
     { href: '/dashboard', label: 'Home', exact: true },
     { href: '/dashboard/products', label: 'My products' },
+    { href: '/dashboard/shop', label: 'My shop', icon: IoStorefrontOutline },
     { href: '/dashboard/messages', label: 'Messages' },
     { href: '/dashboard/payouts', label: 'Payouts' },
     { href: '/dashboard/discounts', label: 'Discounts' },
@@ -186,7 +187,14 @@ export default function CreatorShell({ children }) {
                                                 : 'dash-hoverable rounded-full px-3 py-1.5 text-[13px] dash-soft hover:text-[var(--dash-ink)] hover:bg-[var(--dash-card)] w-fit lg:w-full'
                                         }
                                     >
-                                        {link.label}
+                                        {link.icon ? (
+                                            <span className="flex items-center gap-1.5">
+                                                <link.icon size={13} aria-hidden="true" />
+                                                {link.label}
+                                            </span>
+                                        ) : (
+                                            link.label
+                                        )}
                                     </Link>
                                 )
                             })}

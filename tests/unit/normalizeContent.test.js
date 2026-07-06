@@ -65,3 +65,11 @@ describe('htmlToSegmentedDoc', () => {
         expect(doc.content.every((n) => n.type === 'htmlBlock')).toBe(true)
     })
 })
+
+describe('code-view round trip', () => {
+    it('keeps top-level images as editable image nodes, not html blocks', async () => {
+        const { htmlToSegmentedDoc } = await import('@/lib/blog/normalizeContent')
+        const doc = htmlToSegmentedDoc('<p>Before</p><img src="/api/proxy?key=x.jpg" alt="pic"><p>After</p>')
+        expect(doc.content.map((n) => n.type)).toEqual(['paragraph', 'image', 'paragraph'])
+    })
+})

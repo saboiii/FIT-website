@@ -1,8 +1,10 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import { AnimatePresence, motion } from 'framer-motion'
 import { sheet, swapExit } from '@/lib/motion/tokens'
+import { generateJSON } from '@tiptap/html'
 import { useEditor, EditorContent, useEditorState, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -18,7 +20,7 @@ import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
 import { Sheet } from '@/components/dashboard-ui'
 import { useToast } from '@/components/General/ToastProvider'
-import { HtmlBlock, sanitizeHtmlBlock } from '@/lib/blog/htmlBlock'
+import { HtmlBlock, sanitizeHtmlBlock, injectHtmlBlocks, segmentBody } from '@/lib/blog/htmlBlock'
 import {
     LuBold, LuItalic, LuUnderline, LuStrikethrough, LuList, LuListOrdered,
     LuQuote, LuLink, LuImage, LuAlignLeft, LuAlignCenter, LuAlignRight,
@@ -31,48 +33,25 @@ import {
 // auto-closing tags). Loaded lazily — admin editor only.
 const CodeMirror = dynamic(() => import('@uiw/react-codemirror'), { ssr: false })
 
+// Lets HTML-block NodeViews open the DOCUMENT-level code view (the whole
+// article, not one section — client directive).
+const CodeModeContext = createContext({ openCode: () => {} })
+
 /**
- * NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js). Two modes,
- * swapped IN PLACE (client directive): the rendered HTML, or the code editor
- * occupying the same spot. The raw markup lives in attrs.html and is only
- * ever edited as a plain string, so ProseMirror never parses it. Since
- * content is segmented on import, one block is one complex section — plain
- * text blocks around it are ordinary editable TipTap nodes. Clicking the
- * rendered block shows a hint near the cursor that this section is edited in
- * code view.
+ * NodeView for the shared htmlBlock node (lib/blog/htmlBlock.js): renders the
+ * raw markup read-only. Editing happens in the whole-article code view;
+ * clicking the block floats a glass hint at the cursor (portaled to <body> so
+ * it can never be clipped by the editor's scroll container) with a shortcut
+ * into that view.
  */
-function HtmlBlockView({ node, updateAttributes, selected }) {
-    const [editing, setEditing] = useState(() => !node.attrs.html)
-    const [draft, setDraft] = useState(node.attrs.html || '')
-    const [hint, setHint] = useState(null) // { x, y } within the wrapper
-    const [langExtensions, setLangExtensions] = useState(null)
+function HtmlBlockView({ node, selected }) {
+    const { openCode } = useContext(CodeModeContext)
+    const [hint, setHint] = useState(null) // viewport coords (fixed)
     const hintTimer = useRef(null)
     useEffect(() => () => clearTimeout(hintTimer.current), [])
 
-    // @codemirror/lang-html loads with the editor, not with the admin bundle.
-    useEffect(() => {
-        if (!editing || langExtensions) return
-        let cancelled = false
-        import('@codemirror/lang-html').then((m) => {
-            if (!cancelled) setLangExtensions([m.html({ autoCloseTags: true, matchClosingTags: true })])
-        })
-        return () => { cancelled = true }
-    }, [editing, langExtensions])
-
-    const startEditing = () => {
-        setDraft(node.attrs.html || '')
-        setHint(null)
-        setEditing(true)
-    }
-
-    const done = () => {
-        updateAttributes({ html: draft }) // undoable via the editor history
-        setEditing(false)
-    }
-
     const showHint = (e) => {
-        const rect = e.currentTarget.getBoundingClientRect()
-        setHint({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+        setHint({ x: e.clientX, y: e.clientY })
         clearTimeout(hintTimer.current)
         hintTimer.current = setTimeout(() => setHint(null), 2600)
     }
@@ -81,70 +60,92 @@ function HtmlBlockView({ node, updateAttributes, selected }) {
         <NodeViewWrapper>
             <div
                 contentEditable={false}
-                className={`group relative my-2 rounded-[var(--dash-r-inner)] outline outline-1 outline-offset-4 transition-[outline-color] ${
+                className={`relative my-2 rounded-[var(--dash-r-inner)] outline outline-1 outline-offset-4 transition-[outline-color] ${
                     selected ? 'outline-[var(--dash-focus-line)]' : 'outline-transparent hover:outline-[var(--dash-line)]'
                 }`}
             >
-                <button
-                    type="button"
-                    onClick={editing ? done : startEditing}
-                    className="glass-warm dash-hoverable absolute top-2 right-2 z-10 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-[var(--dash-ink)] cursor-pointer active:scale-[0.97]"
-                >
-                    {editing ? 'Done' : 'Edit HTML'}
-                </button>
+                {node.attrs.html ? (
+                    <div onClick={showHint} dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
+                ) : (
+                    <div className="text-[13px] text-[var(--dash-ink-soft)] border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-6 text-center">
+                        Empty HTML block. Switch to code view to add markup.
+                    </div>
+                )}
+            </div>
+            {typeof document !== 'undefined' && createPortal(
                 <AnimatePresence>
-                    {hint && !editing && (
+                    {hint && (
                         <motion.div
                             initial={{ opacity: 0, y: 6, scale: 0.97 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 4, transition: swapExit }}
                             transition={sheet}
-                            className="glass-warm absolute z-20 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap"
-                            style={{ left: Math.max(0, hint.x - 48), top: hint.y + 16 }}
+                            className="dash glass-warm fixed z-[60] flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap"
+                            style={{
+                                left: Math.min(Math.max(8, hint.x - 48), (window.innerWidth || 1200) - 380),
+                                top: Math.min(hint.y + 16, (window.innerHeight || 800) - 56),
+                                backgroundColor: 'transparent', // .dash paints opaque; glass-warm supplies the surface
+                            }}
                         >
                             <span className="text-[12px] text-[var(--dash-ink-soft)]">
                                 This section is raw HTML and is edited as code
                             </span>
                             <button
                                 type="button"
-                                onClick={startEditing}
+                                onClick={() => { setHint(null); openCode() }}
                                 className="dash-hoverable rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
                             >
                                 Open code view
                             </button>
                         </motion.div>
                     )}
-                </AnimatePresence>
-                {editing ? (
-                    <div className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden text-[13px] [&_.cm-editor]:outline-none [&_.cm-scroller]:font-mono">
-                        <CodeMirror
-                            value={draft}
-                            onChange={(v) => setDraft(v ?? '')}
-                            extensions={langExtensions || []}
-                            maxHeight="640px"
-                            minHeight="220px"
-                            basicSetup={{
-                                lineNumbers: true,
-                                foldGutter: true,
-                                highlightActiveLine: true,
-                                bracketMatching: true,
-                                closeBrackets: true,
-                                autocompletion: true,
-                                indentOnInput: true,
-                            }}
-                            aria-label="HTML source"
-                        />
-                    </div>
-                ) : node.attrs.html ? (
-                    <div onClick={showHint} dangerouslySetInnerHTML={{ __html: sanitizeHtmlBlock(node.attrs.html) }} />
-                ) : (
-                    <div className="text-[13px] text-[var(--dash-ink-soft)] border border-dashed border-[var(--dash-line)] rounded-[var(--dash-r-inner)] px-4 py-6 text-center">
-                        Empty HTML block. Use Edit HTML to add markup.
-                    </div>
-                )}
-            </div>
+                </AnimatePresence>,
+                document.body,
+            )}
         </NodeViewWrapper>
     )
+}
+
+/** Apple-style segmented switch between the writing surface and code view. */
+function ModeSwitch({ mode, onChange }) {
+    return (
+        <div className="glass-warm inline-flex items-center rounded-full p-1" role="tablist" aria-label="Editor view">
+            {[
+                { key: 'write', label: 'Write', icon: <IoNewspaperEmpty /> },
+                { key: 'code', label: 'Code', icon: <LuCode size={13} aria-hidden /> },
+            ].map((seg) => {
+                const active = mode === seg.key
+                return (
+                    <button
+                        key={seg.key}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        onClick={() => onChange(seg.key)}
+                        className="relative rounded-full px-3.5 h-7 text-[12px] font-medium cursor-pointer"
+                    >
+                        {active && (
+                            <motion.span
+                                layoutId="editor-mode-thumb"
+                                transition={sheet}
+                                className="absolute inset-0 rounded-full bg-[var(--dash-ink)]"
+                                aria-hidden
+                            />
+                        )}
+                        <span className={`relative z-10 flex items-center gap-1.5 ${active ? 'text-[var(--dash-canvas)]' : 'text-[var(--dash-ink-soft)]'}`}>
+                            {seg.icon}
+                            {seg.label}
+                        </span>
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+// Tiny pen glyph for the Write segment (avoids another icon-set import).
+function IoNewspaperEmpty() {
+    return <span aria-hidden className="text-[13px] leading-none">✎</span>
 }
 
 // Node names/attrs must stay in sync with lib/blog/renderTiptap.js.
@@ -274,6 +275,12 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
     const [uploading, setUploading] = useState(false)
     const [linkOpen, setLinkOpen] = useState(false)
     const [linkUrl, setLinkUrl] = useState('')
+    // Whole-article code view (client directive): 'write' is the rich
+    // surface, 'code' is ONE CodeMirror holding the full article HTML.
+    const [mode, setMode] = useState('write')
+    const [codeDraft, setCodeDraft] = useState('')
+    const [langExtensions, setLangExtensions] = useState(null)
+    const codeSyncTimer = useRef(null)
     const fileInputRef = useRef(null)
     const { showToast } = useToast()
 
@@ -318,6 +325,68 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
         onEditor(editor || null)
         return () => onEditor(null)
     }, [editor, onEditor])
+
+    // @codemirror/lang-html rides with the code view, not the admin bundle.
+    useEffect(() => {
+        if (mode !== 'code' || langExtensions) return undefined
+        let cancelled = false
+        import('@codemirror/lang-html').then((m) => {
+            if (!cancelled) setLangExtensions([m.html({ autoCloseTags: true, matchClosingTags: true })])
+        })
+        return () => { cancelled = true }
+    }, [mode, langExtensions])
+
+    // Full-article HTML -> segmented doc, applied to the live editor (fires
+    // onUpdate, so autosave and Save always see the code edits).
+    const commitCode = useCallback((html) => {
+        if (!editor) return
+        const body = new DOMParser().parseFromString(String(html ?? ''), 'text/html').body
+        const nodes = segmentBody(body, (chunk) => generateJSON(chunk, extensions))
+        editor.commands.setContent(
+            { type: 'doc', content: nodes.length > 0 ? nodes : [{ type: 'paragraph' }] },
+            { emitUpdate: true },
+        )
+    }, [editor])
+
+    const switchMode = useCallback(async (next) => {
+        if (!editor || next === mode) return
+        if (next === 'code') {
+            // The article's real rendered HTML, pretty-printed for humans
+            // (imports arrive minified on one line).
+            const raw = injectHtmlBlocks(editor.getHTML())
+            let pretty = raw
+            try {
+                const jsb = await import('js-beautify')
+                const beautify = jsb.html || jsb.default?.html
+                if (beautify) {
+                    pretty = beautify(raw, {
+                        indent_size: 2,
+                        wrap_line_length: 0,
+                        preserve_newlines: true,
+                        max_preserve_newlines: 1,
+                    })
+                }
+            } catch { /* formatter unavailable: show raw source */ }
+            setCodeDraft(pretty)
+            setMode('code')
+        } else {
+            clearTimeout(codeSyncTimer.current)
+            commitCode(codeDraft)
+            setMode('write')
+        }
+    }, [editor, mode, codeDraft, commitCode])
+
+    // Debounced live sync while typing code, so hitting Save without
+    // flipping back to Write still saves what the code view shows.
+    const onCodeChange = useCallback((v) => {
+        const next = v ?? ''
+        setCodeDraft(next)
+        clearTimeout(codeSyncTimer.current)
+        codeSyncTimer.current = setTimeout(() => commitCode(next), 900)
+    }, [commitCode])
+    useEffect(() => () => clearTimeout(codeSyncTimer.current), [])
+
+    const openCode = useCallback(() => { switchMode('code') }, [switchMode])
 
     // v3 editors don't re-render on transactions; track active marks here.
     const marks = useEditorState({
@@ -392,7 +461,17 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
     if (!editor) return null
 
     return (
+        <CodeModeContext.Provider value={{ openCode }}>
         <div>
+            {/* Write ⇄ Code, always within reach while scrolling. */}
+            <div className="sticky top-16 z-30 flex justify-end pointer-events-none -mb-8">
+                <div className="pointer-events-auto">
+                    <ModeSwitch mode={mode} onChange={switchMode} />
+                </div>
+            </div>
+
+            {mode === 'write' && (
+            <>
             {/* Selection chrome: marks, colour, alignment, link (§5.12). */}
             <BubbleMenu
                 editor={editor}
@@ -460,11 +539,35 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <MenuButton title="Insert image" onClick={() => fileInputRef.current?.click()}><LuImage /></MenuButton>
                 <MenuButton title="HTML block" onClick={() => editor.chain().focus().insertContent({ type: 'htmlBlock', attrs: { html: '' } }).run()}><LuCode /></MenuButton>
             </FloatingMenu>
+            </>
+            )}
 
-            {/* Grows with the page until very long, then scrolls internally. */}
-            <div className="max-h-[300vh] dash-scroll">
+            {/* Grows with the page until very long, then scrolls internally.
+                The rich surface stays mounted in code mode (hidden) so the
+                editor instance, history and autosave plumbing survive. */}
+            <div className={`max-h-[300vh] dash-scroll ${mode === 'code' ? 'hidden' : ''}`}>
                 <EditorContent editor={editor} />
             </div>
+            {mode === 'code' && (
+                <div className="mt-10 border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden text-[13px] [&_.cm-editor]:outline-none [&_.cm-scroller]:font-mono">
+                    <CodeMirror
+                        value={codeDraft}
+                        onChange={onCodeChange}
+                        extensions={langExtensions || []}
+                        minHeight="60vh"
+                        basicSetup={{
+                            lineNumbers: true,
+                            foldGutter: true,
+                            highlightActiveLine: true,
+                            bracketMatching: true,
+                            closeBrackets: true,
+                            autocompletion: true,
+                            indentOnInput: true,
+                        }}
+                        aria-label="Article HTML source"
+                    />
+                </div>
+            )}
             <input
                 ref={fileInputRef}
                 type="file"
@@ -480,5 +583,6 @@ export default function TiptapEditor({ value, onChange, onEditor }) {
                 <CropModal src={cropSrc} busy={uploading} onCancel={() => setCropSrc(null)} onConfirm={insertCropped} />
             )}
         </div>
+        </CodeModeContext.Provider>
     )
 }

@@ -1,6 +1,8 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { AnimatePresence, motion } from 'framer-motion'
+import { sheet, swapExit } from '@/lib/motion/tokens'
 import { useEditor, EditorContent, useEditorState, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -86,25 +88,33 @@ function HtmlBlockView({ node, updateAttributes, selected }) {
                 <button
                     type="button"
                     onClick={editing ? done : startEditing}
-                    className="dash-hoverable absolute top-2 right-2 z-10 rounded-full px-3 py-1 text-[12px] font-medium border border-[var(--dash-line)] bg-[var(--dash-card)] hover:bg-[var(--dash-canvas)] cursor-pointer shadow-[var(--dash-shadow-float)]"
+                    className="glass-warm dash-hoverable absolute top-2 right-2 z-10 rounded-full px-3.5 py-1.5 text-[12px] font-medium text-[var(--dash-ink)] cursor-pointer active:scale-[0.97]"
                 >
                     {editing ? 'Done' : 'Edit HTML'}
                 </button>
-                {hint && !editing && (
-                    <div
-                        className="absolute z-20 flex items-center gap-2 rounded-full border border-[var(--dash-line)] bg-[var(--dash-card)] px-3 py-1.5 shadow-[var(--dash-shadow-float)] text-[12px] whitespace-nowrap"
-                        style={{ left: Math.max(0, hint.x - 40), top: hint.y + 14 }}
-                    >
-                        <span className="dash-soft">This section is raw HTML and is edited as code.</span>
-                        <button
-                            type="button"
-                            onClick={startEditing}
-                            className="font-medium text-[var(--dash-ink)] underline underline-offset-2 cursor-pointer"
+                <AnimatePresence>
+                    {hint && !editing && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 4, transition: swapExit }}
+                            transition={sheet}
+                            className="glass-warm absolute z-20 flex items-center gap-2.5 rounded-full pl-4 pr-1.5 py-1.5 whitespace-nowrap"
+                            style={{ left: Math.max(0, hint.x - 48), top: hint.y + 16 }}
                         >
-                            Open code view
-                        </button>
-                    </div>
-                )}
+                            <span className="text-[12px] text-[var(--dash-ink-soft)]">
+                                This section is raw HTML and is edited as code
+                            </span>
+                            <button
+                                type="button"
+                                onClick={startEditing}
+                                className="dash-hoverable rounded-full bg-[var(--dash-ink)] text-[var(--dash-canvas)] px-3 py-1 text-[12px] font-medium cursor-pointer active:scale-[0.97]"
+                            >
+                                Open code view
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 {editing ? (
                     <div className="border border-[var(--dash-line)] rounded-[var(--dash-r-inner)] overflow-hidden text-[13px] [&_.cm-editor]:outline-none [&_.cm-scroller]:font-mono">
                         <CodeMirror
